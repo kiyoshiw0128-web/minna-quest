@@ -12,11 +12,13 @@
 ## ドキュメント
 
 - [設計書](docs/superpowers/specs/2026-09-03-minna-quest-design.md) — 2026-09-03 確定
-- 実装計画 — `docs/superpowers/plans/`
+- [実装計画](docs/superpowers/plans/2026-09-03-battle-engine.md) — 段階1（戦闘エンジン）
+- [積み残し](docs/deferred.md) — 段階2以降で拾うもの
 
 ## 状態
 
-設計確定。実装は段階1（戦闘エンジン `packages/core/battle`）から着手。
+段階1（戦闘エンジン）完了。91テスト通過、依存ゼロ、乱数なし。
+次は段階2（育成 `packages/core/progression`）。
 
 ## 構成
 
