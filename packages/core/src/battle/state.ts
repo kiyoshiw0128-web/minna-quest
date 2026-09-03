@@ -34,6 +34,8 @@ export type BattleState = {
   combatants: Combatant[];
   enemyDef: Enemy;
   enraged: boolean;
+  /** 激昂したターン。激昂後の行動表はこのターンを1マス目として読む */
+  enragedTurn: number | null;
 };
 
 export function createBattleState(party: PartyMember[], enemy: Enemy): BattleState {
@@ -61,7 +63,7 @@ export function createBattleState(party: PartyMember[], enemy: Enemy): BattleSta
     cooldowns: {},
   };
 
-  return { turn: 1, combatants: [...allies, foe], enemyDef: enemy, enraged: false };
+  return { turn: 1, combatants: [...allies, foe], enemyDef: enemy, enraged: false, enragedTurn: null };
 }
 
 export function findCombatant(state: BattleState, id: string): Combatant {

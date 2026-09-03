@@ -52,6 +52,17 @@ describe('nextEnemyAction', () => {
     expect(nextEnemyAction({ ...state, turn: 1, enraged: true })?.id).toBe('rampage');
   });
 
+  it('激昂後の行動表は激昂したターンを1マス目として読む', () => {
+    const twoStep: Enemy = {
+      ...dragon,
+      enrage: { hpRate: 0.5, pattern: [{ skillId: 'rampage' }, { skillId: 'breath' }] },
+    };
+    const base = { ...createBattleState([hero], twoStep), enraged: true, enragedTurn: 3 };
+    expect(nextEnemyAction({ ...base, turn: 3 })?.id).toBe('rampage');
+    expect(nextEnemyAction({ ...base, turn: 4 })?.id).toBe('breath');
+    expect(nextEnemyAction({ ...base, turn: 5 })?.id).toBe('rampage');
+  });
+
   it('行動表が空なら何もしない', () => {
     const state = createBattleState([hero], { ...dragon, pattern: [] });
     expect(nextEnemyAction(state)).toBeNull();
@@ -72,8 +83,9 @@ describe('checkEnrage', () => {
       ...base,
       combatants: base.combatants.map((c) => (c.id === 'dragon' ? { ...c, hp: 500 } : c)),
     };
-    const result = checkEnrage(hurt);
+    const result = checkEnrage({ ...hurt, turn: 4 });
     expect(result.state.enraged).toBe(true);
+    expect(result.state.enragedTurn).toBe(4);
     expect(result.events).toEqual([{ t: 'enrage', actorId: 'dragon' }]);
   });
 

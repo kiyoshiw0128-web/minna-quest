@@ -65,9 +65,13 @@ export function simulate(
       state = acted.state;
       events.push(...acted.events);
 
-      const enraged = checkEnrage(state);
-      state = enraged.state;
-      events.push(...enraged.events);
+      // 敵が倒れているなら激昂は起こさない。死体の上で激昂するログを
+      // フロントが再生してしまうため。
+      if (isAlive(findCombatant(state, state.enemyDef.id))) {
+        const enraged = checkEnrage(state);
+        state = enraged.state;
+        events.push(...enraged.events);
+      }
 
       const decided = decide(state);
       if (decided) return finish(decided, turn, events);
@@ -97,6 +101,7 @@ function skillFromPlan(
   return actor.skills.find((skill) => skill.id === skillId) ?? 'unknownSkill';
 }
 
+/** 敵の全滅判定を味方の全滅判定より先に見るのは、相打ちをプレイヤー有利に倒すため。 */
 function decide(state: BattleState): BattleResult | null {
   if (!isAlive(findCombatant(state, state.enemyDef.id))) return 'win';
   if (!state.combatants.some((c) => c.side === 'ally' && isAlive(c))) return 'lose';

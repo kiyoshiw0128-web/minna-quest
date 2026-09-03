@@ -64,6 +64,28 @@ describe('simulate - 決着', () => {
   });
 });
 
+describe('simulate - 激昂', () => {
+  it('とどめの一撃で倒したときは激昂しない', () => {
+    const fragile: Enemy = {
+      ...makeFoe(70),
+      enrage: { hpRate: 0.5, pattern: [{ skillId: 'bite' }] },
+    };
+    const log = simulate([hero], fragile, { hero: ['slash'] });
+    // 75 ダメージで 70 -> 0。半分を割った瞬間に死んでいるので激昂は起きない
+    expect(log.result).toBe('win');
+    expect(log.events.some((e) => e.t === 'enrage')).toBe(false);
+  });
+
+  it('生き残っていれば激昂する', () => {
+    const tough: Enemy = {
+      ...makeFoe(100),
+      enrage: { hpRate: 0.5, pattern: [{ skillId: 'bite' }] },
+    };
+    const log = simulate([hero], tough, { hero: ['slash', 'slash'] });
+    expect(log.events.some((e) => e.t === 'enrage')).toBe(true);
+  });
+});
+
 describe('simulate - プラン', () => {
   it('並べた技を1ターン目から順に使う', () => {
     const log = simulate([hero], makeFoe(99999), { hero: ['heavy', 'slash'] });
