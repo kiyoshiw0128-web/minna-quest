@@ -13,7 +13,7 @@ export type Combatant = {
   base: StatBlock;
   hp: number;
   mp: number;
-  skills: Skill[];
+  skills: readonly Skill[];
   effects: ActiveEffect[];
   /** 技ID -> あと何ターン使えないか */
   cooldowns: Record<string, number>;
@@ -24,9 +24,9 @@ export type PartyMember = {
   id: string;
   name: string;
   stats: StatBlock;
-  skills: Skill[];
+  skills: readonly Skill[];
   /** パッシブ枠とペットの効果。戦闘開始時から永続でかかる */
-  passives?: Effect[];
+  passives?: readonly Effect[];
 };
 
 export type BattleState = {

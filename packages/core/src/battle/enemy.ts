@@ -8,10 +8,10 @@ export type Enemy = {
   id: string;
   name: string;
   stats: StatBlock;
-  skills: Skill[];
+  skills: readonly Skill[];
   /** 属性ごとの倍率。1.5 なら弱点、0.5 なら耐性。未指定は 1 */
   resist?: Partial<Record<Element, number>>;
-  pattern: EnemyPatternEntry[];
+  pattern: readonly EnemyPatternEntry[];
   /** HP がこの割合以下になったら行動表が切り替わる */
-  enrage?: { hpRate: number; pattern: EnemyPatternEntry[] };
+  enrage?: { hpRate: number; pattern: readonly EnemyPatternEntry[] };
 };

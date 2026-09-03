@@ -43,4 +43,4 @@ export const SKILLS = {
     element: 'dark', target: 'enemy',
     damage: { kind: 'fixed', amount: 120 },
   },
-} satisfies Record<string, Skill>;
+} as const satisfies Record<string, Skill>;

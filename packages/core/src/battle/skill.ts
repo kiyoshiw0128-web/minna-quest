@@ -23,5 +23,6 @@ export type Skill = {
   damage?: DamageSpec;
   /** 回復量。使用者の実効 MAT に対する百分率。100 なら MAT と等倍 */
   heal?: number;
-  effects?: { to: 'target' | 'self'; effect: Effect }[];
+  /** マスタデータを凍結できるよう readonly。実行中に技を書き換えることはない */
+  effects?: readonly { to: 'target' | 'self'; effect: Effect }[];
 };

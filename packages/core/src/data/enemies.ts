@@ -35,7 +35,7 @@ const frenzy: Skill = {
  * 第1章のボス。行動表はプレイヤーに全部見せる前提で組んである。
  * 3ターン目の「溜め」に火力を集中させ、4ターン目の灼熱爆発の前に削り切るのが想定解。
  */
-export const BALGOS: Enemy = {
+export const BALGOS = {
   id: 'balgos',
   name: '炎竜バルゴス',
   stats: { maxHp: 3747, maxMp: 999, atk: 140, def: 60, mat: 130, mdf: 40, spd: 12 },
@@ -51,6 +51,6 @@ export const BALGOS: Enemy = {
     hpRate: 0.5,
     pattern: [{ skillId: 'frenzy' }, { skillId: 'dragonBreath' }],
   },
-};
+} as const satisfies Enemy;
 
-export const ENEMIES = { balgos: BALGOS } satisfies Record<string, Enemy>;
+export const ENEMIES = { balgos: BALGOS } as const satisfies Record<string, Enemy>;
