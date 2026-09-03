@@ -45,6 +45,11 @@ export function simulate(
       const skill =
         actor.side === 'enemy' ? nextEnemyAction(state) : skillFromPlan(actor, plan, turn);
 
+      if (skill === 'unknownSkill') {
+        events.push({ t: 'skip', actorId: actor.id, reason: 'unknownSkill' });
+        continue;
+      }
+
       if (!skill) {
         events.push({ t: 'skip', actorId: actor.id, reason: 'noAction' });
         continue;
@@ -76,10 +81,20 @@ export function simulate(
   return finish('timeout', maxTurns, events);
 }
 
-function skillFromPlan(actor: Combatant, plan: BattlePlan, turn: number): Skill | null {
+/**
+ * そのターンにプランが指している技を返す。
+ * null は「意図的に何もしない」、'unknownSkill' は「そのキャラが持っていない技を
+ * 指している」＝改竄されたか壊れたプラン。simulate はサーバ側の正なので、
+ * この2つはログ上でも区別できなければならない。
+ */
+function skillFromPlan(
+  actor: Combatant,
+  plan: BattlePlan,
+  turn: number,
+): Skill | 'unknownSkill' | null {
   const skillId = plan[actor.id]?.[turn - 1] ?? null;
   if (skillId === null) return null;
-  return actor.skills.find((skill) => skill.id === skillId) ?? null;
+  return actor.skills.find((skill) => skill.id === skillId) ?? 'unknownSkill';
 }
 
 function decide(state: BattleState): BattleResult | null {

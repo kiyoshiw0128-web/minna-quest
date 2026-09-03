@@ -77,6 +77,18 @@ describe('simulate - プラン', () => {
     expect(log.events).toContainEqual({ t: 'skip', actorId: 'hero', reason: 'noAction' });
   });
 
+  it('持っていない技を指したプランは unknownSkill として記録する', () => {
+    const log = simulate([hero], makeFoe(99999), { hero: ['notASkill'] });
+    const skips = log.events.filter((e) => e.t === 'skip' && e.actorId === 'hero');
+    expect(skips[0]).toEqual({ t: 'skip', actorId: 'hero', reason: 'unknownSkill' });
+  });
+
+  it('意図的な空枠は noAction のまま', () => {
+    const log = simulate([hero], makeFoe(99999), { hero: [null, 'slash'] });
+    const skips = log.events.filter((e) => e.t === 'skip' && e.actorId === 'hero');
+    expect(skips[0]).toEqual({ t: 'skip', actorId: 'hero', reason: 'noAction' });
+  });
+
   it('MP が足りなければ空振りする', () => {
     const log = simulate([hero], makeFoe(99999), { hero: ['heavy', null, null, null, 'heavy'] });
     // MP30 で 20 の技を1回使うと 10 しか残らず、2回目は撃てない
