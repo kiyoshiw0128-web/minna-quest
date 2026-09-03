@@ -85,4 +85,10 @@ describe('computeStats', () => {
       expect(value).toBeGreaterThanOrEqual(1);
     }
   });
+
+  it('浮動小数点誤差でステータスが1点欠けない（冒険レベル26・素質B）', () => {
+    const gradeB: Aptitude = { ...flat, maxHp: 'B' };
+    const stats = computeStats(character({ adventureLevel: 26, aptitude: gradeB, currentJob: 'blank', jobs: { blank: { level: 1, exp: 0 } } }), noBonus);
+    expect(stats.maxHp).toBe(925);
+  });
 });
