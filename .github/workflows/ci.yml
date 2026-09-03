@@ -1,0 +1,35 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      # package.json の packageManager (pnpm@11.25.0) を読んで同じ版を入れる
+      - name: pnpm を用意する
+        uses: pnpm/action-setup@v4
+
+      - name: Node を用意する
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: pnpm
+
+      - name: 依存をインストールする
+        run: pnpm install --frozen-lockfile
+
+      # packages/core の tsconfig は tests を include しているため、
+      # マスタデータの不変性を守る @ts-expect-error はこのステップでのみ検証される。
+      # test だけでは通ってしまうので、typecheck を落とさないこと。
+      - name: 型を検査する
+        run: pnpm -r typecheck
+
+      - name: テストを走らせる
+        run: pnpm -r test
