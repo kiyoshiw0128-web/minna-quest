@@ -45,7 +45,7 @@ export function createBattleState(party: PartyMember[], enemy: Enemy): BattleSta
     hp: member.stats.maxHp,
     mp: member.stats.maxMp,
     skills: member.skills,
-    effects: (member.passives ?? []).map((effect) => ({ effect, remaining: Infinity })),
+    effects: (member.passives ?? []).map((effect) => ({ effect, remaining: Infinity, appliedTurn: 0 })),
     cooldowns: {},
   }));
 

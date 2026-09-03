@@ -94,7 +94,7 @@ function tickAll(state: BattleState): { state: BattleState; events: BattleEvent[
   const events: BattleEvent[] = [];
 
   for (const combatant of state.combatants) {
-    const { remaining, expired } = tickEffects(combatant.effects);
+    const { remaining, expired } = tickEffects(combatant.effects, state.turn);
     const cooldowns = Object.fromEntries(
       Object.entries(combatant.cooldowns).map(([id, turns]) => [id, Math.max(0, turns - 1)]),
     );

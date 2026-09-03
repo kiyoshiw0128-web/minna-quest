@@ -97,6 +97,50 @@ describe('simulate - プラン', () => {
   });
 });
 
+describe('simulate - 効果の寿命', () => {
+  const charge: Skill = {
+    id: 'charge', name: '溜め', mpCost: 0, cooldown: 0,
+    element: 'none', target: 'self',
+    effects: [{ to: 'self', effect: { kind: 'damageTaken', rate: 0.5, turns: 1 } }],
+  };
+
+  /** 一番遅い（＝そのターンで最後に動く）敵。1ターン目に溜め、以降は噛みつく。 */
+  const slowCharger: Enemy = {
+    id: 'foe', name: '的',
+    stats: { ...stats, maxHp: 99999, spd: 1 },
+    skills: [bite, charge],
+    pattern: [{ skillId: 'charge' }, { skillId: 'bite' }],
+  };
+
+  const plainFoe: Enemy = { ...slowCharger, pattern: [{ skillId: 'bite' }] };
+
+  function heroDamageOnTurn(log: ReturnType<typeof simulate>, turn: number): number {
+    const turnStarts = log.events
+      .map((e, i) => (e.t === 'turnStart' && e.turn === turn ? i : -1))
+      .filter((i) => i >= 0);
+    const from = turnStarts[0];
+    const to = log.events.findIndex((e, i) => i > from && e.t === 'turnStart');
+    const slice = log.events.slice(from, to < 0 ? undefined : to);
+    const hit = slice.find((e) => e.t === 'damage' && e.targetId === 'foe');
+    return hit && hit.t === 'damage' ? hit.amount : 0;
+  }
+
+  it('一番遅い敵が1ターン目にかけた turns:1 の効果が、2ターン目の先頭の行動に乗る', () => {
+    const plan: BattlePlan = { hero: ['slash', 'slash', 'slash'] };
+    const boosted = heroDamageOnTurn(simulate([hero], slowCharger, plan), 2);
+    const plainDamage = heroDamageOnTurn(simulate([hero], plainFoe, plan), 2);
+    // 75 が 溜めの被ダメ +50% で 112 になる
+    expect(plainDamage).toBe(75);
+    expect(boosted).toBe(112);
+  });
+
+  it('turns:1 の効果は、その次のターンには切れている', () => {
+    const plan: BattlePlan = { hero: ['slash', 'slash', 'slash'] };
+    const log = simulate([hero], slowCharger, plan);
+    expect(heroDamageOnTurn(log, 3)).toBe(75);
+  });
+});
+
 describe('simulate - 決定論', () => {
   it('同じ入力からは同じログが出る', () => {
     const plan: BattlePlan = { hero: ['slash', 'heavy', 'slash'] };

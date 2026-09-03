@@ -34,7 +34,7 @@ describe('turnOrder', () => {
   it('速度バフを反映する', () => {
     const buffed = combatant('buffed', 10);
     buffed.effects = [
-      { effect: { kind: 'statMod', stat: 'spd', rate: 1.0, turns: 3 }, remaining: 3 },
+      { effect: { kind: 'statMod', stat: 'spd', rate: 1.0, turns: 3 }, remaining: 3, appliedTurn: 1 },
     ];
     const order = turnOrder([combatant('base', 15), buffed]);
     expect(order.map((c) => c.id)).toEqual(['buffed', 'base']);

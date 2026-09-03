@@ -8,8 +8,11 @@ export type Effect =
   | { kind: 'damageTaken'; rate: number; turns: number }
   | { kind: 'stun'; turns: number };
 
-/** 戦闘中に実際にかかっている効果。remaining は残りターン数。 */
-export type ActiveEffect = { effect: Effect; remaining: number };
+/**
+ * 戦闘中に実際にかかっている効果。
+ * remaining は残りターン数、appliedTurn は付与されたターン。
+ */
+export type ActiveEffect = { effect: Effect; remaining: number; appliedTurn: number };
 
 /** どれだけ弱体化されても素の値の10%は残す。 */
 const MIN_MULTIPLIER = 0.1;
@@ -38,16 +41,36 @@ export function isStunned(actives: ActiveEffect[]): boolean {
   return actives.some((active) => active.effect.kind === 'stun');
 }
 
-export function applyEffect(actives: ActiveEffect[], effect: Effect): ActiveEffect[] {
-  return [...actives, { effect, remaining: effect.turns }];
+/**
+ * 効果を付与する。turn は付与された時点のターン番号。
+ * これを覚えておくのは、付与されたその同じターンの終わりに減算されないようにするため。
+ * 覚えていないと、効果の寿命が「付与者がそのターンの何番目に動いたか」＝速度で
+ * 変わってしまい、遅い敵の turns:1 は誰にも当たらないまま消える。
+ */
+export function applyEffect(
+  actives: ActiveEffect[],
+  effect: Effect,
+  turn: number,
+): ActiveEffect[] {
+  return [...actives, { effect, remaining: effect.turns, appliedTurn: turn }];
 }
 
-export function tickEffects(actives: ActiveEffect[]): {
+/**
+ * ターン終わりに残りターン数を1減らす。turn は今まさに終わろうとしているターン。
+ * そのターンに付与された効果は減らさないので、ターン M に付与された turns:N の効果は
+ * 付与直後からターン M+N の終わりまで、付与者の速度と無関係に効き続ける。
+ */
+export function tickEffects(
+  actives: ActiveEffect[],
+  turn: number,
+): {
   remaining: ActiveEffect[];
   expired: ActiveEffect[];
 } {
   const decremented = actives.map((active) =>
-    active.remaining === Infinity ? active : { ...active, remaining: active.remaining - 1 },
+    active.remaining === Infinity || active.appliedTurn >= turn
+      ? active
+      : { ...active, remaining: active.remaining - 1 },
   );
   return {
     remaining: decremented.filter((active) => active.remaining > 0),

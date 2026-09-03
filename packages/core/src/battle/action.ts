@@ -63,7 +63,7 @@ export function performAction(state: BattleState, actorId: string, skill: Skill)
       if (entry.to !== 'target') continue;
       next = updateCombatant(next, target.id, (combatant) => ({
         ...combatant,
-        effects: applyEffect(combatant.effects, entry.effect),
+        effects: applyEffect(combatant.effects, entry.effect, state.turn),
       }));
       events.push({ t: 'effect', targetId: target.id, effect: entry.effect });
     }
@@ -73,7 +73,7 @@ export function performAction(state: BattleState, actorId: string, skill: Skill)
     if (entry.to !== 'self') continue;
     next = updateCombatant(next, actorId, (combatant) => ({
       ...combatant,
-      effects: applyEffect(combatant.effects, entry.effect),
+      effects: applyEffect(combatant.effects, entry.effect, state.turn),
     }));
     events.push({ t: 'effect', targetId: actorId, effect: entry.effect });
   }

@@ -124,7 +124,7 @@ describe('performAction - 回復と効果', () => {
       ...state,
       combatants: state.combatants.map((c) =>
         c.id === 'dummy'
-          ? { ...c, effects: [{ effect: { kind: 'damageTaken' as const, rate: 0.5, turns: 1 }, remaining: 1 }] }
+          ? { ...c, effects: [{ effect: { kind: 'damageTaken' as const, rate: 0.5, turns: 1 }, remaining: 1, appliedTurn: 1 }] }
           : c,
       ),
     };
