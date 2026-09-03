@@ -1524,7 +1524,7 @@ export function checkEnrage(state: BattleState): { state: BattleState; events: B
 - [ ] **Step 4: テストを走らせて通ることを確認する**
 
 Run: `pnpm --filter @mq/core test`
-Expected: PASS（全60件）
+Expected: PASS（全59件）
 
 - [ ] **Step 5: コミット**
 
@@ -1562,7 +1562,8 @@ import type { Skill } from '../../src/battle/skill.js';
 import type { StatBlock } from '../../src/battle/types.js';
 
 const stats: StatBlock = {
-  maxHp: 500, maxMp: 30, atk: 120, def: 60, mat: 100, mdf: 40, spd: 20,
+  // 敵の噛みつきは毎ターン75。8ターン耐えて timeout に到達させるため余裕を持たせる
+  maxHp: 5000, maxMp: 30, atk: 120, def: 60, mat: 100, mdf: 40, spd: 20,
 };
 
 const slash: Skill = {
