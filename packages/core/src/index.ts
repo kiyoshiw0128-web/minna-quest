@@ -20,3 +20,6 @@ export type { Skill, SkillTarget } from './battle/skill.js';
 export type { Enemy, EnemyPatternEntry } from './battle/enemy.js';
 export type { Side, Combatant, PartyMember, BattleState } from './battle/state.js';
 export type { BattleResult, SkipReason, BattleEvent, BattleLog } from './battle/log.js';
+
+export { SKILLS } from './data/skills.js';
+export { ENEMIES, BALGOS } from './data/enemies.js';
