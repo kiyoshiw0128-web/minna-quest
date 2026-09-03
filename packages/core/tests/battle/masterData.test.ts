@@ -23,6 +23,10 @@ function neverCalled(): void {
   BALGOS.enrage.pattern[0] = { skillId: 'frenzy' };
   // @ts-expect-error 技の効果リストも readonly な配列
   SKILLS.armorBreak.effects[0] = SKILLS.guardChant.effects[0];
+  // @ts-expect-error 敵の技リストの要素も readonly
+  BALGOS.skills[3].damage.power = 9999;
+  // @ts-expect-error 敵の技の効果ネスト先も readonly
+  BALGOS.skills[2].effects[0].effect.turns = 99;
 }
 
 const hero: PartyMember = {
