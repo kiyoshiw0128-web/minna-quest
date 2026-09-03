@@ -38,7 +38,7 @@ const frenzy: Skill = {
 export const BALGOS: Enemy = {
   id: 'balgos',
   name: '炎竜バルゴス',
-  stats: { maxHp: 4000, maxMp: 999, atk: 140, def: 60, mat: 130, mdf: 40, spd: 12 },
+  stats: { maxHp: 3747, maxMp: 999, atk: 140, def: 60, mat: 130, mdf: 40, spd: 12 },
   skills: [dragonBreath, intimidate, charge, blazingBurst, frenzy],
   resist: { fire: 0.5, ice: 1.5 },
   pattern: [
