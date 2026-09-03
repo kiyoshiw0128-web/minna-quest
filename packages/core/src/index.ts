@@ -23,3 +23,41 @@ export type { BattleResult, SkipReason, BattleEvent, BattleLog } from './battle/
 
 export { SKILLS } from './data/skills.js';
 export { ENEMIES, BALGOS } from './data/enemies.js';
+
+export { aptitudeMultiplier } from './progression/aptitude.js';
+export {
+  MAX_ADVENTURE_LEVEL,
+  MAX_JOB_LEVEL,
+  adventureExpToNext,
+  jobExpToNext,
+} from './progression/curve.js';
+export { learnsAt } from './progression/job.js';
+export { computeStats, BASE_STATS, GROWTH_PER_LEVEL } from './progression/stats.js';
+export { gainExp, applyLearns } from './progression/exp.js';
+export {
+  isUnlocked,
+  unlockedJobs,
+  canChangeJob,
+  changeJob,
+  createCharacter,
+} from './progression/unlock.js';
+export { equipActive, equipPassive, ACTIVE_SLOTS, PASSIVE_SLOTS } from './progression/equip.js';
+export { toPartyMember } from './progression/bridge.js';
+
+export type {
+  Grade,
+  Aptitude,
+  JobId,
+  JobProgress,
+  Character,
+  Passive,
+  ProgressEvent,
+} from './progression/types.js';
+export type { Job, JobRequirement, JobStatBonus, LearnEntry } from './progression/job.js';
+export type { ExpGain, JobTable } from './progression/exp.js';
+export type { JobChangeError } from './progression/unlock.js';
+export type { EquipError } from './progression/equip.js';
+export type { SkillTable, PassiveTable } from './progression/bridge.js';
+
+export { JOBS } from './data/jobs.js';
+export { PASSIVES } from './data/passives.js';
