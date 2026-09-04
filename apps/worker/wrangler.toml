@@ -1,5 +1,11 @@
 name = "minna-quest"
 main = "src/index.ts"
+# この日付は本来もっと新しくあるべきだが、ローカルにインストールされている
+# workerd がこれより新しい compatibility_date を受け付けないため、暫定的に
+# 低く固定している。この wrangler.toml は `wrangler deploy` にもそのまま
+# 使われるため、この設定は本番デプロイにも影響する — 約13ヶ月分のデフォルト
+# 挙動の変更を取りこぼしたまま本番稼働させることになる。wrangler / workerd
+# を最新化した上でこの日付を引き上げるまでは、本番相当として扱わないこと。
 compatibility_date = "2024-12-30"
 compatibility_flags = ["nodejs_compat"]
 
