@@ -62,8 +62,11 @@ corepack pnpm --filter @mq/worker dev   # ローカルで workerd を起動
 - **`closeDay` に `daySeed` を渡さない。** タイブレークは `voteSeed`。型が同じなので防げない
 - **`packages/core/tsconfig.json` に `noEmit` が無い。** 素の `tsc` を走らせるとソースの隣に生成物を吐く
 - **`apps/worker/src/store.ts` 以外に SQL を書かない。** 行の型もこのファイルの外に出さない
-- **`wrangler.toml` の `compatibility_date` は 2024-12-30 に低く固定してある。** ローカルの workerd の都合。
-  本番にもこの値が乗るので、本番相当として使う前に wrangler ごと上げること
+- **`compatibility_date` を、手元のテストが走らない日付に上げない。** 実行環境が古いと
+  警告を出して黙って古い挙動に丸められ、本番だけが未検証の設定で動く
+- **`nodeBoundaryGuard.ts` の番人を消さない。** Workerの型定義が見張り先の名前を
+  宣言し始めると typecheck が落ちるが、それは境界が壊れたのではなく見張り先が
+  正規の型になっただけ。別の Node 専用の名前に移すこと
 - **締めと日送りは `advanceDay` の1バッチだけ。** 個別のUPDATE関数は乖離の温床なので削除済み。復活させない
 - **`apps/worker` のテストは `apps/web/dist` を必要とする。** 静的アセットの設定が
   そこを指しているため、無いとテストが1件も起動しない。CIは先にビルドしている
