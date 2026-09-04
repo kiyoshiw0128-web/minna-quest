@@ -2,6 +2,7 @@ import { catchUp } from './close.js';
 import { handleJoin } from './routes/join.js';
 import { handleToday } from './routes/today.js';
 import { handleVote } from './routes/vote.js';
+import { handleWorld } from './routes/world.js';
 import { fail, ok } from './respond.js';
 import type { Env } from './env.js';
 
@@ -21,6 +22,10 @@ export default {
 
     if (url.pathname === '/api/vote' && request.method === 'POST') {
       return handleVote(request, env);
+    }
+
+    if (url.pathname === '/api/world' && request.method === 'GET') {
+      return handleWorld(request, env);
     }
 
     return fail('not found', 404);
