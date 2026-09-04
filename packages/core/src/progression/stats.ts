@@ -43,10 +43,15 @@ function computeStat(
  *
  * 素質を伸びにだけ掛けるのは、差がレベルとともに開いていくようにするため。
  * 冒険レベルは転職しても下がらないので、この式の第2項は転職で失われない。
+ *
+ * ジョブレベルは currentJob ではなく引数の job.id から引く。両者がずれたまま
+ * 呼ぶと「パラディンの補正 × 戦士のジョブレベル」という、どの職業にも
+ * 対応しない数字が黙って出てしまう。job.id から引けば、就いたことのない
+ * 職業を渡す「その職業ならどうなるか」の試算がそのまま正しい値になる。
  */
 export function computeStats(character: Character, job: Job): StatBlock {
   const levels = character.adventureLevel - 1;
-  const jobLevel = character.jobs[character.currentJob]?.level ?? 1;
+  const jobLevel = character.jobs[job.id]?.level ?? 1;
 
   return {
     maxHp: computeStat('maxHp', character, job, levels, jobLevel),

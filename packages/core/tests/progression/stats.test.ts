@@ -17,6 +17,13 @@ const noBonus: Job = {
   id: 'blank', name: '無', tier: 'basic', statBonus: {}, learnset: [], requires: [],
 };
 
+/** 就いたことのない職業の試算に使う。warrior とは補正値が違う。 */
+const paladin: Job = {
+  id: 'paladin', name: 'パラディン', tier: 'advanced',
+  statBonus: { atk: 3, def: 4, mdf: 3, maxHp: 10 },
+  learnset: [], requires: [{ jobId: 'warrior', level: 20 }],
+};
+
 function character(over: Partial<Character> = {}): Character {
   return {
     id: 'c', name: 'テスト',
@@ -70,6 +77,35 @@ describe('computeStats', () => {
     const lv1 = computeStats(character(), warrior);
     const lv10 = computeStats(character({ jobs: { warrior: { level: 10, exp: 0 } } }), warrior);
     expect(lv10.atk - lv1.atk).toBe(27);
+  });
+
+  it('就いたことのない職業の試算はジョブレベル1で計算する', () => {
+    // 戦士レベル10のキャラに、就いたことのないパラディンの定義を渡す。
+    // 補正の出どころ（paladin）とレベルの出どころが食い違うと、
+    // 「パラディンの補正 × 戦士のレベル10」という誰のものでもない数字が出る。
+    const veteranWarrior = character({ jobs: { warrior: { level: 10, exp: 0 } } });
+
+    const preview = computeStats(veteranWarrior, paladin);
+
+    // ジョブレベル1ぶんの補正だけが乗る
+    expect(preview.atk).toBe(BASE_STATS.atk + 3);  // 12 + 3 = 15
+    expect(preview.def).toBe(BASE_STATS.def + 4);  // 10 + 4 = 14
+    expect(preview.maxHp).toBe(BASE_STATS.maxHp + 10);  // 120 + 10 = 130
+
+    // 戦士レベル10を流用していたら atk は 12 + 30 = 42 になっていた
+    expect(preview.atk).not.toBe(BASE_STATS.atk + 3 * 10);
+  });
+
+  it('就いたことのある職業の試算はその職業自身のレベルを使う', () => {
+    // 現在職は戦士（レベル10）だが、パラディンにも過去にレベル3まで就いている。
+    const both = character({
+      jobs: { warrior: { level: 10, exp: 0 }, paladin: { level: 3, exp: 0 } },
+    });
+
+    const preview = computeStats(both, paladin);
+
+    expect(preview.atk).toBe(BASE_STATS.atk + 3 * 3);  // 12 + 9 = 21
+    expect(preview.def).toBe(BASE_STATS.def + 4 * 3);  // 10 + 12 = 22
   });
 
   it('すべて整数を返す', () => {
