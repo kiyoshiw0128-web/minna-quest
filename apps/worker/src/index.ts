@@ -37,9 +37,20 @@ export default {
   async scheduled(_event: ScheduledController, env: Env): Promise<void> {
     const now = new Date();
     const worlds = await env.DB.prepare('SELECT id FROM worlds').all<{ id: string }>();
+    let totalClosed = 0;
+    let failedCount = 0;
+    // 世界ごとに独立して締める。1つの世界が例外を投げても、
+    // 他の世界の進行を止めてはいけない（複数世界を運用する段階で顕在化する穴）。
     for (const world of worlds.results) {
-      const closed = await catchUp(env.DB, world.id, now);
-      console.log(`world ${world.id}: closed ${closed} day(s)`);
+      try {
+        const closed = await catchUp(env.DB, world.id, now);
+        totalClosed += closed;
+        console.log(`world ${world.id}: closed ${closed} day(s)`);
+      } catch (error) {
+        failedCount += 1;
+        console.error(`world ${world.id}: catchUp failed`, error);
+      }
     }
+    console.log(`scheduled done: closed ${totalClosed} day(s) total, ${failedCount} world(s) failed`);
   },
 } satisfies ExportedHandler<Env>;
