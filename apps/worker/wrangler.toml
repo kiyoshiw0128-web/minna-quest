@@ -14,7 +14,7 @@ compatibility_flags = ["nodejs_compat"]
 [[d1_databases]]
 binding = "DB"
 database_name = "minna-quest"
-database_id = "00000000-0000-0000-0000-000000000000"
+database_id = "7fd0b4cc-6e86-4eb3-930f-7580a8cd2a81"
 
 [triggers]
 crons = ["0 20 * * *"]
