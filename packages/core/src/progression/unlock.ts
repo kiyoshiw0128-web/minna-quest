@@ -89,9 +89,11 @@ export function createCharacter(
 
   const learned = applyLearns(blank, learnsAt(job, 1)).character;
 
+  // 習得済みと装備は別々に動くリストなので、同じ配列オブジェクトを
+  // 共有させずに複製しておく。
   return {
     ...learned,
-    equippedActive: learned.learnedSkills,
-    equippedPassive: learned.learnedPassives,
+    equippedActive: [...learned.learnedSkills],
+    equippedPassive: [...learned.learnedPassives],
   };
 }

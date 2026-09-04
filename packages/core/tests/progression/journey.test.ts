@@ -19,6 +19,16 @@ function fresh(): Character {
   return createCharacter({ id: 'hero', name: '主人公', aptitude: flat, job: 'warrior' }, JOBS);
 }
 
+/**
+ * ok/reason の結果を開く。失敗したら投げる。
+ * `if (!result.ok) return;` で守ると、操作が壊れたときにテストが
+ * 何も検査しないまま緑で終わってしまうため。
+ */
+function unwrap<T>(result: { ok: true; character: T } | { ok: false; reason: string }): T {
+  if (!result.ok) throw new Error(`操作が失敗した: ${result.reason}`);
+  return result.character;
+}
+
 /** ジョブレベルを目標まで上げる。冒険レベルは動かさない。 */
 function trainJob(character: Character, target: number): Character {
   let current = character;
@@ -45,41 +55,30 @@ describe('育成の通し', () => {
   it('転職しても冒険レベルと習得済みは失われない', () => {
     const trained = gainExp(trainJob(fresh(), 12), { adventure: 100000, job: 0 }, JOBS).character;
     const level = trained.adventureLevel;
-    const changed = changeJob(trained, 'priest', JOBS);
-    expect(changed.ok).toBe(true);
-    if (!changed.ok) return;
-    expect(changed.character.adventureLevel).toBe(level);
-    expect(changed.character.learnedSkills).toContain('heavyBlow');
-    expect(changed.character.jobs['priest']).toEqual({ level: 1, exp: 0 });
+    const changed = unwrap(changeJob(trained, 'priest', JOBS));
+    expect(changed.adventureLevel).toBe(level);
+    expect(changed.learnedSkills).toContain('heavyBlow');
+    expect(changed.jobs['priest']).toEqual({ level: 1, exp: 0 });
   });
 
   it('2つの職業を育てると上級職が解禁される', () => {
     let hero = trainJob(fresh(), 20);
     expect(isUnlocked(hero, JOBS.paladin)).toBe(false);
 
-    const toPriest = changeJob(hero, 'priest', JOBS);
-    expect(toPriest.ok).toBe(true);
-    if (!toPriest.ok) return;
-    hero = trainJob(toPriest.character, 15);
+    hero = trainJob(unwrap(changeJob(hero, 'priest', JOBS)), 15);
 
     expect(isUnlocked(hero, JOBS.paladin)).toBe(true);
 
-    const toPaladin = changeJob(hero, 'paladin', JOBS);
-    expect(toPaladin.ok).toBe(true);
-    if (!toPaladin.ok) return;
-    expect(toPaladin.character.currentJob).toBe('paladin');
+    const toPaladin = unwrap(changeJob(hero, 'paladin', JOBS));
+    expect(toPaladin.currentJob).toBe('paladin');
   });
 
   it('上級職に就くとステータスが上がる', () => {
     let hero = trainJob(fresh(), 20);
     const asWarrior = computeStats(hero, JOBS.warrior);
 
-    const toPriest = changeJob(hero, 'priest', JOBS);
-    if (!toPriest.ok) return;
-    hero = trainJob(toPriest.character, 15);
-    const toPaladin = changeJob(hero, 'paladin', JOBS);
-    if (!toPaladin.ok) return;
-    const trained = trainJob(toPaladin.character, 20);
+    hero = trainJob(unwrap(changeJob(hero, 'priest', JOBS)), 15);
+    const trained = trainJob(unwrap(changeJob(hero, 'paladin', JOBS)), 20);
 
     const asPaladin = computeStats(trained, JOBS.paladin);
     expect(asPaladin.def).toBeGreaterThan(asWarrior.def);
@@ -95,9 +94,9 @@ describe('育成の通し', () => {
 
     // createCharacter が装備済みでも、比較を「slash 1本」に揃えるため付け直す
     function damageDealt(character: Character): number {
-      const equippedActive = equipActive(character, ['slash']);
-      if (!equippedActive.ok) throw new Error('equip failed');
-      const member = toPartyMember(equippedActive.character, JOBS.warrior, SKILLS, PASSIVES);
+      const member = toPartyMember(
+        unwrap(equipActive(character, ['slash'])), JOBS.warrior, SKILLS, PASSIVES,
+      );
       const log = simulate([member], dummy, { hero: ['slash'] }, { maxTurns: 1 });
       const hit = log.events.find((event) => event.t === 'damage');
       if (!hit || hit.t !== 'damage') throw new Error('no damage event');
@@ -111,14 +110,30 @@ describe('育成の通し', () => {
   });
 
   it('パッシブを装備すると戦闘に効く', () => {
-    const trained = trainJob(fresh(), 16);
-    const withSkill = equipActive(trained, ['slash']);
-    if (!withSkill.ok) return;
-    const withPassive = equipPassive(withSkill.character, ['ironSkin']);
-    expect(withPassive.ok).toBe(true);
-    if (!withPassive.ok) return;
+    // 殴ってくるだけの敵。こちらは何もせず、受けたダメージだけを見る。
+    const bruiser: Enemy = {
+      id: 'bruiser', name: '乱暴者',
+      stats: { maxHp: 9999, maxMp: 0, atk: 200, def: 1, mat: 1, mdf: 1, spd: 99 },
+      skills: [SKILLS.slash],
+      pattern: [{ skillId: 'slash' }],
+    };
 
-    const member = toPartyMember(withPassive.character, JOBS.warrior, SKILLS, PASSIVES);
-    expect(member.passives).toEqual([PASSIVES.ironSkin.effect]);
+    function damageTaken(character: Character): number {
+      const member = toPartyMember(character, JOBS.warrior, SKILLS, PASSIVES);
+      const log = simulate([member], bruiser, { hero: [null] }, { maxTurns: 1 });
+      return log.events
+        .filter((event) => event.t === 'damage' && event.targetId === 'hero')
+        .reduce((total, event) => total + (event.t === 'damage' ? event.amount : 0), 0);
+    }
+
+    // ironSkin は戦士レベル16で覚える（def +20%）
+    const trained = unwrap(equipActive(trainJob(fresh(), 16), ['slash']));
+    const guarded = unwrap(equipPassive(trained, ['ironSkin']));
+
+    const bare = damageTaken(trained);
+    const withPassive = damageTaken(guarded);
+
+    expect(bare).toBeGreaterThan(0);
+    expect(withPassive).toBeLessThan(bare);
   });
 });
