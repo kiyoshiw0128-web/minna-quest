@@ -31,5 +31,12 @@ jobs:
       - name: 型を検査する
         run: pnpm -r typecheck
 
+      # apps/worker は wrangler.toml の [assets] で apps/web/dist を指しており、
+      # このディレクトリが無いと Worker のテストは1件も起動しない
+      # （vitest-pool-workers が設定読み込みの時点で落ちる）。
+      # dist は生成物なのでリポジトリに入っていない。先にビルドする。
+      - name: 画面をビルドする
+        run: pnpm --filter @mq/web build
+
       - name: テストを走らせる
         run: pnpm -r test

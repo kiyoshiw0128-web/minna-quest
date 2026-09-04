@@ -28,6 +28,18 @@ apps/worker/       Cloudflare Worker（API・D1・Cron）
 apps/web/          Vite + React
 ```
 
+## テストを走らせる
+
+```bash
+corepack pnpm --filter @mq/web build   # 初回・画面を変えた後に必要
+corepack pnpm -r test
+corepack pnpm -r typecheck
+```
+
+`apps/worker` のテストは `apps/web/dist` を必要とする。Worker が画面を静的アセットと
+して配信する設定になっているためで、このディレクトリが無いと Worker のテストは
+1件も起動せずに落ちる。`dist` は生成物なのでリポジトリには入っていない。
+
 ## サーバを動かす
 
 ローカル:
