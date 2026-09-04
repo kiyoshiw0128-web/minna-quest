@@ -1,4 +1,6 @@
 import { handleJoin } from './routes/join.js';
+import { handleToday } from './routes/today.js';
+import { handleVote } from './routes/vote.js';
 import { fail, ok } from './respond.js';
 import type { Env } from './env.js';
 
@@ -10,6 +12,14 @@ export default {
 
     if (url.pathname === '/api/join' && request.method === 'POST') {
       return handleJoin(request, env);
+    }
+
+    if (url.pathname === '/api/today' && request.method === 'GET') {
+      return handleToday(request, env);
+    }
+
+    if (url.pathname === '/api/vote' && request.method === 'POST') {
+      return handleVote(request, env);
     }
 
     return fail('not found', 404);
