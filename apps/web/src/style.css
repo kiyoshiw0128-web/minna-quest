@@ -1,13 +1,52 @@
-/* 見た目は作り込まない。読める・押せる・状態が分かる、まで（設計書 §8）。 */
+/*
+ * 見た目は作り込まない。読める・押せる・状態が分かる、まで（設計書 §8）。
+ *
+ * ただし色は明示する。何も書かないと、ブラウザがダークモードのときに
+ * 背景だけ暗くなり文字色は既定の黒のままになって、黒地に黒で何も読めなくなる。
+ * 実際にそうなっていた。明暗どちらでも読めることは「作り込み」ではなく前提。
+ */
+:root {
+  color-scheme: light dark;
+  --bg: #ffffff;
+  --fg: #1a1a1a;
+  --muted: #5a5a5a;
+  --line: #d0d0d0;
+  --accent: #1b4f9c;
+  --alert: #b00020;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #16181c;
+    --fg: #e8e8e8;
+    --muted: #a0a4ab;
+    --line: #3a3f46;
+    --accent: #7fb0ff;
+    --alert: #ff8a95;
+  }
+}
+
 body {
   font-family: system-ui, sans-serif;
+  line-height: 1.6;
   max-width: 640px;
   margin: 0 auto;
   padding: 1rem;
+  background: var(--bg);
+  color: var(--fg);
+}
+
+nav {
+  display: flex;
+  gap: 0.5rem;
+  border-bottom: 1px solid var(--line);
+  padding-bottom: 0.5rem;
+  margin-bottom: 1rem;
 }
 
 nav button[aria-current='true'] {
   font-weight: bold;
+  color: var(--accent);
 }
 
 form label {
@@ -15,10 +54,41 @@ form label {
   margin-bottom: 0.5rem;
 }
 
+input {
+  background: var(--bg);
+  color: var(--fg);
+  border: 1px solid var(--line);
+  border-radius: 4px;
+  padding: 0.4rem 0.5rem;
+  font: inherit;
+}
+
 button {
   cursor: pointer;
+  background: var(--bg);
+  color: var(--fg);
+  border: 1px solid var(--line);
+  border-radius: 4px;
+  padding: 0.4rem 0.75rem;
+  font: inherit;
+}
+
+/* 自分が投票した選択肢。太字だけだと一覧の中で埋もれるので枠でも示す。 */
+button[aria-pressed='true'] {
+  font-weight: bold;
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+ul {
+  list-style: none;
+  padding: 0;
+}
+
+li {
+  margin-bottom: 0.5rem;
 }
 
 [role='alert'] {
-  color: #b00020;
+  color: var(--alert);
 }
