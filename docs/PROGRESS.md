@@ -12,24 +12,30 @@
 | 2 | 育成 `packages/core/src/progression/` | **完了・main にマージ済み** |
 | 3a | 日次ロジック `packages/core/src/daily/` | **完了・main にマージ済み** |
 | 3b | サーバ基盤 `apps/worker/` | **完了。`feat/worker-d1` でレビュー済み、マージ待ち** |
+| 4a | 画面・毎日の投票ループ `apps/web/` | **完了・main にマージ済み** |
 | 3c | 戦闘API・報酬 | 未着手（計画も無い） |
-| 4 | 画面・永続化のUI | 未着手（計画も無い） |
+| 4b | 戦闘・編成の画面 | 未着手。3c の後 |
 
 ## いまの状態
 
-- テスト **399件**（core 340 / worker 59）、typecheck クリーン、CI 緑
+- テスト **430件**（core 358 / worker 62 / web 10）、typecheck クリーン、CI 緑
 - `packages/core` は実行時依存ゼロ、乱数は `daily/` のシード付き純関数のみ
 - `apps/worker` は Cloudflare Worker + D1 + Cron。API 4本、招待コード認証、JST 05:00 の締めと取り戻し
-- **まだ遊べない。** 画面が無い。サーバは動くが、戦闘APIと報酬も未実装
+- `apps/web` は React。参加・今日の3択と投票・世界の履歴の3画面。同じ Worker が配信する
+- **毎日の周回は成立する。** 参加して投票し、翌朝に決まっているのを見るところまで
+- **戦闘はまだできない。** 戦闘APIが無い。エンジンにはあるが繋がっていない
 - **デプロイは未実施。** `README.md` の手順を人が実行する必要がある
 - リポジトリ: https://github.com/kiyoshiw0128-web/minna-quest （public）
 
 ## 次の一手
 
-`feat/worker-d1` を main にマージする。そのあとは段階3c（戦闘API・報酬）か段階4（画面）で、
-どちらも仕様・計画からになる。遊べるようにすることを優先するなら画面が先。
+段階3c（戦闘API・報酬）。エンジンの `simulate` をサーバから呼び、8ターンのプランを
+受けて結果を返す。「誰かが倒せば世界としては撃破」の集約もここ。
+そのあとで段階4b（戦闘・編成の画面）。
 
-段階3b 計画: `docs/superpowers/plans/2026-09-04-worker-d1.md`
+まだ**人がデプロイを実行していない**。`README.md` の手順を人が走らせる必要がある。
+
+段階4a 仕様: `docs/superpowers/specs/2026-09-05-web-daily-loop-design.md`
 段階3b 仕様: `docs/superpowers/specs/2026-09-04-worker-d1-design.md`
 
 ## 書類の置き場所
@@ -59,3 +65,9 @@ corepack pnpm --filter @mq/worker dev   # ローカルで workerd を起動
 - **`wrangler.toml` の `compatibility_date` は 2024-12-30 に低く固定してある。** ローカルの workerd の都合。
   本番にもこの値が乗るので、本番相当として使う前に wrangler ごと上げること
 - **締めと日送りは `advanceDay` の1バッチだけ。** 個別のUPDATE関数は乖離の温床なので削除済み。復活させない
+- **`apps/worker` のテストは `apps/web/dist` を必要とする。** 静的アセットの設定が
+  そこを指しているため、無いとテストが1件も起動しない。CIは先にビルドしている
+- **`wrangler.toml` の `run_worker_first` を外さない。** 外すと静的アセットが
+  `/api/*` を横取りし、画面には「通信に失敗しました」としか出なくなる
+- **ルートの deploy 用スクリプト名は `release`。** pnpm は `deploy` を予約語として
+  横取りするため、`pnpm deploy` は別のものになる
