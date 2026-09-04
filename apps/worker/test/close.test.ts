@@ -77,12 +77,16 @@ describe('catchUp', () => {
   it('二重に走らせても世界は二重に進まない', async () => {
     const first = await catchUp(env.DB, WORLD, atDay(2));
     const chosen = (await getDay(env.DB, WORLD, 1))?.chosenId;
+    const tagsAfterFirst = (await getWorld(env.DB, WORLD))?.tags;
+    const optionIdsAfterFirst = (await getDay(env.DB, WORLD, 2))?.optionIds;
 
     const second = await catchUp(env.DB, WORLD, atDay(2));
     expect(first).toBe(1);
     expect(second).toBe(0);
     expect((await getDay(env.DB, WORLD, 1))?.chosenId).toBe(chosen);
     expect((await getWorld(env.DB, WORLD))?.currentDay).toBe(2);
+    expect((await getWorld(env.DB, WORLD))?.tags).toEqual(tagsAfterFirst);
+    expect((await getDay(env.DB, WORLD, 2))?.optionIds).toEqual(optionIdsAfterFirst);
   });
 
   it('溜まった日を古い順に取り戻す', async () => {

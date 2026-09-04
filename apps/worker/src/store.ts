@@ -143,6 +143,58 @@ export async function markDayClosed(
   return (result.meta.changes ?? 0) === 1;
 }
 
+/**
+ * 1日分の締めと、それが生む3つの帰結（翌日の行の追加、世界の進行度更新）を
+ * 1トランザクションで行う。締めが実際に効いたかを返す。
+ *
+ * `db.batch` はD1では単一トランザクションとして実行されるため、途中で
+ * 落ちても「締めたのに翌日が無い」「翌日はあるのに進行度が古い」といった
+ * 半端な状態は残らない。
+ *
+ * 各文はそれぞれ自分の力で競合に強い：
+ * - 締め: `WHERE ... AND chosen_id IS NULL` で二重締めを防ぐ。changes をそのまま返り値にする。
+ * - 翌日の挿入: `ON CONFLICT (world_id, day_no) DO NOTHING` で、負けた側が
+ *   勝者の挿入済み行にぶつかってバッチ全体を失敗させない。
+ * - 進行度の更新: `WHERE id = ? AND current_day = ?` で、締めようとしている日から
+ *   進める場合だけ効かせる。負けた側は勝者がすでに current_day を進めているので
+ *   0行になり、勝者のフラグを上書きできない。
+ */
+export async function advanceDay(
+  db: D1Database,
+  worldId: string,
+  closedDay: WorldDay,
+  closedAt: string,
+  nextDay: WorldDay,
+  progress: { fromDay: number; currentDay: number; chapter: number; tags: readonly string[] },
+): Promise<boolean> {
+  const [closeResult] = await db.batch([
+    db
+      .prepare(
+        `UPDATE world_days
+            SET chosen_id = ?, counts = ?, tiebroken = ?, closed_at = ?
+          WHERE world_id = ? AND day_no = ? AND chosen_id IS NULL`,
+      )
+      .bind(
+        closedDay.chosenId, JSON.stringify(closedDay.counts), closedDay.tiebroken === true ? 1 : 0,
+        closedAt, worldId, closedDay.dayNo,
+      ),
+    db
+      .prepare(
+        `INSERT INTO world_days (world_id, day_no, option_ids, chosen_id, counts, tiebroken)
+         VALUES (?, ?, ?, NULL, NULL, NULL)
+         ON CONFLICT (world_id, day_no) DO NOTHING`,
+      )
+      .bind(worldId, nextDay.dayNo, JSON.stringify(nextDay.optionIds)),
+    db
+      .prepare(
+        `UPDATE worlds SET current_day = ?, chapter = ?, tags = ?
+          WHERE id = ? AND current_day = ?`,
+      )
+      .bind(progress.currentDay, progress.chapter, JSON.stringify(progress.tags), worldId, progress.fromDay),
+  ]);
+  return (closeResult.meta.changes ?? 0) === 1;
+}
+
 export async function listVotes(
   db: D1Database, worldId: string, dayNo: number,
 ): Promise<readonly Vote[]> {

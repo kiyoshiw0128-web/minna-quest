@@ -2,9 +2,7 @@ import {
   EVENTS, applyOutcome, chapterOf, closeDay, daySeed, jstDayNumber, pickEvents, voteSeed,
 } from '@mq/core';
 import type { DailyEvent, WorldFlags } from '@mq/core';
-import {
-  getWorld, insertDay, listOpenDaysBefore, listVotes, markDayClosed, updateWorldProgress,
-} from './store.js';
+import { advanceDay, getWorld, listOpenDaysBefore, listVotes } from './store.js';
 
 const POOL: readonly DailyEvent[] = Object.values(EVENTS);
 
@@ -28,7 +26,7 @@ export async function catchUp(db: D1Database, worldId: string, now: Date): Promi
 
   // 対象が無くなるまで繰り返す。1日締めるたびに翌日の行が増えるので、
   // 一覧は毎回引き直す。回数の上限は「今日より前の日数」で、
-  // 万一 markDayClosed が進まない状況でも無限ループにならない。
+  // 万一 advanceDay が進まない状況でも無限ループにならない。
   for (let guard = 0; guard < today; guard++) {
     const pending = await listOpenDaysBefore(db, worldId, today);
     const day = pending[0];
@@ -37,27 +35,28 @@ export async function catchUp(db: D1Database, worldId: string, now: Date): Promi
     const votes = await listVotes(db, worldId, day.dayNo);
     const resolved = closeDay(day, votes, voteSeed(worldId, day.dayNo));
 
-    const didClose = await markDayClosed(db, worldId, resolved, now.toISOString());
-    if (!didClose) continue; // すでに他が締めていた。正常な結果
-
-    closedCount += 1;
-
     const chosen = POOL.find((event) => event.id === resolved.chosenId);
-    if (chosen !== undefined) flags = applyOutcome(flags, chosen);
+    const nextFlags: WorldFlags = chosen === undefined ? flags : applyOutcome(flags, chosen);
 
     const nextDayNo = day.dayNo + 1;
-    flags = { ...flags, chapter: chapterOf(nextDayNo) };
+    const advancedFlags: WorldFlags = { ...nextFlags, chapter: chapterOf(nextDayNo) };
 
-    const options = pickEvents(POOL, flags, daySeed(worldId, nextDayNo));
-    await insertDay(db, worldId, {
-      dayNo: nextDayNo,
-      optionIds: options.map((event) => event.id),
-      chosenId: null,
-      counts: null,
-      tiebroken: null,
-    });
+    const options = pickEvents(POOL, advancedFlags, daySeed(worldId, nextDayNo));
 
-    await updateWorldProgress(db, worldId, nextDayNo, flags.chapter, flags.tags);
+    const didAdvance = await advanceDay(
+      db,
+      worldId,
+      resolved,
+      now.toISOString(),
+      { dayNo: nextDayNo, optionIds: options.map((event) => event.id), chosenId: null, counts: null, tiebroken: null },
+      { fromDay: day.dayNo, currentDay: nextDayNo, chapter: advancedFlags.chapter, tags: advancedFlags.tags },
+    );
+    // すでに他が締めていた。正常な結果。ローカルの flags はもう古いので、
+    // ここで止めて次回の起動に読み直しから任せる。
+    if (!didAdvance) break;
+
+    closedCount += 1;
+    flags = advancedFlags;
   }
 
   return closedCount;

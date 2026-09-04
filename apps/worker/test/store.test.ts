@@ -3,7 +3,7 @@ import { env, applyD1Migrations } from 'cloudflare:test';
 import {
   getWorld, getDay, listOpenDaysBefore, listClosedDays, listVotes,
   insertDay, markDayClosed, updateWorldProgress, upsertVote,
-  findPlayerByTokenHash, claimInvite, insertPlayer,
+  findPlayerByTokenHash, claimInvite, insertPlayer, advanceDay,
 } from '../src/store.js';
 
 const WORLD = 'w1';
@@ -113,6 +113,42 @@ describe('日', () => {
     }, '2026-09-04T20:00:00.000Z');
     const closed = await listClosedDays(env.DB, WORLD);
     expect(closed.map((day) => day.dayNo)).toEqual([1]);
+  });
+});
+
+describe('advanceDay', () => {
+  it('負けたランナーの呼び出しは世界のタグと進行度を書き換えない', async () => {
+    await insertDay(env.DB, WORLD, {
+      dayNo: 1, optionIds: ['a', 'b'], chosenId: null, counts: null, tiebroken: null,
+    });
+
+    // 勝者が先に1日分丸ごと進める。
+    const won = await advanceDay(
+      env.DB, WORLD,
+      { dayNo: 1, optionIds: ['a', 'b'], chosenId: 'a', counts: { a: 1 }, tiebroken: false },
+      '2026-09-04T20:00:00.000Z',
+      { dayNo: 2, optionIds: ['x', 'y', 'z'], chosenId: null, counts: null, tiebroken: null },
+      { fromDay: 1, currentDay: 2, chapter: 1, tags: ['winner-tag'] },
+    );
+    expect(won).toBe(true);
+
+    // 負けたランナーが同じ日を締めようとする。締めの文自体が0行になる。
+    const lost = await advanceDay(
+      env.DB, WORLD,
+      { dayNo: 1, optionIds: ['a', 'b'], chosenId: 'b', counts: { b: 1 }, tiebroken: false },
+      '2026-09-04T20:00:01.000Z',
+      { dayNo: 2, optionIds: ['p', 'q', 'r'], chosenId: null, counts: null, tiebroken: null },
+      { fromDay: 1, currentDay: 2, chapter: 2, tags: ['loser-tag'] },
+    );
+    expect(lost).toBe(false);
+
+    const day1 = await getDay(env.DB, WORLD, 1);
+    expect(day1?.chosenId).toBe('a');
+    const day2 = await getDay(env.DB, WORLD, 2);
+    expect(day2?.optionIds).toEqual(['x', 'y', 'z']);
+    const world = await getWorld(env.DB, WORLD);
+    expect(world?.currentDay).toBe(2);
+    expect(world?.tags).toEqual(['winner-tag']);
   });
 });
 
