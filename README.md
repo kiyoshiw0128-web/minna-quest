@@ -39,6 +39,12 @@ corepack pnpm --filter @mq/worker dev
 
 本番へのデプロイ:
 
+> **注意:** `apps/worker/wrangler.toml` の `compatibility_date` はローカルの workerd に
+> 合わせて `2024-12-30` に固定している。この値はそのまま本番にも適用される。
+> つまり本番は常にこの日付時点のWorker仕様で動く。本番投入前に、wrangler と workerd を
+> 更新したうえで `compatibility_date` を現在日付付近に上げること。上げないまま
+> 「本番運用中」と見なさないこと。
+
 ```bash
 # 1. D1 を作り、出力された database_id を wrangler.toml に書く
 corepack pnpm --filter @mq/worker exec wrangler d1 create minna-quest
