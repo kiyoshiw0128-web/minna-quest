@@ -46,14 +46,15 @@ describe('育成の通し', () => {
   });
 
   it('戦士を育てるとジョブレベルで技を覚える', () => {
-    const trained = trainJob(fresh(), 12);
+    // heavyBlowは戦士Lv18で覚える（jobs.ts参照）
+    const trained = trainJob(fresh(), 18);
     expect(trained.learnedSkills).toContain('slash');
     expect(trained.learnedSkills).toContain('provoke');
     expect(trained.learnedSkills).toContain('heavyBlow');
   });
 
   it('転職しても冒険レベルと習得済みは失われない', () => {
-    const trained = gainExp(trainJob(fresh(), 12), { adventure: 100000, job: 0 }, JOBS).character;
+    const trained = gainExp(trainJob(fresh(), 18), { adventure: 100000, job: 0 }, JOBS).character;
     const level = trained.adventureLevel;
     const changed = unwrap(changeJob(trained, 'priest', JOBS));
     expect(changed.adventureLevel).toBe(level);
@@ -126,7 +127,7 @@ describe('育成の通し', () => {
         .reduce((total, event) => total + (event.t === 'damage' ? event.amount : 0), 0);
     }
 
-    // ironSkin は戦士レベル16で覚える（def +20%）
+    // ironSkin は戦士レベル15で覚える（def +20%）。Lv16まで育てれば確実に習得済み
     const trained = unwrap(equipActive(trainJob(fresh(), 16), ['slash']));
     const guarded = unwrap(equipPassive(trained, ['ironSkin']));
 

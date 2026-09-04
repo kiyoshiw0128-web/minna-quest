@@ -5,8 +5,51 @@ import { SKILLS } from '../../src/data/skills.js';
 import { MAX_JOB_LEVEL } from '../../src/progression/curve.js';
 import { ACTIVE_SLOTS, PASSIVE_SLOTS } from '../../src/progression/equip.js';
 import type { LearnEntry } from '../../src/progression/job.js';
+import type { Skill } from '../../src/battle/skill.js';
+import type { StatKey } from '../../src/battle/types.js';
 
 const jobs = Object.values(JOBS);
+
+/**
+ * content-brief.mdの「職業ごとの主軸」表をそのままコード化したもの。
+ * 複数指定の職業（ranger/spellblade）は「両方」が求められているので、
+ * 表現としては「そのどちらかで伸びる技が1本以上」ではなく、後続のテストで
+ * 個別に判定する。単一指定の職業はここに1要素で並べる。
+ */
+const PRIMARY_AXIS: Readonly<Record<string, readonly StatKey[]>> = {
+  warrior: ['atk'],
+  monk: ['atk'],
+  mage: ['mat'],
+  priest: ['mdf'],
+  thief: ['spd'],
+  ranger: ['spd', 'mat'],
+  paladin: ['def'],
+  spellblade: ['atk', 'mat'],
+  sage: ['mat'],
+};
+
+/**
+ * damage.tsのscaleOfと同じ既定ルール（物理はatk、魔法はmat）。
+ * exportされていないのでテスト側で再現する。healはhealScale、既定はmat。
+ */
+function skillScales(skill: Skill): readonly StatKey[] {
+  const scales: StatKey[] = [];
+  if (skill.damage?.kind === 'physical' || skill.damage?.kind === 'magical') {
+    scales.push(skill.damage.scale ?? (skill.damage.kind === 'physical' ? 'atk' : 'mat'));
+  }
+  if (skill.heal !== undefined) {
+    scales.push(skill.healScale ?? 'mat');
+  }
+  return scales;
+}
+
+/** その職業が覚える技（learnedスキルのみ、パッシブは除く）を解決する。 */
+function learnedSkills(job: (typeof jobs)[number]): Skill[] {
+  const entries: readonly LearnEntry[] = job.learnset;
+  return entries
+    .filter((entry) => entry.kind === 'skill')
+    .map((entry) => SKILLS[entry.id as keyof typeof SKILLS]);
+}
 
 describe('職業マスタの健全性', () => {
   it('キーと id が一致している', () => {
@@ -110,5 +153,60 @@ describe('職業マスタの健全性', () => {
     for (const passive of Object.values(PASSIVES)) {
       expect(passive.effect.turns).toBe(Infinity);
     }
+  });
+
+  /**
+   * content-brief.mdの「職業ごとの主軸」表と実データが一致していることの検査。
+   * 「勝てる」ではなく「その能力で伸びる技を持っているか」を見る。
+   * 主軸をATKからDEFに書き換える、あるいはscale指定ごと消すと、この検査が落ちる
+   * ことを確認済み（手動でSKILLS.judgmentShield.damage.scaleを外して確認した）。
+   */
+  it('各職業が覚える技に、主軸として指定した能力で伸びる技が1本以上ある', () => {
+    for (const job of jobs) {
+      const axis = PRIMARY_AXIS[job.id];
+      expect(axis, `${job.id} の主軸が PRIMARY_AXIS に定義されていない`).toBeDefined();
+
+      const matches = learnedSkills(job).filter((skill) =>
+        skillScales(skill).some((scale) => axis.includes(scale)),
+      );
+      expect(
+        matches.length,
+        `${job.id} は主軸(${axis.join('/')})で伸びる技を持っていない`,
+      ).toBeGreaterThan(0);
+    }
+  });
+
+  it('狩人はSPDで伸びる物理とMATで伸びる属性矢の両方を持つ', () => {
+    const skills = learnedSkills(JOBS.ranger);
+    const hasSpdPhysical = skills.some(
+      (skill) => skill.damage?.kind === 'physical' && skill.damage.scale === 'spd',
+    );
+    const hasMatMagical = skills.some(
+      (skill) =>
+        skill.damage?.kind === 'magical' && (skill.damage.scale ?? 'mat') === 'mat',
+    );
+    expect(hasSpdPhysical).toBe(true);
+    expect(hasMatMagical).toBe(true);
+  });
+
+  it('魔剣士はATKとMAT両方で伸びる技を持つ', () => {
+    const skills = learnedSkills(JOBS.spellblade);
+    const hasAtk = skills.some(
+      (skill) =>
+        skill.damage?.kind === 'physical' && (skill.damage.scale ?? 'atk') === 'atk',
+    );
+    const hasMat = skills.some(
+      (skill) =>
+        skill.damage?.kind === 'magical' && (skill.damage.scale ?? 'mat') === 'mat',
+    );
+    expect(hasAtk).toBe(true);
+    expect(hasMat).toBe(true);
+  });
+
+  it('僧侶はMDFで回復する技を持つ（healScale: mdf）', () => {
+    const skills = learnedSkills(JOBS.priest);
+    expect(skills.some((skill) => skill.heal !== undefined && skill.healScale === 'mdf')).toBe(
+      true,
+    );
   });
 });
