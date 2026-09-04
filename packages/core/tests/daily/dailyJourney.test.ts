@@ -121,14 +121,50 @@ describe('日次ループの通し', () => {
   });
 
   it('酒場の顔ぶれはイベントの3択と相関しない', () => {
-    const eventFirsts = new Set<string>();
-    const tavernFirsts = new Set<string>();
-    for (let dayNo = 1; dayNo <= 20; dayNo++) {
-      eventFirsts.add(openDay('world-1', dayNo).optionIds[0]);
-      tavernFirsts.add(rollRecruits(tavernSeed('world-1', dayNo), `world-1:${dayNo}`, NAMES, basicJobs, 15)[0].name);
+    // 「どちらもばらけている」では、二つのシードが同一に潰れた実装でも通ってしまう。
+    // 同じ関数を両方のシードで駆動して、出てくる列がずれることを見る。
+    const days = 200;
+
+    const eventsByDaySeed: string[] = [];
+    const eventsByTavernSeed: string[] = [];
+    const rosterByTavernSeed: string[] = [];
+    const rosterByDaySeed: string[] = [];
+
+    for (let dayNo = 1; dayNo <= days; dayNo++) {
+      const flags = { chapter: chapterOf(dayNo), tags: [] };
+
+      // まずシードそのものが、どの日でも一致しない。
+      expect(daySeed('world-1', dayNo)).not.toBe(tavernSeed('world-1', dayNo));
+
+      eventsByDaySeed.push(
+        pickEvents(pool, flags, daySeed('world-1', dayNo)).map((e) => e.id).join(),
+      );
+      eventsByTavernSeed.push(
+        pickEvents(pool, flags, tavernSeed('world-1', dayNo)).map((e) => e.id).join(),
+      );
+
+      const prefix = `world-1:${dayNo}`;
+      rosterByTavernSeed.push(
+        rollRecruits(tavernSeed('world-1', dayNo), prefix, NAMES, basicJobs, 15)
+          .map((r) => r.name)
+          .join(),
+      );
+      rosterByDaySeed.push(
+        rollRecruits(daySeed('world-1', dayNo), prefix, NAMES, basicJobs, 15)
+          .map((r) => r.name)
+          .join(),
+      );
     }
-    expect(eventFirsts.size).toBeGreaterThan(1);
-    expect(tavernFirsts.size).toBeGreaterThan(1);
+
+    // 名前空間が潰れていれば、これらは同じ列になる。
+    expect(eventsByDaySeed).not.toEqual(eventsByTavernSeed);
+    expect(rosterByTavernSeed).not.toEqual(rosterByDaySeed);
+
+    // 潰れていなければ、日ごとの一致もごく一部にとどまる。
+    const sameEventDraw = eventsByDaySeed.filter((v, i) => v === eventsByTavernSeed[i]).length;
+    const sameRoster = rosterByTavernSeed.filter((v, i) => v === rosterByDaySeed[i]).length;
+    expect(sameEventDraw).toBeLessThan(days / 2);
+    expect(sameRoster).toBeLessThan(days / 2);
   });
 
   it('酒場には毎日3人並び、値段がついている', () => {
