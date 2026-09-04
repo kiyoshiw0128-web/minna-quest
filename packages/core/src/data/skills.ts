@@ -114,17 +114,19 @@ export const SKILLS = {
     damage: { kind: 'physical', power: 190 },
   },
   /**
-   * 武闘家のSPD技1本。spdの成長は全能力中最小（1.2/Lv）で、武闘家の
-   * statBonusもspd1しか乗らないため、同じpowerのATK技には届かない
-   * （冒険Lv20・C素質・ジョブLv20で武闘家はatk168・spd52。防御力60の
-   * 相手にslashは105、power300のこの技でも97.5と一段落ちる）。
-   * それでも通常のSPD技の目安（ATK技の2.5〜3倍）まで積んでおくことで、
-   * SPD寄りの素質を選んだプレイヤーには報いる技として機能する。
+   * 武闘家のSPD技1本。SPDは全能力中もっとも成長が遅く（1.2/Lv、ATKは4/Lv）、
+   * 武闘家のstatBonusもspd1しか乗らない。ATK技と同じ power では、MPを払う技が
+   * 無消費のslashに負ける。実測（冒険Lv20・C素質・ジョブLv20・相手DEF60）で
+   * power300では97、slashは105と逆転していた。
+   *
+   * power420まで積むと、C素質でも136とslashを明確に上回り、SPDに素質を
+   * 振ったキャラでは154まで伸びる。SPD技の power がATK技の3倍を超えるのは、
+   * 能力そのものの伸びの差をここで埋めているため。
    */
   galeKick: {
     id: 'galeKick', name: '疾風脚', mpCost: 12, cooldown: 2,
     element: 'none', target: 'enemy',
-    damage: { kind: 'physical', power: 300, scale: 'spd' },
+    damage: { kind: 'physical', power: 420, scale: 'spd' },
   },
   manaBolt: {
     id: 'manaBolt', name: '魔弾', mpCost: 9, cooldown: 0,
@@ -201,11 +203,20 @@ export const SKILLS = {
     element: 'none', target: 'enemy',
     damage: { kind: 'physical', power: 140 },
   },
-  /** 狩人のSPD物理。thunderArrowのMAT属性矢と対になる「両方」の片側。 */
+  /**
+   * 狩人のSPD物理。snipe（MP10・CD2・power200・pierce0.3）と選ばせる技なので、
+   * 同じ MP と CD で power だけ上げると、ATK型では常にsnipeが上、SPD型では
+   * 常にこちらが上という、素質で答えが決まる死んだ選択になる。
+   *
+   * MP8・CD1と軽くして、1発の威力ではsnipeにやや劣るが倍の頻度で撃てる技に
+   * してある。実測（冒険Lv20・C素質・ジョブLv20・相手DEF60）で、C素質では
+   * 162対snipe180、SPDに振ると177対163と逆転する。撃つ回数を含めれば
+   * どちらの素質でも選ぶ理由がある。
+   */
   windArrow: {
-    id: 'windArrow', name: '疾風の矢', mpCost: 10, cooldown: 2,
+    id: 'windArrow', name: '疾風の矢', mpCost: 8, cooldown: 1,
     element: 'none', target: 'enemy',
-    damage: { kind: 'physical', power: 260, scale: 'spd' },
+    damage: { kind: 'physical', power: 360, scale: 'spd' },
   },
   thunderArrow: {
     id: 'thunderArrow', name: '雷の矢', mpCost: 9, cooldown: 0,

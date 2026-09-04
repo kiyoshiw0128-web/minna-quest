@@ -7,6 +7,10 @@ import { createBattleState, findCombatant } from '../../src/battle/state.js';
 import type { PartyMember } from '../../src/battle/state.js';
 import { computeDamage } from '../../src/battle/damage.js';
 import type { AttackerStats } from '../../src/battle/types.js';
+import { computeStats } from '../../src/progression/stats.js';
+import type { Aptitude, Character } from '../../src/progression/types.js';
+import type { Job } from '../../src/progression/job.js';
+import type { Skill } from '../../src/battle/skill.js';
 
 /**
  * マスタデータが実行時に書き換えられないことの検査。
@@ -130,5 +134,69 @@ describe('マスタデータ', () => {
         );
       }
     }
+  });
+});
+
+describe('技がMPに見合っているか', () => {
+  const FLAT_APTITUDE: Aptitude = {
+    maxHp: 'C', maxMp: 'C', atk: 'C', def: 'C', mat: 'C', mdf: 'C', spd: 'C',
+  };
+  const TARGET_DEF = 60;
+  const TARGET_MDF = 40;
+  const TARGET_MAX_HP = 2000;
+
+  function statsFor(job: Job) {
+    const character: Character = {
+      id: 'probe', name: 'probe',
+      adventureLevel: 20, adventureExp: 0,
+      aptitude: FLAT_APTITUDE,
+      currentJob: job.id,
+      jobs: { [job.id]: { level: 20, exp: 0 } },
+      learnedSkills: [], learnedPassives: [], equippedActive: [], equippedPassive: [],
+    };
+    return computeStats(character, job);
+  }
+
+  /**
+   * MPを払う単体攻撃技が、無消費の通常攻撃（威力100・ATK基準）に負けていないこと。
+   *
+   * これは机上の balance 感覚ではなく、実際に一度起きた事故を捕まえるための検査。
+   * scale を SPD にした技は、SPD の成長がATKの3分の1以下（1.2/Lv 対 4/Lv）
+   * であるために、同じ power では無消費の通常攻撃に負ける。負けている技は
+   * 誰も選ばないので、その職業の主軸として置いた意味がなくなる。
+   *
+   * 弱体・強化を伴う技（effects つき）は、威力ではなくその効果に価値があるので
+   * 対象から外す。全体攻撃も、1発の威力では比べられないので外す。
+   */
+  it('MPを払う単体攻撃は、どの職業でも無消費の通常攻撃を上回る', () => {
+    const weaker: string[] = [];
+
+    for (const job of Object.values(JOBS)) {
+      const stats = statsFor(job);
+      const attacker = {
+        atk: stats.atk, def: stats.def, mat: stats.mat, mdf: stats.mdf, spd: stats.spd,
+      };
+      const common = {
+        attacker, def: TARGET_DEF, mdf: TARGET_MDF, targetMaxHp: TARGET_MAX_HP,
+        elementRate: 1, damageTakenRate: 1,
+      };
+      const freeAttack = computeDamage({ ...common, spec: { kind: 'physical', power: 100 } });
+
+      for (const entry of job.learnset) {
+        if (entry.kind !== 'skill') continue;
+        const skill: Skill = SKILLS[entry.id as keyof typeof SKILLS];
+        if (!skill.damage) continue;
+        if (skill.mpCost === 0) continue;
+        if (skill.effects) continue;
+        if (skill.target !== 'enemy') continue;
+
+        const damage = computeDamage({ ...common, spec: skill.damage });
+        if (damage <= freeAttack) {
+          weaker.push(`${job.id}/${skill.id}: ${damage} <= ${freeAttack}`);
+        }
+      }
+    }
+
+    expect(weaker).toEqual([]);
   });
 });
