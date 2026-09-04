@@ -43,6 +43,11 @@ export async function catchUp(db: D1Database, worldId: string, now: Date): Promi
 
     const options = pickEvents(POOL, advancedFlags, daySeed(worldId, nextDayNo));
 
+    // 選んだ選択肢に金貨があれば世界の全員に配る（設計書 §4）。ルートが共有なので
+    // 得られるものも共有でよく、誰が投票したかで差をつけない。締めと同じバッチに
+    // 入れることで、締めの冪等性がそのままこの配布の冪等性になる。
+    const goldAward = chosen?.outcome?.gold ?? 0;
+
     const didAdvance = await advanceDay(
       db,
       worldId,
@@ -50,6 +55,7 @@ export async function catchUp(db: D1Database, worldId: string, now: Date): Promi
       now.toISOString(),
       { dayNo: nextDayNo, optionIds: options.map((event) => event.id), chosenId: null, counts: null, tiebroken: null },
       { fromDay: day.dayNo, currentDay: nextDayNo, chapter: advancedFlags.chapter, tags: advancedFlags.tags },
+      goldAward,
     );
     // すでに他が締めていた。正常な結果。ローカルの flags はもう古いので、
     // ここで止めて次回の起動に読み直しから任せる。

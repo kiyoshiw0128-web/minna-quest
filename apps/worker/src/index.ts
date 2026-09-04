@@ -1,5 +1,7 @@
 import { catchUp } from './close.js';
+import { handleHire } from './routes/hire.js';
 import { handleJoin } from './routes/join.js';
+import { handleTavern } from './routes/tavern.js';
 import { handleToday } from './routes/today.js';
 import { handleVote } from './routes/vote.js';
 import { handleWorld } from './routes/world.js';
@@ -26,6 +28,14 @@ export default {
 
     if (url.pathname === '/api/world' && request.method === 'GET') {
       return handleWorld(request, env);
+    }
+
+    if (url.pathname === '/api/tavern' && request.method === 'GET') {
+      return handleTavern(request, env);
+    }
+
+    if (url.pathname === '/api/hire' && request.method === 'POST') {
+      return handleHire(request, env);
     }
 
     // `/api/` 配下で上のどれにも一致しなかったものは、画面のアセットに

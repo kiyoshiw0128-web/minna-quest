@@ -1,5 +1,6 @@
 import { describe, it, expect, beforeEach } from 'vitest';
 import { env, SELF, applyD1Migrations } from 'cloudflare:test';
+import { createCharacter, JOBS } from '@mq/core';
 import { randomToken, sha256Hex, bearerToken } from '../src/auth.js';
 import { claimInviteAndInsertPlayer, findUnusedInviteWorldId } from '../src/store.js';
 
@@ -146,6 +147,10 @@ describe('POST /api/join', () => {
     await env.DB.prepare('UPDATE invites SET used_by = ?, used_at = ? WHERE code_hash = ?')
       .bind('someone-else', '2026-09-03T00:00:00.000Z', codeHash).run();
 
+    const hero = createCharacter({ id: 'c-race', name: 'レース', aptitude: {
+      maxHp: 'A', maxMp: 'A', atk: 'A', def: 'A', mat: 'A', mdf: 'A', spd: 'A',
+    }, job: 'warrior' }, JOBS);
+
     const claimed = await claimInviteAndInsertPlayer(env.DB, {
       codeHash,
       playerId: 'p-race',
@@ -153,6 +158,7 @@ describe('POST /api/join', () => {
       name: 'レース',
       tokenHash: await sha256Hex('irrelevant-token'),
       usedAt: '2026-09-03T00:00:01.000Z',
+      hero,
     });
     expect(claimed).toBe(false);
   });

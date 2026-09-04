@@ -125,3 +125,64 @@ describe('catchUp', () => {
     expect(await catchUp(env.DB, 'nope', atDay(2))).toBe(0);
   });
 });
+
+async function insertPlayer(id: string): Promise<void> {
+  await env.DB.prepare(
+    `INSERT INTO players (id, world_id, name, token_hash, joined_at) VALUES (?, ?, ?, ?, ?)`,
+  ).bind(id, WORLD, id, `token-${id}`, '2026-09-04T00:00:00.000Z').run();
+}
+
+async function goldOf(id: string): Promise<number> {
+  const row = await env.DB.prepare('SELECT gold FROM players WHERE id = ?').bind(id).first<{ gold: number }>();
+  return row?.gold ?? -1;
+}
+
+describe('金貨の配布（設計書 §4）', () => {
+  it('確定した選択肢に gold があれば世界の全員に配られる', async () => {
+    await insertPlayer('p1');
+    await insertPlayer('p2');
+    // restAtSpring の outcome.gold は 10（packages/core/src/data/events.ts）。
+    await env.DB.prepare(
+      `INSERT INTO votes (world_id, day_no, player_id, option_id, voted_at) VALUES (?, 1, 'p1', 'restAtSpring', ?)`,
+    ).bind(WORLD, '2026-09-04T00:00:00.000Z').run();
+
+    await catchUp(env.DB, WORLD, atDay(2));
+
+    expect(await goldOf('p1')).toBe(10);
+    expect(await goldOf('p2')).toBe(10);
+  });
+
+  it('gold を持たない選択肢（戦闘）が確定した日は誰にも配られない', async () => {
+    await insertPlayer('p1');
+    await env.DB.prepare(
+      `INSERT INTO votes (world_id, day_no, player_id, option_id, voted_at) VALUES (?, 1, 'p1', 'banditAmbush', ?)`,
+    ).bind(WORLD, '2026-09-04T00:00:00.000Z').run();
+
+    await catchUp(env.DB, WORLD, atDay(2));
+
+    expect(await goldOf('p1')).toBe(0);
+  });
+
+  it(
+    '二重に締めても金貨は二重に配られない（並行実行でガードを競わせる）',
+    async () => {
+      await insertPlayer('p1');
+      await env.DB.prepare(
+        `INSERT INTO votes (world_id, day_no, player_id, option_id, voted_at) VALUES (?, 1, 'p1', 'restAtSpring', ?)`,
+      ).bind(WORLD, '2026-09-04T00:00:00.000Z').run();
+
+      // close.test.ts の「二重に走らせても世界は二重に進まない」と同じ理由で、
+      // 逐次呼び出しではなく並行に走らせて締めの完了と締めのガードを実際に競わせる。
+      const [first, second] = await Promise.all([
+        catchUp(env.DB, WORLD, atDay(2)),
+        catchUp(env.DB, WORLD, atDay(2)),
+      ]);
+      expect([first, second].sort((a, b) => b - a)).toEqual([1, 0]);
+
+      // ガードが効いていれば10のまま。advanceDay の金貨配布から
+      // `EXISTS (... chosen_id IS NULL)` を外すと、負けた側のバッチでも
+      // 配布が実行されてしまい20になる（実際に外して確認済み。報告書参照）。
+      expect(await goldOf('p1')).toBe(10);
+    },
+  );
+});

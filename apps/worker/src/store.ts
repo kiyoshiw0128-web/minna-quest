@@ -1,4 +1,4 @@
-import type { Vote, WorldDay } from '@mq/core';
+import type { Character, Vote, WorldDay } from '@mq/core';
 
 export type WorldRow = {
   readonly id: string;
@@ -99,7 +99,7 @@ export async function listClosedDays(
 }
 
 /**
- * 1日分の締めと、それが生む3つの帰結（翌日の行の追加、世界の進行度更新）を
+ * 1日分の締めと、それが生む4つの帰結（金貨の配布、翌日の行の追加、世界の進行度更新）を
  * 1トランザクションで行う。締めが実際に効いたかを返す。
  *
  * `db.batch` はD1では単一トランザクションとして実行されるため、途中で
@@ -107,6 +107,10 @@ export async function listClosedDays(
  * 半端な状態は残らない。
  *
  * 各文はそれぞれ自分の力で競合に強い：
+ * - 金貨の配布: `EXISTS (... WHERE ... AND chosen_id IS NULL)` を締めの文より前に置き、
+ *   締める前の状態（未締め）を条件にする。締めの文が chosen_id を埋めた後では
+ *   このEXISTSは常にfalseになるので、二重に締めても二重に配れない。
+ *   締めが冪等ならこの配布も自動的に冪等になる、という設計をそのままSQLに落としている。
  * - 締め: `WHERE ... AND chosen_id IS NULL` で二重締めを防ぐ。changes をそのまま返り値にする。
  * - 翌日の挿入: `ON CONFLICT (world_id, day_no) DO NOTHING` で、負けた側が
  *   勝者の挿入済み行にぶつかってバッチ全体を失敗させない。
@@ -121,8 +125,19 @@ export async function advanceDay(
   closedAt: string,
   nextDay: WorldDay,
   progress: { fromDay: number; currentDay: number; chapter: number; tags: readonly string[] },
+  goldAward = 0,
 ): Promise<boolean> {
-  const [closeResult] = await db.batch([
+  const [, closeResult] = await db.batch([
+    db
+      .prepare(
+        `UPDATE players SET gold = gold + ?
+          WHERE world_id = ?
+            AND EXISTS (
+              SELECT 1 FROM world_days
+               WHERE world_id = ? AND day_no = ? AND chosen_id IS NULL
+            )`,
+      )
+      .bind(goldAward, worldId, worldId, closedDay.dayNo),
     db
       .prepare(
         `UPDATE world_days
@@ -228,13 +243,58 @@ export async function findUnusedInviteWorldId(
 }
 
 /**
- * 招待を使用済みにするのと、プレイヤーを作るのを1トランザクションで行う。
+ * Character を新規に挿入するための文を組み立てる。
+ * jobs / learnedSkills / learnedPassives は数が可変なので、呼び出し側が
+ * 組み立てるバッチにそのまま展開できるよう配列で返す（1つの prepare にまとめられない）。
+ *
+ * 挿入対象はすべて新規の character_id を前提にした無条件の INSERT。
+ * 競合を気にしなければならないのは呼び出し側（雇用の金貨・枠のガード）の役目で、
+ * ここでは「渡された Character をそのまま行に落とす」ことだけに専念する。
+ */
+function characterInsertStatements(
+  db: D1Database, character: Character, playerId: string,
+): D1PreparedStatement[] {
+  return [
+    db
+      .prepare(
+        `INSERT INTO characters
+           (id, player_id, name, adventure_level, adventure_exp, aptitude, current_job, equipped_active, equipped_passive)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      )
+      .bind(
+        character.id, playerId, character.name, character.adventureLevel, character.adventureExp,
+        JSON.stringify(character.aptitude), character.currentJob,
+        JSON.stringify(character.equippedActive), JSON.stringify(character.equippedPassive),
+      ),
+    ...Object.entries(character.jobs).map(([jobId, progress]) =>
+      db
+        .prepare('INSERT INTO job_levels (character_id, job_id, level, exp) VALUES (?, ?, ?, ?)')
+        .bind(character.id, jobId, progress.level, progress.exp),
+    ),
+    ...character.learnedSkills.map((skillId) =>
+      db.prepare(`INSERT INTO learned (character_id, kind, id) VALUES (?, 'skill', ?)`).bind(character.id, skillId),
+    ),
+    ...character.learnedPassives.map((passiveId) =>
+      db.prepare(`INSERT INTO learned (character_id, kind, id) VALUES (?, 'passive', ?)`).bind(character.id, passiveId),
+    ),
+  ];
+}
+
+/**
+ * 招待を使用済みにするのと、プレイヤーを作るのと、その主人公を1体作って
+ * パーティ枠0に入れるのを1トランザクションで行う。
  * `db.batch` はD1では単一トランザクションとして実行されるため、
- * どちらかが失敗しても中途半端な状態（招待だけ消費されてプレイヤーが無い等）は残らない。
+ * どれかが失敗しても中途半端な状態（招待だけ消費されてプレイヤーが無い、
+ * プレイヤーはできたのに主人公が無い、等）は残らない。
  *
  * 招待の消費は `WHERE code_hash = ? AND used_by IS NULL` で守られているので、
  * 呼び出し前の読み取りと書き込みの間に他の誰かが同じコードを使っていれば0行更新になる。
  * 戻り値の false はまさにその競合を表す。
+ *
+ * プレイヤー行・主人公の行は招待の消費が失敗しても無条件に作られる。
+ * 既存のプレイヤー挿入がそうだったのと同じ理由で、そのプレイヤーの
+ * トークンを誰も知らないので無害（呼び出し元は claimed=false を見て
+ * そのままエラーを返し、トークンを漏らさない）。
  */
 export async function claimInviteAndInsertPlayer(
   db: D1Database,
@@ -245,6 +305,7 @@ export async function claimInviteAndInsertPlayer(
     name: string;
     tokenHash: string;
     usedAt: string;
+    hero: Character;
   },
 ): Promise<boolean> {
   const [claimResult] = await db.batch([
@@ -256,6 +317,105 @@ export async function claimInviteAndInsertPlayer(
         `INSERT INTO players (id, world_id, name, token_hash, joined_at) VALUES (?, ?, ?, ?, ?)`,
       )
       .bind(params.playerId, params.worldId, params.name, params.tokenHash, params.usedAt),
+    ...characterInsertStatements(db, params.hero, params.playerId),
+    db
+      .prepare('INSERT INTO party (player_id, character_id, slot) VALUES (?, ?, 0)')
+      .bind(params.playerId, params.hero.id),
   ]);
   return (claimResult.meta.changes ?? 0) === 1;
+}
+
+export async function getPlayerGold(db: D1Database, playerId: string): Promise<number | null> {
+  const raw = await db.prepare('SELECT gold FROM players WHERE id = ?').bind(playerId).first<{ gold: number }>();
+  return raw === null ? null : raw.gold;
+}
+
+export async function getPartySize(db: D1Database, playerId: string): Promise<number> {
+  const raw = await db
+    .prepare('SELECT COUNT(*) AS n FROM party WHERE player_id = ?')
+    .bind(playerId)
+    .first<{ n: number }>();
+  return raw?.n ?? 0;
+}
+
+/** パーティの枠は0〜3の4つ。 */
+const PARTY_SLOTS = 4;
+
+/**
+ * 雇用を1トランザクションで行う。金貨の減算と characters/job_levels/learned/party
+ * への挿入を分けると、「金だけ減って仲間が増えない」事故が起きる（設計書 §5）。
+ *
+ * characters の挿入そのものに「今この瞬間、金貨が足りているか」「パーティに
+ * 空きがあるか」の両方をガードとして持たせている。このSELECTはバッチの最初の
+ * 文なので、他のどの文にもまだ触れられていない状態（呼び出し前と同じ状態）を見る。
+ * 以降の文（job_levels・learned・party・金貨の減算）はすべて
+ * 「その character_id が存在するか」だけを条件にしているので、
+ * 最初の挿入が0行だった場合は連鎖してすべて0行になり、何も変わらない。
+ *
+ * パーティの空き枠探しは `NOT EXISTS` で0〜3のうち埋まっていない最小の枠を選ぶ。
+ * (player_id, slot) が主キーなので、同じ枠に2人入る事故はDBの制約自体が防ぐ。
+ */
+export async function hireRecruit(
+  db: D1Database,
+  params: { playerId: string; cost: number; character: Character },
+): Promise<boolean> {
+  const { playerId, cost, character } = params;
+
+  const [charResult] = await db.batch([
+    db
+      .prepare(
+        `INSERT INTO characters
+           (id, player_id, name, adventure_level, adventure_exp, aptitude, current_job, equipped_active, equipped_passive)
+         SELECT ?, ?, ?, ?, ?, ?, ?, ?, ?
+          WHERE (SELECT gold FROM players WHERE id = ?) >= ?
+            AND (SELECT COUNT(*) FROM party WHERE player_id = ?) < ${PARTY_SLOTS}`,
+      )
+      .bind(
+        character.id, playerId, character.name, character.adventureLevel, character.adventureExp,
+        JSON.stringify(character.aptitude), character.currentJob,
+        JSON.stringify(character.equippedActive), JSON.stringify(character.equippedPassive),
+        playerId, cost, playerId,
+      ),
+    ...Object.entries(character.jobs).map(([jobId, progress]) =>
+      db
+        .prepare(
+          `INSERT INTO job_levels (character_id, job_id, level, exp)
+           SELECT ?, ?, ?, ? WHERE EXISTS (SELECT 1 FROM characters WHERE id = ?)`,
+        )
+        .bind(character.id, jobId, progress.level, progress.exp, character.id),
+    ),
+    ...character.learnedSkills.map((skillId) =>
+      db
+        .prepare(
+          `INSERT INTO learned (character_id, kind, id)
+           SELECT ?, 'skill', ? WHERE EXISTS (SELECT 1 FROM characters WHERE id = ?)`,
+        )
+        .bind(character.id, skillId, character.id),
+    ),
+    ...character.learnedPassives.map((passiveId) =>
+      db
+        .prepare(
+          `INSERT INTO learned (character_id, kind, id)
+           SELECT ?, 'passive', ? WHERE EXISTS (SELECT 1 FROM characters WHERE id = ?)`,
+        )
+        .bind(character.id, passiveId, character.id),
+    ),
+    db
+      .prepare(
+        `INSERT INTO party (player_id, character_id, slot)
+         SELECT ?, ?, s.slot
+           FROM (SELECT 0 AS slot UNION ALL SELECT 1 UNION ALL SELECT 2 UNION ALL SELECT 3) s
+          WHERE EXISTS (SELECT 1 FROM characters WHERE id = ?)
+            AND NOT EXISTS (SELECT 1 FROM party WHERE player_id = ? AND slot = s.slot)
+          ORDER BY s.slot LIMIT 1`,
+      )
+      .bind(playerId, character.id, character.id, playerId),
+    db
+      .prepare(
+        `UPDATE players SET gold = gold - ?
+          WHERE id = ? AND EXISTS (SELECT 1 FROM characters WHERE id = ?)`,
+      )
+      .bind(cost, playerId, character.id),
+  ]);
+  return (charResult.meta.changes ?? 0) === 1;
 }

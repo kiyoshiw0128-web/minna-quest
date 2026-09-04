@@ -1,8 +1,9 @@
 import { describe, it, expect, beforeEach } from 'vitest';
 import { env, applyD1Migrations } from 'cloudflare:test';
+import { createCharacter, JOBS } from '@mq/core';
 import {
   getWorld, getDay, listOpenDaysBefore, listClosedDays, listVotes,
-  upsertVote, findPlayerByTokenHash, insertPlayer, advanceDay,
+  upsertVote, findPlayerByTokenHash, insertPlayer, advanceDay, hireRecruit,
 } from '../src/store.js';
 
 const WORLD = 'w1';
@@ -31,7 +32,7 @@ async function closeDayRaw(
 
 beforeEach(async () => {
   await applyD1Migrations(env.DB, env.TEST_MIGRATIONS);
-  for (const table of ['votes', 'world_days', 'players', 'invites', 'worlds']) {
+  for (const table of ['party', 'learned', 'job_levels', 'characters', 'votes', 'world_days', 'players', 'invites', 'worlds']) {
     await env.DB.prepare(`DELETE FROM ${table}`).run();
   }
   await seedWorld();
@@ -165,4 +166,56 @@ describe('プレイヤー', () => {
   it('知らないハッシュは null', async () => {
     expect(await findPlayerByTokenHash(env.DB, 'nope')).toBeNull();
   });
+});
+
+describe('hireRecruit', () => {
+  const APTITUDE = { maxHp: 'C', maxMp: 'C', atk: 'C', def: 'C', mat: 'C', mdf: 'C', spd: 'C' } as const;
+
+  async function seedPlayerWithGold(gold: number): Promise<void> {
+    await insertPlayer(env.DB, {
+      id: 'p1', worldId: WORLD, name: 'テスト', tokenHash: 'h-hire', joinedAt: '2026-09-04T00:00:00.000Z',
+    });
+    await env.DB.prepare('UPDATE players SET gold = ? WHERE id = ?').bind(gold, 'p1').run();
+  }
+
+  it('金貨が足りて枠もあれば、金貨を引いてキャラとパーティ枠を作る', async () => {
+    await seedPlayerWithGold(100);
+    const character = createCharacter({ id: 'c1', name: 'リクルート', aptitude: APTITUDE, job: 'warrior' }, JOBS);
+
+    const hired = await hireRecruit(env.DB, { playerId: 'p1', cost: 80, character });
+    expect(hired).toBe(true);
+
+    const player = await env.DB.prepare('SELECT gold FROM players WHERE id = ?').bind('p1').first<{ gold: number }>();
+    expect(player?.gold).toBe(20);
+    const party = await env.DB.prepare('SELECT character_id FROM party WHERE player_id = ?').bind('p1').first<{ character_id: string }>();
+    expect(party?.character_id).toBe('c1');
+  });
+
+  // パーティが満杯のときにキャラの挿入が丸ごとスキップされることの検査。
+  // ルート側（hire.ts）の事前チェックだけでこの経路を通ろうとすると、
+  // 事前チェックで先に断られてしまい hireRecruit の中のガードを一度も通らない。
+  // そのためここでは store の関数を直接叩いて、DB側のガードそのものを検査する。
+  it(
+    'パーティが満杯なら、金貨が足りていてもキャラは作られず金貨も減らない',
+    async () => {
+      await seedPlayerWithGold(1000);
+      for (let slot = 0; slot < 4; slot++) {
+        await env.DB.prepare('INSERT INTO party (player_id, character_id, slot) VALUES (?, ?, ?)')
+          .bind('p1', `dummy-${slot}`, slot).run();
+      }
+      const character = createCharacter({ id: 'c-overflow', name: 'あぶれ', aptitude: APTITUDE, job: 'warrior' }, JOBS);
+
+      const hired = await hireRecruit(env.DB, { playerId: 'p1', cost: 80, character });
+      expect(hired).toBe(false);
+
+      const player = await env.DB.prepare('SELECT gold FROM players WHERE id = ?').bind('p1').first<{ gold: number }>();
+      // ガードが効いていれば1000のまま。characters の挿入INSERTから
+      // 「金貨・枠」のWHERE条件を外すと、パーティが満杯でも金貨だけ引かれてしまう
+      // （実際に外して確認済み。報告書参照）。
+      expect(player?.gold).toBe(1000);
+
+      const characterRow = await env.DB.prepare('SELECT id FROM characters WHERE id = ?').bind('c-overflow').first();
+      expect(characterRow).toBeNull();
+    },
+  );
 });
