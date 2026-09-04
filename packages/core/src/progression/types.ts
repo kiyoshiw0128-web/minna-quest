@@ -13,7 +13,7 @@ export type Aptitude = Readonly<Record<keyof StatBlock, Grade>>;
 export type JobId = string;
 
 /** ある職業での進み具合。職業ごとに独立して持つ。 */
-export type JobProgress = { level: number; exp: number };
+export type JobProgress = { readonly level: number; readonly exp: number };
 
 /**
  * 育成上のキャラクター。戦闘用の PartyMember とは別物で、

@@ -104,7 +104,25 @@ describe('gainExp - ジョブレベルと習得', () => {
   });
 });
 
+/**
+ * JobProgress は世代をまたいで参照が共有される（再訪の転職では jobs レコードごと、
+ * gainExp では現在職以外の JobProgress が入力と同一オブジェクトになる）。
+ * 1回の書き換えが過去のスナップショットまで遡って壊すので、型で止める。
+ *
+ * この関数は「コンパイルが通らないこと」を確かめるためだけのもので、呼ばない。
+ */
+function neverCalled(character: Character): void {
+  // @ts-expect-error ジョブレベルは readonly
+  character.jobs['warrior'].level = 99;
+  // @ts-expect-error ジョブ経験値は readonly
+  character.jobs['warrior'].exp = 99;
+}
+
 describe('gainExp - 不変性', () => {
+  it('JobProgress は型レベルで書き換えを拒む', () => {
+    expect(typeof neverCalled).toBe('function');
+  });
+
   it('元のキャラを書き換えない', () => {
     const before = character();
     gainExp(before, { adventure: 10000, job: 10000 }, jobs);
