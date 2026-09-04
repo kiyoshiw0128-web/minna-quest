@@ -4,3 +4,14 @@ dist/
 .dev.vars
 .DS_Store
 .superpowers/
+
+# tsc をむき出しで走らせたときにソースの隣へ吐かれる生成物。
+# ビルド成果物は dist/ 以外に置かない。
+packages/core/src/**/*.js
+packages/core/src/**/*.d.ts
+packages/core/src/**/*.js.map
+packages/core/src/**/*.d.ts.map
+packages/core/tests/**/*.js
+packages/core/tests/**/*.d.ts
+packages/core/tests/**/*.js.map
+packages/core/tests/**/*.d.ts.map
