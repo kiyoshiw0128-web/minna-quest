@@ -1,6 +1,7 @@
 import { describe, it, expect, beforeEach } from 'vitest';
 import { env, SELF, applyD1Migrations } from 'cloudflare:test';
 import { randomToken, sha256Hex, bearerToken } from '../src/auth.js';
+import { claimInviteAndInsertPlayer, findUnusedInviteWorldId } from '../src/store.js';
 
 const WORLD = 'w1';
 
@@ -132,5 +133,27 @@ describe('POST /api/join', () => {
       body: 'not json',
     });
     expect(response.status).toBe(400);
+  });
+
+  it('読み取りと書き込みの間に他人が使い切っても claimInviteAndInsertPlayer は false を返す', async () => {
+    await addInvite('secret-code');
+    const codeHash = await sha256Hex('secret-code');
+
+    const worldId = await findUnusedInviteWorldId(env.DB, codeHash);
+    expect(worldId).toBe(WORLD);
+
+    // 読み取りの直後に別のリクエストが同じコードを使い切った状況を再現する。
+    await env.DB.prepare('UPDATE invites SET used_by = ?, used_at = ? WHERE code_hash = ?')
+      .bind('someone-else', '2026-09-03T00:00:00.000Z', codeHash).run();
+
+    const claimed = await claimInviteAndInsertPlayer(env.DB, {
+      codeHash,
+      playerId: 'p-race',
+      worldId: worldId as string,
+      name: 'レース',
+      tokenHash: await sha256Hex('irrelevant-token'),
+      usedAt: '2026-09-03T00:00:01.000Z',
+    });
+    expect(claimed).toBe(false);
   });
 });

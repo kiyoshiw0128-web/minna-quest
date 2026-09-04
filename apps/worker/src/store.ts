@@ -209,3 +209,50 @@ export async function claimInvite(
     .first<{ world_id: string }>();
   return result === null ? null : result.world_id;
 }
+
+/**
+ * 招待が未使用のまま存在するかを確認し、所属する世界のIDを返す。
+ * 存在しない・すでに使用済みなら null。この時点では何も変更しない。
+ */
+export async function findUnusedInviteWorldId(
+  db: D1Database, codeHash: string,
+): Promise<string | null> {
+  const result = await db
+    .prepare('SELECT world_id FROM invites WHERE code_hash = ? AND used_by IS NULL')
+    .bind(codeHash)
+    .first<{ world_id: string }>();
+  return result === null ? null : result.world_id;
+}
+
+/**
+ * 招待を使用済みにするのと、プレイヤーを作るのを1トランザクションで行う。
+ * `db.batch` はD1では単一トランザクションとして実行されるため、
+ * どちらかが失敗しても中途半端な状態（招待だけ消費されてプレイヤーが無い等）は残らない。
+ *
+ * 招待の消費は `WHERE code_hash = ? AND used_by IS NULL` で守られているので、
+ * 呼び出し前の読み取りと書き込みの間に他の誰かが同じコードを使っていれば0行更新になる。
+ * 戻り値の false はまさにその競合を表す。
+ */
+export async function claimInviteAndInsertPlayer(
+  db: D1Database,
+  params: {
+    codeHash: string;
+    playerId: string;
+    worldId: string;
+    name: string;
+    tokenHash: string;
+    usedAt: string;
+  },
+): Promise<boolean> {
+  const [claimResult] = await db.batch([
+    db
+      .prepare('UPDATE invites SET used_by = ?, used_at = ? WHERE code_hash = ? AND used_by IS NULL')
+      .bind(params.playerId, params.usedAt, params.codeHash),
+    db
+      .prepare(
+        `INSERT INTO players (id, world_id, name, token_hash, joined_at) VALUES (?, ?, ?, ?, ?)`,
+      )
+      .bind(params.playerId, params.worldId, params.name, params.tokenHash, params.usedAt),
+  ]);
+  return (claimResult.meta.changes ?? 0) === 1;
+}
