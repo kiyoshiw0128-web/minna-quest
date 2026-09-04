@@ -96,6 +96,16 @@ describe('gainExp - ジョブレベルと習得', () => {
     expect(after.jobs['mage']).toEqual({ level: 5, exp: 100 });
   });
 
+  it('表に無い職業なら投げる', () => {
+    const broken = character({ currentJob: 'ghost', jobs: { ghost: { level: 1, exp: 0 } } });
+    expect(() => gainExp(broken, { adventure: 0, job: 30 }, jobs)).toThrow('unknown job: ghost');
+  });
+
+  it('経験値が0でも表に無い職業なら投げる', () => {
+    const broken = character({ currentJob: 'ghost' });
+    expect(() => gainExp(broken, { adventure: 100, job: 0 }, jobs)).toThrow('unknown job: ghost');
+  });
+
   it('ジョブレベルの上限で止まる', () => {
     const maxed = character({ jobs: { warrior: { level: MAX_JOB_LEVEL, exp: 0 } } });
     const { character: after } = gainExp(maxed, { adventure: 0, job: 999999 }, jobs);

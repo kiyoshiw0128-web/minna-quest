@@ -84,8 +84,14 @@ function advanceJob(
   events: ProgressEvent[],
 ): Pick<Character, 'jobs' | 'learnedSkills' | 'learnedPassives'> {
   const jobId = character.currentJob;
-  const current: JobProgress = character.jobs[jobId] ?? { level: 1, exp: 0 };
   const definition = jobs[jobId];
+  // 表に無い職業は投げる。黙って進めると「レベルは上がるのに何も覚えない」
+  // キャラができてしまい、原因（壊れたセーブデータの職業ID）から何層も
+  // 離れたところで表面化する。bridge.ts / createCharacter / canChangeJob と
+  // 同じ扱いに揃える。
+  if (!definition) throw new Error(`unknown job: ${jobId}`);
+
+  const current: JobProgress = character.jobs[jobId] ?? { level: 1, exp: 0 };
 
   let level = current.level;
   let exp = current.exp + amount;
@@ -96,7 +102,6 @@ function advanceJob(
     level += 1;
     events.push({ t: 'jobLevelUp', jobId, level });
 
-    if (!definition) continue;
     const learned = applyLearns(learner, learnsAt(definition, level));
     learner = learned.character;
     events.push(...learned.events);
