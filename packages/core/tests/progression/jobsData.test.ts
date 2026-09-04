@@ -3,6 +3,8 @@ import { JOBS } from '../../src/data/jobs.js';
 import { PASSIVES } from '../../src/data/passives.js';
 import { SKILLS } from '../../src/data/skills.js';
 import { MAX_JOB_LEVEL } from '../../src/progression/curve.js';
+import { ACTIVE_SLOTS, PASSIVE_SLOTS } from '../../src/progression/equip.js';
+import type { LearnEntry } from '../../src/progression/job.js';
 
 const jobs = Object.values(JOBS);
 
@@ -77,6 +79,24 @@ describe('職業マスタの健全性', () => {
     for (const job of jobs) {
       const atOne = job.learnset.filter((entry) => entry.level === 1);
       expect(atOne.length).toBeGreaterThan(0);
+    }
+  });
+
+  /**
+   * createCharacter は初期職のレベル1の習得をそのまま装備する。枠数を見ないので、
+   * レベル1で枠より多く覚える職業を足すと、ルール上ありえない数の技を持った
+   * キャラが戦闘エンジンまで届いてしまう。今のマスタでは起きないが、
+   * 将来の職業追加で越えたらここで気づけるようにしておく。
+   */
+  it('レベル1で覚えるものは装備枠に収まる', () => {
+    for (const job of jobs) {
+      // マスタの as const で kind が絞り込まれて検査が空回りしないよう、
+      // 一般の LearnEntry として扱う。
+      const atOne: readonly LearnEntry[] = job.learnset.filter((entry) => entry.level === 1);
+      const skills = atOne.filter((entry) => entry.kind === 'skill');
+      const passives = atOne.filter((entry) => entry.kind === 'passive');
+      expect(skills.length).toBeLessThanOrEqual(ACTIVE_SLOTS);
+      expect(passives.length).toBeLessThanOrEqual(PASSIVE_SLOTS);
     }
   });
 

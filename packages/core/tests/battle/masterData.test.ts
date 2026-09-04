@@ -1,6 +1,8 @@
 import { describe, it, expect } from 'vitest';
 import { SKILLS } from '../../src/data/skills.js';
 import { BALGOS } from '../../src/data/enemies.js';
+import { JOBS } from '../../src/data/jobs.js';
+import { PASSIVES } from '../../src/data/passives.js';
 import { createBattleState, findCombatant } from '../../src/battle/state.js';
 import type { PartyMember } from '../../src/battle/state.js';
 
@@ -27,6 +29,18 @@ function neverCalled(): void {
   BALGOS.skills[3].damage.power = 9999;
   // @ts-expect-error 敵の技の効果ネスト先も readonly
   BALGOS.skills[2].effects[0].effect.turns = 99;
+  // @ts-expect-error 職業の補正値は readonly
+  JOBS.warrior.statBonus.atk = 999;
+  // @ts-expect-error 習得表の要素の中身も readonly
+  JOBS.warrior.learnset[0].id = 'meteor';
+  // @ts-expect-error 習得表は readonly な配列
+  JOBS.mage.learnset[0] = JOBS.warrior.learnset[0];
+  // @ts-expect-error 上級職の解禁条件も readonly
+  JOBS.paladin.requires[0].level = 1;
+  // @ts-expect-error パッシブの効果も readonly
+  PASSIVES.ironSkin.effect.rate = 9;
+  // @ts-expect-error パッシブの効果の持続ターンも readonly
+  PASSIVES.swiftFoot.effect.turns = 1;
 }
 
 const hero: PartyMember = {
