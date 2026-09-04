@@ -68,3 +68,22 @@ export function pickEvents(
 ): readonly DailyEvent[] {
   return drawWithout(seed, eligibleEvents(pool, flags), OPTIONS_PER_DAY);
 }
+
+/**
+ * 選ばれたイベントの結果を、翌日の世界の状態に畳み込む。
+ *
+ * outcome.addTags を tags に足した新しい WorldFlags を返す。
+ * すでに持っているタグは重複させない。渡された flags には触れない。
+ * 結果を持たないイベントや addTags のないイベントはそのまま返す。
+ *
+ * 章は日数から決まるもので、イベントの結果では動かさない。
+ */
+export function applyOutcome(flags: WorldFlags, event: DailyEvent): WorldFlags {
+  const added = event.outcome?.addTags;
+  if (added === undefined || added.length === 0) return flags;
+
+  const fresh = added.filter((tag) => !flags.tags.includes(tag));
+  if (fresh.length === 0) return flags;
+
+  return { ...flags, tags: [...flags.tags, ...fresh] };
+}

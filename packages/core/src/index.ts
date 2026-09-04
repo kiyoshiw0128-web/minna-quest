@@ -68,6 +68,7 @@ export {
   matchesCondition,
   eligibleEvents,
   pickEvents,
+  applyOutcome,
   OPTIONS_PER_DAY,
 } from './daily/event.js';
 export { tallyVotes } from './daily/vote.js';

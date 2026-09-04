@@ -1,20 +1,21 @@
 import { describe, it, expect } from 'vitest';
 import { daySeed, tavernSeed } from '../../src/daily/seed.js';
-import { pickEvents } from '../../src/daily/event.js';
+import { pickEvents, applyOutcome } from '../../src/daily/event.js';
 import { closeDay, chapterOf, isBossDay } from '../../src/daily/day.js';
 import { rollRecruits } from '../../src/daily/recruit.js';
 import { EVENTS } from '../../src/data/events.js';
 import { NAMES } from '../../src/data/names.js';
 import { JOBS } from '../../src/data/jobs.js';
 import type { WorldDay } from '../../src/daily/day.js';
+import type { WorldFlags, DailyEvent } from '../../src/daily/event.js';
 import type { Vote } from '../../src/daily/vote.js';
 
 const pool = Object.values(EVENTS);
 const basicJobs = Object.values(JOBS).filter((job) => job.tier === 'basic').map((job) => job.id);
 
-/** その日の3択を作る。 */
-function openDay(worldId: string, dayNo: number): WorldDay {
-  const options = pickEvents(pool, { chapter: chapterOf(dayNo), tags: [] }, daySeed(worldId, dayNo));
+/** その日の3択を作る。tags を渡さなければ、まだ何も拾っていない世界として開く。 */
+function openDay(worldId: string, dayNo: number, tags: readonly string[] = []): WorldDay {
+  const options = pickEvents(pool, { chapter: chapterOf(dayNo), tags }, daySeed(worldId, dayNo));
   return { dayNo, optionIds: options.map((event) => event.id), chosenId: null, counts: null, tiebroken: null };
 }
 
@@ -67,6 +68,51 @@ describe('日次ループの通し', () => {
       const closed = closeDay(day, [], daySeed('world-1', dayNo));
       expect(closed.chosenId).not.toBeNull();
     }
+  });
+
+  it('30日分の選択がフラグに積み上がり、条件つきのイベントが開く', () => {
+    // 選んだイベントの結果を翌日のフラグに畳み込みながら30日進める。
+    // これをやらないと requiresTags のイベントは永遠に出てこない。
+    let flags: WorldFlags = { chapter: chapterOf(1), tags: [] };
+    const collected: string[] = [];
+    const gatedSeen = new Set<string>();
+
+    for (let dayNo = 1; dayNo <= 30; dayNo++) {
+      flags = { chapter: chapterOf(dayNo), tags: flags.tags };
+
+      const options = pickEvents(pool, flags, daySeed('world-1', dayNo));
+      expect(options.length).toBeGreaterThan(0);
+
+      for (const option of options) {
+        if (option.condition.requiresTags !== undefined) gatedSeen.add(option.id);
+      }
+
+      const day: WorldDay = {
+        dayNo,
+        optionIds: options.map((event) => event.id),
+        chosenId: null,
+        counts: null,
+        tiebroken: null,
+      };
+      const closed = closeDay(day, [], daySeed('world-1', dayNo));
+      expect(closed.chosenId).not.toBeNull();
+
+      const chosen = options.find((event) => event.id === closed.chosenId);
+      expect(chosen).toBeDefined();
+
+      const next = applyOutcome(flags, chosen as DailyEvent);
+      for (const tag of next.tags) {
+        if (!collected.includes(tag)) collected.push(tag);
+      }
+      flags = next;
+    }
+
+    // 選択の結果としてタグが実際に貯まっている。
+    expect(collected.length).toBeGreaterThan(0);
+    expect(flags.tags).toEqual(collected);
+
+    // 貯まったタグに守られていたイベントが、実際に3択へ顔を出した。
+    expect(gatedSeen.size).toBeGreaterThan(0);
   });
 
   it('7日ごとにボスの日が来る', () => {

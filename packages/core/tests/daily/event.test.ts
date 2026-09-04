@@ -3,6 +3,7 @@ import {
   matchesCondition,
   eligibleEvents,
   pickEvents,
+  applyOutcome,
   OPTIONS_PER_DAY,
 } from '../../src/daily/event.js';
 import type { DailyEvent, WorldFlags } from '../../src/daily/event.js';
@@ -108,5 +109,55 @@ describe('pickEvents', () => {
 
   it('OPTIONS_PER_DAY は3', () => {
     expect(OPTIONS_PER_DAY).toBe(3);
+  });
+});
+
+describe('applyOutcome', () => {
+  function withTags(...tags: readonly string[]): DailyEvent {
+    return { id: 'e', name: 'e', kind: 'story', condition: {}, outcome: { addTags: tags } };
+  }
+
+  const empty: WorldFlags = { chapter: 1, tags: [] };
+
+  it('結果のタグが次の日のフラグに乗る', () => {
+    expect(applyOutcome(empty, withTags('met-elder')).tags).toEqual(['met-elder']);
+  });
+
+  it('すでに持っているタグは重複しない', () => {
+    const flagsWith: WorldFlags = { chapter: 1, tags: ['met-elder'] };
+    expect(applyOutcome(flagsWith, withTags('met-elder')).tags).toEqual(['met-elder']);
+  });
+
+  it('新しいタグだけが足される', () => {
+    const flagsWith: WorldFlags = { chapter: 1, tags: ['met-elder'] };
+    expect(applyOutcome(flagsWith, withTags('met-elder', 'has-pet')).tags).toEqual([
+      'met-elder',
+      'has-pet',
+    ]);
+  });
+
+  it('結果のないイベントはフラグを変えない', () => {
+    const battle: DailyEvent = {
+      id: 'b', name: 'b', kind: 'battle', enemyId: 'balgos', condition: {},
+    };
+    expect(applyOutcome(empty, battle)).toBe(empty);
+  });
+
+  it('addTags のない結果はフラグを変えない', () => {
+    const gold: DailyEvent = {
+      id: 'g', name: 'g', kind: 'story', condition: {}, outcome: { gold: 30 },
+    };
+    expect(applyOutcome(empty, gold)).toBe(empty);
+  });
+
+  it('章は動かさない', () => {
+    const flagsAt: WorldFlags = { chapter: 3, tags: [] };
+    expect(applyOutcome(flagsAt, withTags('saw-ruins')).chapter).toBe(3);
+  });
+
+  it('元のフラグを変更しない', () => {
+    const before: WorldFlags = { chapter: 1, tags: ['met-elder'] };
+    applyOutcome(before, withTags('has-pet'));
+    expect(before.tags).toEqual(['met-elder']);
   });
 });
