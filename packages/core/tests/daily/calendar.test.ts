@@ -54,4 +54,8 @@ describe('jstDayNumber', () => {
       expect(Number.isInteger(jstDayNumber(started, now))).toBe(true);
     }
   });
+
+  it('startedAt が日付として解釈できないと例外を投げる（黙って NaN を返さない）', () => {
+    expect(() => jstDayNumber('not-a-date', new Date('2026-09-04T15:00:00.000Z'))).toThrow();
+  });
 });

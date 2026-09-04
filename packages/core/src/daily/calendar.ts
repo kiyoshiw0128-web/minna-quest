@@ -18,6 +18,10 @@ function jstDayIndex(at: number): number {
  * 現在時刻を引数で受け取るのは、日付境界の挙動を実機なしでテストするため。
  */
 export function jstDayNumber(startedAt: string, now: Date): number {
-  const days = jstDayIndex(now.getTime()) - jstDayIndex(Date.parse(startedAt));
+  const startedAtMs = Date.parse(startedAt);
+  if (Number.isNaN(startedAtMs)) {
+    throw new Error(`jstDayNumber: startedAt を日付として解釈できない: ${startedAt}`);
+  }
+  const days = jstDayIndex(now.getTime()) - jstDayIndex(startedAtMs);
   return Math.max(1, days + 1);
 }
