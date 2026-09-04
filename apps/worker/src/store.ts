@@ -1,0 +1,211 @@
+import type { Vote, WorldDay } from '@mq/core';
+
+export type WorldRow = {
+  readonly id: string;
+  readonly name: string;
+  readonly startedAt: string;
+  readonly currentDay: number;
+  readonly chapter: number;
+  readonly tags: readonly string[];
+};
+
+export type PlayerRow = {
+  readonly id: string;
+  readonly worldId: string;
+  readonly name: string;
+};
+
+type RawWorld = {
+  id: string; name: string; started_at: string;
+  current_day: number; chapter: number; tags: string;
+};
+
+type RawDay = {
+  day_no: number; option_ids: string;
+  chosen_id: string | null; counts: string | null; tiebroken: number | null;
+};
+
+function toWorld(raw: RawWorld): WorldRow {
+  return {
+    id: raw.id,
+    name: raw.name,
+    startedAt: raw.started_at,
+    currentDay: raw.current_day,
+    chapter: raw.chapter,
+    tags: JSON.parse(raw.tags) as string[],
+  };
+}
+
+function toDay(raw: RawDay): WorldDay {
+  return {
+    dayNo: raw.day_no,
+    optionIds: JSON.parse(raw.option_ids) as string[],
+    chosenId: raw.chosen_id,
+    counts: raw.counts === null ? null : (JSON.parse(raw.counts) as Record<string, number>),
+    tiebroken: raw.tiebroken === null ? null : raw.tiebroken === 1,
+  };
+}
+
+export async function getWorld(db: D1Database, worldId: string): Promise<WorldRow | null> {
+  const raw = await db
+    .prepare('SELECT id, name, started_at, current_day, chapter, tags FROM worlds WHERE id = ?')
+    .bind(worldId)
+    .first<RawWorld>();
+  return raw === null ? null : toWorld(raw);
+}
+
+export async function updateWorldProgress(
+  db: D1Database, worldId: string, currentDay: number, chapter: number, tags: readonly string[],
+): Promise<void> {
+  await db
+    .prepare('UPDATE worlds SET current_day = ?, chapter = ?, tags = ? WHERE id = ?')
+    .bind(currentDay, chapter, JSON.stringify(tags), worldId)
+    .run();
+}
+
+export async function getDay(
+  db: D1Database, worldId: string, dayNo: number,
+): Promise<WorldDay | null> {
+  const raw = await db
+    .prepare(
+      `SELECT day_no, option_ids, chosen_id, counts, tiebroken
+         FROM world_days WHERE world_id = ? AND day_no = ?`,
+    )
+    .bind(worldId, dayNo)
+    .first<RawDay>();
+  return raw === null ? null : toDay(raw);
+}
+
+/** 締めていない日のうち、指定した日より前のものを古い順に返す。 */
+export async function listOpenDaysBefore(
+  db: D1Database, worldId: string, today: number,
+): Promise<readonly WorldDay[]> {
+  const result = await db
+    .prepare(
+      `SELECT day_no, option_ids, chosen_id, counts, tiebroken
+         FROM world_days
+        WHERE world_id = ? AND day_no < ? AND chosen_id IS NULL
+        ORDER BY day_no ASC`,
+    )
+    .bind(worldId, today)
+    .all<RawDay>();
+  return result.results.map(toDay);
+}
+
+export async function listClosedDays(
+  db: D1Database, worldId: string,
+): Promise<readonly WorldDay[]> {
+  const result = await db
+    .prepare(
+      `SELECT day_no, option_ids, chosen_id, counts, tiebroken
+         FROM world_days
+        WHERE world_id = ? AND chosen_id IS NOT NULL
+        ORDER BY day_no ASC`,
+    )
+    .bind(worldId)
+    .all<RawDay>();
+  return result.results.map(toDay);
+}
+
+export async function insertDay(
+  db: D1Database, worldId: string, day: WorldDay,
+): Promise<void> {
+  await db
+    .prepare(
+      `INSERT INTO world_days (world_id, day_no, option_ids, chosen_id, counts, tiebroken)
+       VALUES (?, ?, ?, NULL, NULL, NULL)`,
+    )
+    .bind(worldId, day.dayNo, JSON.stringify(day.optionIds))
+    .run();
+}
+
+/**
+ * その日を締める。すでに締まっていれば false を返す。
+ *
+ * `WHERE chosen_id IS NULL` が冪等性そのもの。二重に走った2回目は0行更新で終わる。
+ * 4列を1文で書くので、chosen_id だけ入って counts が NULL という半端な行は作れない。
+ * **0行はエラーではなく正常な結果。**
+ */
+export async function markDayClosed(
+  db: D1Database, worldId: string, day: WorldDay, closedAt: string,
+): Promise<boolean> {
+  const result = await db
+    .prepare(
+      `UPDATE world_days
+          SET chosen_id = ?, counts = ?, tiebroken = ?, closed_at = ?
+        WHERE world_id = ? AND day_no = ? AND chosen_id IS NULL`,
+    )
+    .bind(
+      day.chosenId, JSON.stringify(day.counts), day.tiebroken === true ? 1 : 0,
+      closedAt, worldId, day.dayNo,
+    )
+    .run();
+  return (result.meta.changes ?? 0) === 1;
+}
+
+export async function listVotes(
+  db: D1Database, worldId: string, dayNo: number,
+): Promise<readonly Vote[]> {
+  const result = await db
+    .prepare(
+      'SELECT player_id, option_id FROM votes WHERE world_id = ? AND day_no = ? ORDER BY player_id',
+    )
+    .bind(worldId, dayNo)
+    .all<{ player_id: string; option_id: string }>();
+  return result.results.map((row) => ({ playerId: row.player_id, optionId: row.option_id }));
+}
+
+export async function upsertVote(
+  db: D1Database, worldId: string, dayNo: number,
+  playerId: string, optionId: string, votedAt: string,
+): Promise<void> {
+  await db
+    .prepare(
+      `INSERT INTO votes (world_id, day_no, player_id, option_id, voted_at)
+       VALUES (?, ?, ?, ?, ?)
+       ON CONFLICT (world_id, day_no, player_id)
+       DO UPDATE SET option_id = excluded.option_id, voted_at = excluded.voted_at`,
+    )
+    .bind(worldId, dayNo, playerId, optionId, votedAt)
+    .run();
+}
+
+export async function findPlayerByTokenHash(
+  db: D1Database, tokenHash: string,
+): Promise<PlayerRow | null> {
+  const raw = await db
+    .prepare('SELECT id, world_id, name FROM players WHERE token_hash = ?')
+    .bind(tokenHash)
+    .first<{ id: string; world_id: string; name: string }>();
+  return raw === null ? null : { id: raw.id, worldId: raw.world_id, name: raw.name };
+}
+
+export async function insertPlayer(
+  db: D1Database,
+  player: { id: string; worldId: string; name: string; tokenHash: string; joinedAt: string },
+): Promise<void> {
+  await db
+    .prepare(
+      `INSERT INTO players (id, world_id, name, token_hash, joined_at) VALUES (?, ?, ?, ?, ?)`,
+    )
+    .bind(player.id, player.worldId, player.name, player.tokenHash, player.joinedAt)
+    .run();
+}
+
+/**
+ * 招待を使用済みにして、所属する世界のIDを返す。
+ * 未使用の招待が無ければ null。`WHERE used_by IS NULL` で二重使用を防ぐ。
+ */
+export async function claimInvite(
+  db: D1Database, codeHash: string, playerId: string, usedAt: string,
+): Promise<string | null> {
+  const result = await db
+    .prepare(
+      `UPDATE invites SET used_by = ?, used_at = ?
+        WHERE code_hash = ? AND used_by IS NULL
+        RETURNING world_id`,
+    )
+    .bind(playerId, usedAt, codeHash)
+    .first<{ world_id: string }>();
+  return result === null ? null : result.world_id;
+}
