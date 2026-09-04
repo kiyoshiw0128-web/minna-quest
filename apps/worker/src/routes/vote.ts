@@ -27,6 +27,10 @@ export async function handleVote(request: Request, env: Env): Promise<Response> 
   if (day.chosenId !== null) return fail('this day is already closed');
   if (!day.optionIds.includes(optionId)) return fail('option is not on the ballot');
 
-  await upsertVote(env.DB, world.id, day.dayNo, player.id, optionId, new Date().toISOString());
+  const wrote = await upsertVote(env.DB, world.id, day.dayNo, player.id, optionId, new Date().toISOString());
+  // 上の事前チェックは安い早期リターンに過ぎない。ここで0行が返るのは、
+  // 事前チェックと書き込みの間に cron が日を締めた場合（TOCTOU）。
+  // 嘘の200を返さないよう、事前チェックと同じ「締め済み」応答にする。
+  if (!wrote) return fail('this day is already closed');
   return ok({ dayNo: day.dayNo, optionId });
 }

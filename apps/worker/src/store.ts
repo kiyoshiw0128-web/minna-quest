@@ -54,15 +54,6 @@ export async function getWorld(db: D1Database, worldId: string): Promise<WorldRo
   return raw === null ? null : toWorld(raw);
 }
 
-export async function updateWorldProgress(
-  db: D1Database, worldId: string, currentDay: number, chapter: number, tags: readonly string[],
-): Promise<void> {
-  await db
-    .prepare('UPDATE worlds SET current_day = ?, chapter = ?, tags = ? WHERE id = ?')
-    .bind(currentDay, chapter, JSON.stringify(tags), worldId)
-    .run();
-}
-
 export async function getDay(
   db: D1Database, worldId: string, dayNo: number,
 ): Promise<WorldDay | null> {
@@ -105,42 +96,6 @@ export async function listClosedDays(
     .bind(worldId)
     .all<RawDay>();
   return result.results.map(toDay);
-}
-
-export async function insertDay(
-  db: D1Database, worldId: string, day: WorldDay,
-): Promise<void> {
-  await db
-    .prepare(
-      `INSERT INTO world_days (world_id, day_no, option_ids, chosen_id, counts, tiebroken)
-       VALUES (?, ?, ?, NULL, NULL, NULL)`,
-    )
-    .bind(worldId, day.dayNo, JSON.stringify(day.optionIds))
-    .run();
-}
-
-/**
- * その日を締める。すでに締まっていれば false を返す。
- *
- * `WHERE chosen_id IS NULL` が冪等性そのもの。二重に走った2回目は0行更新で終わる。
- * 4列を1文で書くので、chosen_id だけ入って counts が NULL という半端な行は作れない。
- * **0行はエラーではなく正常な結果。**
- */
-export async function markDayClosed(
-  db: D1Database, worldId: string, day: WorldDay, closedAt: string,
-): Promise<boolean> {
-  const result = await db
-    .prepare(
-      `UPDATE world_days
-          SET chosen_id = ?, counts = ?, tiebroken = ?, closed_at = ?
-        WHERE world_id = ? AND day_no = ? AND chosen_id IS NULL`,
-    )
-    .bind(
-      day.chosenId, JSON.stringify(day.counts), day.tiebroken === true ? 1 : 0,
-      closedAt, worldId, day.dayNo,
-    )
-    .run();
-  return (result.meta.changes ?? 0) === 1;
 }
 
 /**
@@ -207,19 +162,33 @@ export async function listVotes(
   return result.results.map((row) => ({ playerId: row.player_id, optionId: row.option_id }));
 }
 
+/**
+ * 投票を入れる、または上書きする。書き込めたら true を返す。
+ *
+ * `SELECT ... WHERE chosen_id IS NULL` を条件に付けた `INSERT ... SELECT` にしているのは、
+ * 「日が開いているか」の確認と書き込みの間に締めが割り込む TOCTOU を防ぐため。
+ * ルート側の事前チェック（`day.chosenId !== null`）はあくまで安い早期リターンで、
+ * 本当の可否はこの1文が締めと同じテーブル・同じ行を見て決める。
+ * 締まっていれば0行になり、投票は残らない。
+ */
 export async function upsertVote(
   db: D1Database, worldId: string, dayNo: number,
   playerId: string, optionId: string, votedAt: string,
-): Promise<void> {
-  await db
+): Promise<boolean> {
+  const result = await db
     .prepare(
       `INSERT INTO votes (world_id, day_no, player_id, option_id, voted_at)
-       VALUES (?, ?, ?, ?, ?)
+       SELECT ?, ?, ?, ?, ?
+        WHERE EXISTS (
+          SELECT 1 FROM world_days
+           WHERE world_id = ? AND day_no = ? AND chosen_id IS NULL
+        )
        ON CONFLICT (world_id, day_no, player_id)
        DO UPDATE SET option_id = excluded.option_id, voted_at = excluded.voted_at`,
     )
-    .bind(worldId, dayNo, playerId, optionId, votedAt)
+    .bind(worldId, dayNo, playerId, optionId, votedAt, worldId, dayNo)
     .run();
+  return (result.meta.changes ?? 0) === 1;
 }
 
 export async function findPlayerByTokenHash(
@@ -242,24 +211,6 @@ export async function insertPlayer(
     )
     .bind(player.id, player.worldId, player.name, player.tokenHash, player.joinedAt)
     .run();
-}
-
-/**
- * 招待を使用済みにして、所属する世界のIDを返す。
- * 未使用の招待が無ければ null。`WHERE used_by IS NULL` で二重使用を防ぐ。
- */
-export async function claimInvite(
-  db: D1Database, codeHash: string, playerId: string, usedAt: string,
-): Promise<string | null> {
-  const result = await db
-    .prepare(
-      `UPDATE invites SET used_by = ?, used_at = ?
-        WHERE code_hash = ? AND used_by IS NULL
-        RETURNING world_id`,
-    )
-    .bind(playerId, usedAt, codeHash)
-    .first<{ world_id: string }>();
-  return result === null ? null : result.world_id;
 }
 
 /**
