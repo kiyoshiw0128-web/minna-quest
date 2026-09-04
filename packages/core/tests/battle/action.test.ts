@@ -28,6 +28,20 @@ const heal: Skill = {
   heal: 120,
 };
 
+/** 回復量を MDF で決める版。MDF40 なので MAT 版とは必ず違う値になる。 */
+const wardHeal: Skill = {
+  id: 'wardHeal', name: '守りの祈り', mpCost: 8, cooldown: 0,
+  element: 'holy', target: 'lowestHpAlly',
+  heal: 120, healScale: 'mdf',
+};
+
+/** 威力を SPD で決める物理技。SPD20 なので ATK120 版とは必ず違う値になる。 */
+const swiftStrike: Skill = {
+  id: 'swiftStrike', name: '疾風突き', mpCost: 0, cooldown: 0,
+  element: 'none', target: 'enemy',
+  damage: { kind: 'physical', power: 100, scale: 'spd' },
+};
+
 const roar: Skill = {
   id: 'roar', name: '威嚇', mpCost: 0, cooldown: 0,
   element: 'none', target: 'allEnemies',
@@ -41,7 +55,7 @@ const charge: Skill = {
 };
 
 const hero: PartyMember = {
-  id: 'hero', name: '主人公', stats, skills: [slash, fireball, heal, roar, charge],
+  id: 'hero', name: '主人公', stats, skills: [slash, fireball, heal, wardHeal, swiftStrike, roar, charge],
 };
 const mage: PartyMember = { id: 'mage', name: '魔法使い', stats, skills: [fireball, heal] };
 
@@ -97,6 +111,28 @@ describe('performAction - 回復と効果', () => {
     // MAT100 の 120% = 120 回復
     expect(findCombatant(after, 'mage').hp).toBe(220);
     expect(findCombatant(after, 'hero').hp).toBe(500);
+  });
+
+  it('healScale を指定すると、その能力で回復量が決まる', () => {
+    const base = createBattleState([hero, mage], dummy);
+    const wounded = {
+      ...base,
+      combatants: base.combatants.map((c) => (c.id === 'mage' ? { ...c, hp: 100 } : c)),
+    };
+    const { state: after } = performAction(wounded, 'hero', wardHeal);
+    // MDF40 の 120% = 48 回復。MAT100 で決まるなら 220 になるはず
+    expect(findCombatant(after, 'mage').hp).toBe(148);
+  });
+
+  it('scale を指定した技は、その能力でダメージが決まる', () => {
+    const state = createBattleState([hero], dummy);
+    const bySpd = performAction(state, 'hero', swiftStrike);
+    const byAtk = performAction(state, 'hero', slash);
+    // SPD20 -> 20 * 100/160 = 12。ATK120 の 75 とは別の値
+    const spdDamage = bySpd.events.find((e) => e.t === 'damage');
+    const atkDamage = byAtk.events.find((e) => e.t === 'damage');
+    expect(spdDamage).toMatchObject({ amount: 12 });
+    expect(atkDamage).toMatchObject({ amount: 75 });
   });
 
   it('回復は最大 HP を超えない', () => {

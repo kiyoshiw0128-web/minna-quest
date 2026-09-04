@@ -1,4 +1,4 @@
-import type { DamageSpec, Element } from './types.js';
+import type { DamageSpec, Element, StatKey } from './types.js';
 import type { Effect } from './effects.js';
 
 /**
@@ -21,8 +21,10 @@ export type Skill = {
   element: Element;
   target: SkillTarget;
   damage?: DamageSpec;
-  /** 回復量。使用者の実効 MAT に対する百分率。100 なら MAT と等倍 */
+  /** 回復量。使用者の実効ステータスに対する百分率。100 なら等倍 */
   heal?: number;
+  /** 回復量をどの能力で決めるか。既定は MAT */
+  healScale?: StatKey;
   /** マスタデータを凍結できるよう readonly。実行中に技を書き換えることはない */
   effects?: readonly { to: 'target' | 'self'; effect: Effect }[];
 };

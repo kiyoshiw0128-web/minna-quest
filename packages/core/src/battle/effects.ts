@@ -1,6 +1,6 @@
-import type { StatBlock } from './types.js';
+import type { StatBlock, StatKey } from './types.js';
 
-export type StatKey = 'atk' | 'def' | 'mat' | 'mdf' | 'spd';
+export type { StatKey };
 
 /** 一時的な効果。turns は付与された時点での持続ターン数。 */
 export type Effect =

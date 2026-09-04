@@ -14,8 +14,15 @@ export {
   tickEffects,
 } from './battle/effects.js';
 
-export type { StatBlock, Element, DamageSpec, DamageInput } from './battle/types.js';
-export type { StatKey, Effect, ActiveEffect } from './battle/effects.js';
+export type {
+  StatBlock,
+  StatKey,
+  AttackerStats,
+  Element,
+  DamageSpec,
+  DamageInput,
+} from './battle/types.js';
+export type { Effect, ActiveEffect } from './battle/effects.js';
 export type { Skill, SkillTarget } from './battle/skill.js';
 export type { Enemy, EnemyPatternEntry } from './battle/enemy.js';
 export type { Side, Combatant, PartyMember, BattleState } from './battle/state.js';

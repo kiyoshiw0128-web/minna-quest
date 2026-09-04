@@ -4,7 +4,7 @@ import { isAlive } from './order.js';
 import { findCombatant, updateCombatant } from './state.js';
 import type { BattleState, Combatant } from './state.js';
 import type { Skill } from './skill.js';
-import type { Element } from './types.js';
+import type { AttackerStats, Element } from './types.js';
 import type { BattleEvent } from './log.js';
 
 export type ActionResult = { state: BattleState; events: BattleEvent[] };
@@ -29,15 +29,15 @@ export function performAction(state: BattleState, actorId: string, skill: Skill)
     cooldowns: { ...combatant.cooldowns, [skill.id]: skill.cooldown },
   }));
 
-  const attackerAtk = effectiveStat(actor.base, 'atk', actor.effects);
-  const attackerMat = effectiveStat(actor.base, 'mat', actor.effects);
+  // 攻撃側の実効値は行動の開始時に一度だけ確定させる。技が複数の対象を打つとき、
+  // 1体目に与えた弱体で2体目への威力が変わってしまうのを避けるため。
+  const attacker = effectiveAttackerStats(actor);
 
   for (const target of resolveTargets(next, actor, skill)) {
     if (skill.damage) {
       const current = findCombatant(next, target.id);
       const amount = computeDamage({
-        atk: attackerAtk,
-        mat: attackerMat,
+        attacker,
         def: effectiveStat(current.base, 'def', current.effects),
         mdf: effectiveStat(current.base, 'mdf', current.effects),
         targetMaxHp: current.base.maxHp,
@@ -53,7 +53,7 @@ export function performAction(state: BattleState, actorId: string, skill: Skill)
 
     if (skill.heal !== undefined) {
       const current = findCombatant(next, target.id);
-      const raw = Math.max(1, Math.floor((attackerMat * skill.heal) / 100));
+      const raw = Math.max(1, Math.floor((attacker[skill.healScale ?? 'mat'] * skill.heal) / 100));
       const hpAfter = Math.min(current.base.maxHp, current.hp + raw);
       next = updateCombatant(next, current.id, (combatant) => ({ ...combatant, hp: hpAfter }));
       events.push({ t: 'heal', targetId: current.id, amount: hpAfter - current.hp, hpAfter });
@@ -79,6 +79,16 @@ export function performAction(state: BattleState, actorId: string, skill: Skill)
   }
 
   return { state: next, events };
+}
+
+function effectiveAttackerStats(actor: Combatant): AttackerStats {
+  return {
+    atk: effectiveStat(actor.base, 'atk', actor.effects),
+    def: effectiveStat(actor.base, 'def', actor.effects),
+    mat: effectiveStat(actor.base, 'mat', actor.effects),
+    mdf: effectiveStat(actor.base, 'mdf', actor.effects),
+    spd: effectiveStat(actor.base, 'spd', actor.effects),
+  };
 }
 
 function resolveTargets(state: BattleState, actor: Combatant, skill: Skill): Combatant[] {

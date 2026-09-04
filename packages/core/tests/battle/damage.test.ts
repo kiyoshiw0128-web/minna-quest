@@ -3,8 +3,7 @@ import { computeDamage } from '../../src/battle/damage.js';
 import type { DamageInput } from '../../src/battle/types.js';
 
 const base: Omit<DamageInput, 'spec'> = {
-  atk: 120,
-  mat: 100,
+  attacker: { atk: 120, mat: 100, def: 30, mdf: 20, spd: 80 },
   def: 60,
   mdf: 40,
   targetMaxHp: 1000,
@@ -30,7 +29,12 @@ describe('computeDamage - 物理', () => {
 
   it('どれだけ硬くても最低1ダメージは通る', () => {
     expect(
-      computeDamage({ ...base, atk: 1, def: 9999, spec: { kind: 'physical', power: 1 } }),
+      computeDamage({
+        ...base,
+        attacker: { ...base.attacker, atk: 1 },
+        def: 9999,
+        spec: { kind: 'physical', power: 1 },
+      }),
     ).toBe(1);
   });
 });
@@ -86,5 +90,58 @@ describe('computeDamage - 倍率', () => {
     expect(
       computeDamage({ ...base, damageTakenRate: 1.5, spec: { kind: 'fixed', amount: 200 } }),
     ).toBe(300);
+  });
+});
+
+describe('computeDamage - 威力を決める能力の指定', () => {
+  it('指定が無ければ物理は ATK を使う', () => {
+    // attacker.atk 120 -> 120 * 100/160 = 75
+    expect(computeDamage({ ...base, spec: { kind: 'physical', power: 100 } })).toBe(75);
+  });
+
+  it('指定が無ければ魔法は MAT を使う', () => {
+    // attacker.mat 100 -> 100 * 100/140 = 71.4 -> 71
+    expect(computeDamage({ ...base, spec: { kind: 'magical', power: 100 } })).toBe(71);
+  });
+
+  it('物理技を SPD で伸ばせる', () => {
+    // attacker.spd 80 -> 80 * 100/160 = 50。ATK の 75 とは別の値になる
+    expect(
+      computeDamage({ ...base, spec: { kind: 'physical', power: 100, scale: 'spd' } }),
+    ).toBe(50);
+  });
+
+  it('物理技を DEF で伸ばせる', () => {
+    // attacker.def 30 -> 30 * 100/160 = 18.75 -> 18
+    expect(
+      computeDamage({ ...base, spec: { kind: 'physical', power: 100, scale: 'def' } }),
+    ).toBe(18);
+  });
+
+  it('魔法技を MDF で伸ばせる', () => {
+    // attacker.mdf 20 -> 20 * 100/140 = 14.2 -> 14
+    expect(
+      computeDamage({ ...base, spec: { kind: 'magical', power: 100, scale: 'mdf' } }),
+    ).toBe(14);
+  });
+
+  it('scale を変えても軽減に使う防御側の能力は kind のまま', () => {
+    // SPD で伸びる物理技は、MDF ではなく DEF で軽減される。
+    // DEF60 -> 80 * 100/160 = 50。MDF40 で軽減されるなら 57 になるはず
+    const bySpd = computeDamage({
+      ...base,
+      spec: { kind: 'physical', power: 100, scale: 'spd' },
+    });
+    const magicalBySpd = computeDamage({
+      ...base,
+      spec: { kind: 'magical', power: 100, scale: 'spd' },
+    });
+    expect(bySpd).toBe(50);
+    expect(magicalBySpd).toBe(57);
+    expect(bySpd).not.toBe(magicalBySpd);
+  });
+
+  it('固定ダメージは scale の影響を受けない', () => {
+    expect(computeDamage({ ...base, spec: { kind: 'fixed', amount: 200 } })).toBe(200);
   });
 });
