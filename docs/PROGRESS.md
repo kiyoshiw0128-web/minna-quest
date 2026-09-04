@@ -37,6 +37,7 @@
 | 何 | どこ |
 |---|---|
 | 全体の設計 | `docs/superpowers/specs/2026-09-03-minna-quest-design.md` |
+| **エンジンの到達点** | **`docs/ENGINE.md`** — core に何が入って何が入っていないか |
 | 段階3bの設計 | `docs/superpowers/specs/2026-09-04-worker-d1-design.md` |
 | 各段階の実装計画 | `docs/superpowers/plans/` |
 | 積み残し | `docs/deferred.md` |
