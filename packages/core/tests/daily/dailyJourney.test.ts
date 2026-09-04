@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { daySeed, tavernSeed } from '../../src/daily/seed.js';
+import { daySeed, tavernSeed, voteSeed } from '../../src/daily/seed.js';
 import { pickEvents, applyOutcome } from '../../src/daily/event.js';
 import { closeDay, chapterOf, isBossDay } from '../../src/daily/day.js';
 import { rollRecruits } from '../../src/daily/recruit.js';
@@ -41,7 +41,7 @@ describe('日次ループの通し', () => {
       { playerId: 'b', optionId: day.optionIds[1] },
       { playerId: 'c', optionId: day.optionIds[0] },
     ];
-    const closed = closeDay(day, votes, daySeed('world-1', 1));
+    const closed = closeDay(day, votes, voteSeed('world-1', 1));
     expect(closed.chosenId).toBe(day.optionIds[1]);
     expect(closed.counts?.[day.optionIds[1]]).toBe(2);
   });
@@ -49,14 +49,14 @@ describe('日次ループの通し', () => {
   it('締め処理が二重に走っても世界は動かない', () => {
     const day = openDay('world-1', 1);
     const votes: Vote[] = [{ playerId: 'a', optionId: day.optionIds[0] }];
-    const seed = daySeed('world-1', 1);
+    const seed = voteSeed('world-1', 1);
     const once = closeDay(day, votes, seed);
     expect(closeDay(closeDay(once, votes, seed), votes, seed)).toEqual(once);
   });
 
   it('1人だけでも世界は進む', () => {
     const day = openDay('world-1', 3);
-    const closed = closeDay(day, [{ playerId: 'solo', optionId: day.optionIds[2] }], daySeed('world-1', 3));
+    const closed = closeDay(day, [{ playerId: 'solo', optionId: day.optionIds[2] }], voteSeed('world-1', 3));
     expect(closed.chosenId).toBe(day.optionIds[2]);
     expect(closed.tiebroken).toBe(false);
   });
@@ -65,7 +65,7 @@ describe('日次ループの通し', () => {
     for (let dayNo = 1; dayNo <= 30; dayNo++) {
       const day = openDay('world-1', dayNo);
       expect(day.optionIds.length).toBeGreaterThan(0);
-      const closed = closeDay(day, [], daySeed('world-1', dayNo));
+      const closed = closeDay(day, [], voteSeed('world-1', dayNo));
       expect(closed.chosenId).not.toBeNull();
     }
   });
@@ -94,7 +94,7 @@ describe('日次ループの通し', () => {
         counts: null,
         tiebroken: null,
       };
-      const closed = closeDay(day, [], daySeed('world-1', dayNo));
+      const closed = closeDay(day, [], voteSeed('world-1', dayNo));
       expect(closed.chosenId).not.toBeNull();
 
       const chosen = options.find((event) => event.id === closed.chosenId);

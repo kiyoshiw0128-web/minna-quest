@@ -1,13 +1,5 @@
 import { intAt } from './rng.js';
 
-/**
- * Draw index for tiebreak selection.
- * The day seed is shared with the event draw, which consumes low indices sequentially (0, 1, 2, ...).
- * By drawing from a distant index (1_000_000), the tiebreak result is independent from event
- * selection, preventing hidden coupling between systems.
- */
-const TIEBREAK_DRAW_INDEX = 1_000_000;
-
 export type Vote = {
   readonly playerId: string;
   readonly optionId: string;
@@ -26,6 +18,8 @@ export type Tally = {
  * - 同じプレイヤーが複数回投票していたら、最後の1票だけを数える
  * - 提示されていない選択肢への票は無視する
  * - 同数ならシードで決める。サイコロを振らないので後から検証できる
+ * - シードは voteSeed（投票専用の名前空間）を渡すこと。イベント抽選と
+ *   同じシードを渡すと、両者の結果が裏で結びついてしまう
  * - 誰も投票しなければ全選択肢が0票で並び、そのままタイブレークに落ちる
  */
 export function tallyVotes(
@@ -49,7 +43,7 @@ export function tallyVotes(
   const tiebroken = leaders.length > 1;
 
   return {
-    winner: tiebroken ? leaders[intAt(seed, TIEBREAK_DRAW_INDEX, leaders.length)] : leaders[0],
+    winner: tiebroken ? leaders[intAt(seed, 0, leaders.length)] : leaders[0],
     counts,
     tiebroken,
   };

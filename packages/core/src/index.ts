@@ -63,7 +63,7 @@ export { JOBS } from './data/jobs.js';
 export { PASSIVES } from './data/passives.js';
 
 export { hashString, randomAt, intAt, drawWithout } from './daily/rng.js';
-export { daySeed, tavernSeed } from './daily/seed.js';
+export { daySeed, tavernSeed, voteSeed } from './daily/seed.js';
 export {
   matchesCondition,
   eligibleEvents,
