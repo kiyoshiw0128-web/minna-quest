@@ -77,3 +77,17 @@ describe('401', () => {
     expect(screen.queryByText('unauthorized')).not.toBeInTheDocument();
   });
 });
+
+describe('保存領域が使えないブラウザ', () => {
+  it('localStorage が読めないとき、白い画面ではなく理由を出す', () => {
+    const spy = vi.spyOn(Storage.prototype, 'getItem').mockImplementation(() => {
+      throw new Error('SecurityError');
+    });
+    try {
+      render(<App />);
+      expect(screen.getByRole('alert').textContent).toContain('保存領域が使えない');
+    } finally {
+      spy.mockRestore();
+    }
+  });
+});

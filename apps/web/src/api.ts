@@ -60,7 +60,14 @@ async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
   const body = (await response.json()) as Envelope<T>;
 
   if (response.status === 401) {
-    clearToken();
+    // 保存領域が使えないブラウザでは clearToken が例外を投げる。ここで漏らすと
+    // 401 が「通信に失敗しました」に化けて、参加画面への引き戻しが起きない。
+    // 捨てられなくても引き戻しは行う必要があるので、投げ直さずに進める。
+    try {
+      clearToken();
+    } catch {
+      // 捨てられなかったトークンは、次の要求でまた 401 になるだけで害はない。
+    }
     throw new UnauthorizedError(body.ok ? 'unauthorized' : body.error);
   }
   if (!body.ok) {

@@ -6,6 +6,9 @@ import { HistoryScreen } from './screens/HistoryScreen.js';
 
 type Tab = 'today' | 'history';
 
+/** localStorage が読めたかどうか。読めないブラウザ設定があるため状態として持つ。 */
+type StorageState = { kind: 'ok'; token: string | null } | { kind: 'unavailable' };
+
 /**
  * 画面の切り替えはパスではなく token の有無・タブの状態で行う（設計書 §4）。
  * token を App がここで一元的に持つのは、401 を受けたときに「今日」「履歴」の
@@ -13,11 +16,32 @@ type Tab = 'today' | 'history';
  * 各画面が自分でトークンを持つと、片方だけ古いトークンのまま表示が残りかねない。
  */
 export function App() {
-  const [token, setToken] = useState<string | null>(() => getToken());
+  // localStorage は使えないことがある（プライベートモードやサイトデータの
+  // ブロック設定）。読めない場合に例外がそのまま描画を突き抜けると、
+  // 理由の書かれていない白い画面になる。それは「黙って失敗させない」
+  // （設計書 §6）に反するので、ここで受け止めて理由を出す。
+  const [storage] = useState<StorageState>(() => {
+    try {
+      return { kind: 'ok', token: getToken() };
+    } catch {
+      return { kind: 'unavailable' };
+    }
+  });
+  const [token, setToken] = useState<string | null>(
+    storage.kind === 'ok' ? storage.token : null,
+  );
   const [tab, setTab] = useState<Tab>('today');
+  const [saveFailed, setSaveFailed] = useState(false);
 
   function handleJoined(newToken: string): void {
-    saveToken(newToken);
+    // 保存に失敗しても、そのセッションの間は遊べる。ただし次に開いたときには
+    // 参加からやり直しになるので、そのことを伝えてから先に進める。
+    try {
+      saveToken(newToken);
+      setSaveFailed(false);
+    } catch {
+      setSaveFailed(true);
+    }
     setToken(newToken);
   }
 
@@ -27,12 +51,29 @@ export function App() {
     setToken(null);
   }
 
+  if (storage.kind === 'unavailable') {
+    return (
+      <main>
+        <h1>みんなdeクエスト</h1>
+        <p role="alert">
+          ブラウザの保存領域が使えないため、参加状態を保てません。
+          プライベートモードを解除するか、このサイトのデータ保存を許可してください。
+        </p>
+      </main>
+    );
+  }
+
   if (token === null) {
     return <JoinScreen onJoined={handleJoined} />;
   }
 
   return (
     <div>
+      {saveFailed && (
+        <p role="alert">
+          参加状態を保存できませんでした。このタブを閉じると、参加からやり直しになります。
+        </p>
+      )}
       <nav>
         <button type="button" onClick={() => setTab('today')} aria-current={tab === 'today'}>
           今日
