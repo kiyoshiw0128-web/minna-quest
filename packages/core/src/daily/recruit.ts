@@ -57,13 +57,28 @@ function gradeAt(seed: number, index: number): Grade {
  * その日の酒場に並ぶ顔ぶれを決める。
  * シードが共通なので全員が同じ3人を見る。
  * 名前は非復元抽出なので、同じ人物が2人並ぶことはない。
+ *
+ * idPrefix は生成される Recruit のIDの前半分になる。
+ * シードは32bitのハッシュなので別々の世界が同じ値に潰れうる。
+ * IDをシードから作ると世界をまたいで衝突するため、
+ * 呼び出し側が世界と日を一意に表す文字列（例: `${worldId}:${dayNo}`）を渡す。
  */
 export function rollRecruits(
   seed: number,
+  idPrefix: string,
   names: readonly string[],
   jobIds: readonly JobId[],
   maxLevel: number,
 ): readonly Recruit[] {
+  if (maxLevel < 1) {
+    throw new Error(`rollRecruits: maxLevel must be at least 1: ${maxLevel}`);
+  }
+  if (names.length < RECRUITS_PER_DAY) {
+    throw new Error(
+      `rollRecruits: names must have at least ${RECRUITS_PER_DAY} entries: ${names.length}`,
+    );
+  }
+
   const picked = drawWithout(seed, names, RECRUITS_PER_DAY);
 
   return picked.map((name, slot) => {
@@ -80,7 +95,7 @@ export function rollRecruits(
     const adventureLevel = intAt(seed, base + 8, maxLevel) + 1;
 
     return {
-      id: `${seed}-${slot}`,
+      id: `${idPrefix}-${slot}`,
       name,
       jobId: jobIds[intAt(seed, base + 9, jobIds.length)],
       aptitude,

@@ -79,7 +79,7 @@ describe('日次ループの通し', () => {
     const tavernFirsts = new Set<string>();
     for (let dayNo = 1; dayNo <= 20; dayNo++) {
       eventFirsts.add(openDay('world-1', dayNo).optionIds[0]);
-      tavernFirsts.add(rollRecruits(tavernSeed('world-1', dayNo), NAMES, basicJobs, 15)[0].name);
+      tavernFirsts.add(rollRecruits(tavernSeed('world-1', dayNo), `world-1:${dayNo}`, NAMES, basicJobs, 15)[0].name);
     }
     expect(eventFirsts.size).toBeGreaterThan(1);
     expect(tavernFirsts.size).toBeGreaterThan(1);
@@ -87,7 +87,7 @@ describe('日次ループの通し', () => {
 
   it('酒場には毎日3人並び、値段がついている', () => {
     for (let dayNo = 1; dayNo <= 10; dayNo++) {
-      const roster = rollRecruits(tavernSeed('world-1', dayNo), NAMES, basicJobs, 15);
+      const roster = rollRecruits(tavernSeed('world-1', dayNo), `world-1:${dayNo}`, NAMES, basicJobs, 15);
       expect(roster).toHaveLength(3);
       for (const recruit of roster) {
         expect(recruit.cost).toBeGreaterThan(0);
