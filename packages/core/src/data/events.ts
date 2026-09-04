@@ -58,4 +58,4 @@ export const EVENTS = {
     enemyId: 'balgos',
     condition: { minChapter: 2 },
   },
-} as const satisfies Record<string, DailyEvent> as Record<string, DailyEvent>;
+} as const satisfies Record<string, DailyEvent>;

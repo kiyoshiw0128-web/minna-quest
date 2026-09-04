@@ -4,8 +4,9 @@ import { NAMES } from '../../src/data/names.js';
 import { ENEMIES } from '../../src/data/enemies.js';
 import { eligibleEvents, OPTIONS_PER_DAY } from '../../src/daily/event.js';
 import { RECRUITS_PER_DAY } from '../../src/daily/recruit.js';
+import type { DailyEvent } from '../../src/daily/event.js';
 
-const events = Object.values(EVENTS);
+const events: readonly DailyEvent[] = Object.values(EVENTS);
 
 describe('イベントマスタの健全性', () => {
   it('キーと id が一致している', () => {
