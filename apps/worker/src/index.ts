@@ -28,7 +28,15 @@ export default {
       return handleWorld(request, env);
     }
 
-    return fail('not found', 404);
+    // `/api/` 配下で上のどれにも一致しなかったものは、画面のアセットに
+    // 横取りさせず、JSONの404を返す。画面側は全レスポンスをJSONとして
+    // パースするため、ここでHTMLを返すと失敗理由が見えなくなる。
+    if (url.pathname.startsWith('/api/')) return fail('not found', 404);
+
+    // API以外は apps/web のビルド成果物（wrangler.toml の [assets]）に委ねる。
+    // run_worker_first を立てているため、ここで明示的に呼ばないとアセットに
+    // 届かない。存在しないパスは not_found_handling=spa により index.html が返る。
+    return env.ASSETS.fetch(request);
   },
 
   // `SELECT id FROM worlds` はここだけ SQL がルート外に出るが、世界の一覧を

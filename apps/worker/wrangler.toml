@@ -16,3 +16,15 @@ database_id = "00000000-0000-0000-0000-000000000000"
 
 [triggers]
 crons = ["0 20 * * *"]
+
+# apps/web のビルド成果物（apps/web/dist）を配信する。
+# run_worker_first を付けないと、静的アセットが Worker のコードより先に
+# 評価され、`/api/*`宛のリクエストでもアセット側が先に判定してしまう
+# （既定は asset-first のため）。必ず Worker のコードを先に通し、
+# `/api/*` を確実に処理させてからアセットへフォールバックする。
+[assets]
+directory = "../web/dist"
+run_worker_first = true
+binding = "ASSETS"
+# SPA なので、アセットに無いパス（クライアント側ルート）は index.html を返す。
+not_found_handling = "single-page-application"

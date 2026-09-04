@@ -33,6 +33,10 @@ apps/web/          Vite + React
 ローカル:
 
 ```bash
+# 画面（apps/web/dist）が無いと Worker が静的アセットを配信できない。
+# 一度もビルドしていない、または画面のコードを変えた後は先にビルドする。
+corepack pnpm --filter @mq/web build
+
 corepack pnpm --filter @mq/worker exec wrangler d1 migrations apply minna-quest --local
 corepack pnpm --filter @mq/worker dev
 ```
@@ -57,11 +61,22 @@ corepack pnpm --filter @mq/worker exec tsx scripts/seed.ts "みんなの冒険" 
 corepack pnpm --filter @mq/worker exec wrangler d1 execute minna-quest --remote --file=seed.sql
 rm seed.sql
 
-# 4. デプロイ
-corepack pnpm --filter @mq/worker deploy
+# 4. 画面をビルドしてからデプロイする（この順序を守ること。Worker だけ
+#    デプロイすると、apps/web/dist が古いまま／無いままデプロイ物に
+#    同梱され、古い画面が出るか何も出ない）
+corepack pnpm run release
 ```
+
+`corepack pnpm run release`（ルートの package.json）は `apps/web` のビルドと
+`wrangler deploy` をこの順で必ず1コマンドにまとめたもの。`apps/worker` だけを
+`wrangler deploy` する経路を使わないこと。
+（スクリプト名を `deploy` にしなかったのは、`pnpm deploy` が pnpm 自身の
+予約コマンド（ワークスペースからデプロイ用サブセットを作る機能）と衝突し、
+挙動が意図と変わってしまうため。）
 
 cron は JST 05:00（UTC 20:00）に走る。翌朝、`wrangler tail` でログを見て
 `closed N day(s)` が出ていれば動いている。
 
-画面はまだ無いので、ルートを開くと404が返る。API を直接叩いて確認する。
+画面（`apps/web`）は Worker から同一オリジンで配信する（`apps/worker/wrangler.toml`
+の `[assets]`）。`/api/*` は Worker のコードが必ず先に処理し、それ以外は画面の
+`index.html`（SPA）にフォールバックする。

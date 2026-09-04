@@ -19,9 +19,13 @@ describe('足場', () => {
     expect(await response.json()).toEqual({ ok: true, data: { status: 'ok' } });
   });
 
-  it('知らないパスは封筒つきの404を返す', async () => {
+  // 静的アセットを足す前は「知らないパスはJSONの404」だったが、
+  // 画面（SPA）を配信するようになった今は、/api/ 以外の未知パスは
+  // クライアント側ルーティングの入り口として index.html を返すのが正しい。
+  // /api/ 配下での404の挙動は test/assets.test.ts で別途検査する。
+  it('/api/以外の知らないパスは画面（index.html）を返す', async () => {
     const response = await SELF.fetch('https://example.com/nope');
-    expect(response.status).toBe(404);
-    expect(await response.json()).toEqual({ ok: false, error: 'not found' });
+    expect(response.status).toBe(200);
+    expect(response.headers.get('content-type')).toContain('text/html');
   });
 });
