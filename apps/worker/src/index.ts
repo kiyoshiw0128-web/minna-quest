@@ -1,3 +1,4 @@
+import { catchUp } from './close.js';
 import { handleJoin } from './routes/join.js';
 import { handleToday } from './routes/today.js';
 import { handleVote } from './routes/vote.js';
@@ -23,5 +24,17 @@ export default {
     }
 
     return fail('not found', 404);
+  },
+
+  // `SELECT id FROM worlds` はここだけ SQL がルート外に出るが、世界の一覧を
+  // 取るだけの1行であり、store.ts に足すほどの面ではない。
+  // 世界が増えたら store.ts に listWorldIds として移すこと。
+  async scheduled(_event: ScheduledController, env: Env): Promise<void> {
+    const now = new Date();
+    const worlds = await env.DB.prepare('SELECT id FROM worlds').all<{ id: string }>();
+    for (const world of worlds.results) {
+      const closed = await catchUp(env.DB, world.id, now);
+      console.log(`world ${world.id}: closed ${closed} day(s)`);
+    }
   },
 } satisfies ExportedHandler<Env>;
