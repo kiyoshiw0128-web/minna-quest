@@ -75,18 +75,25 @@ describe('catchUp', () => {
   });
 
   it('二重に走らせても世界は二重に進まない', async () => {
-    const first = await catchUp(env.DB, WORLD, atDay(2));
-    const chosen = (await getDay(env.DB, WORLD, 1))?.chosenId;
-    const tagsAfterFirst = (await getWorld(env.DB, WORLD))?.tags;
-    const optionIdsAfterFirst = (await getDay(env.DB, WORLD, 2))?.optionIds;
+    // cron を「もう1つ走らせる」を、ただの逐次呼び出しにすると機構を検証しない：
+    // 1回目が day 1 を締めた後だと listOpenDaysBefore が day 1 をそもそも返さなく
+    // なるので、2回目は advanceDay の締め用ガード（`AND chosen_id IS NULL`）に
+    // 一度も触れずに 0 を返して「idempotent に見える」だけになる。
+    // 実際に9章が求めている「4.3 の UPDATE が0行を返す」経路を踏ませるため、
+    // 2回の catchUp を並行に走らせて、両方に同じ「day 1 は未締め」という
+    // 読み取り結果を見せた上でガードを競わせる。
+    const [first, second] = await Promise.all([
+      catchUp(env.DB, WORLD, atDay(2)),
+      catchUp(env.DB, WORLD, atDay(2)),
+    ]);
 
-    const second = await catchUp(env.DB, WORLD, atDay(2));
-    expect(first).toBe(1);
-    expect(second).toBe(0);
-    expect((await getDay(env.DB, WORLD, 1))?.chosenId).toBe(chosen);
-    expect((await getWorld(env.DB, WORLD))?.currentDay).toBe(2);
-    expect((await getWorld(env.DB, WORLD))?.tags).toEqual(tagsAfterFirst);
-    expect((await getDay(env.DB, WORLD, 2))?.optionIds).toEqual(optionIdsAfterFirst);
+    // どちらが先に書き込めるかは決まっていないので、順不同で1勝0敗を確認する。
+    expect([first, second].sort((a, b) => b - a)).toEqual([1, 0]);
+
+    const day1 = await getDay(env.DB, WORLD, 1);
+    expect(day1?.chosenId).not.toBeNull();
+    const world = await getWorld(env.DB, WORLD);
+    expect(world?.currentDay).toBe(2);
   });
 
   it('溜まった日を古い順に取り戻す', async () => {
