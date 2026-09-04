@@ -43,4 +43,43 @@ export const SKILLS = {
     element: 'dark', target: 'enemy',
     damage: { kind: 'fixed', amount: 120 },
   },
+  /**
+   * 本来の挑発は「敵の狙いを自分に引きつける」効果だが、段階1の狙い先は
+   * HP割合で決まる仕組みで、それを変えるのは戦闘エンジンへの変更になる。
+   * ここでは仕様書4.2が名前を挙げている技として、engine が今支えられる
+   * 「身を晒して守りを固める」自己バフとして実装する。引きつけ効果は段階4以降に送る。
+   */
+  provoke: {
+    id: 'provoke', name: '挑発', mpCost: 6, cooldown: 3,
+    element: 'none', target: 'self',
+    effects: [
+      { to: 'self', effect: { kind: 'statMod', stat: 'def', rate: 0.5, turns: 3 } },
+      { to: 'self', effect: { kind: 'statMod', stat: 'mdf', rate: 0.5, turns: 3 } },
+    ],
+  },
+  focus: {
+    id: 'focus', name: '精神統一', mpCost: 8, cooldown: 4,
+    element: 'none', target: 'self',
+    effects: [{ to: 'self', effect: { kind: 'statMod', stat: 'atk', rate: 0.5, turns: 3 } }],
+  },
+  flameArrow: {
+    id: 'flameArrow', name: '火炎の矢', mpCost: 8, cooldown: 0,
+    element: 'fire', target: 'enemy',
+    damage: { kind: 'magical', power: 140 },
+  },
+  snipe: {
+    id: 'snipe', name: '狙撃', mpCost: 10, cooldown: 2,
+    element: 'none', target: 'enemy',
+    damage: { kind: 'physical', power: 200, pierce: 0.3 },
+  },
+  holyBlade: {
+    id: 'holyBlade', name: '聖剣', mpCost: 14, cooldown: 2,
+    element: 'holy', target: 'enemy',
+    damage: { kind: 'physical', power: 240, pierce: 0.25 },
+  },
+  meteor: {
+    id: 'meteor', name: 'メテオ', mpCost: 30, cooldown: 5,
+    element: 'fire', target: 'allEnemies',
+    damage: { kind: 'magical', power: 500 },
+  },
 } as const satisfies Record<string, Skill>;
