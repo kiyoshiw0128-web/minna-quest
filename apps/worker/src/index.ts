@@ -1,8 +1,12 @@
 import { catchUp } from './close.js';
 import { handleGetBattle, handlePostBattle } from './routes/battle.js';
+import { handleDismiss } from './routes/dismiss.js';
+import { handleEquip } from './routes/equip.js';
 import { handleHire } from './routes/hire.js';
+import { handleJob } from './routes/job.js';
 import { handleJoin } from './routes/join.js';
 import { handleMe } from './routes/me.js';
+import { handleParty } from './routes/party.js';
 import { handleTavern } from './routes/tavern.js';
 import { handleToday } from './routes/today.js';
 import { handleVote } from './routes/vote.js';
@@ -50,6 +54,22 @@ export default {
 
     if (url.pathname === '/api/battle' && request.method === 'POST') {
       return handlePostBattle(request, env);
+    }
+
+    if (url.pathname === '/api/job' && request.method === 'POST') {
+      return handleJob(request, env);
+    }
+
+    if (url.pathname === '/api/equip' && request.method === 'POST') {
+      return handleEquip(request, env);
+    }
+
+    if (url.pathname === '/api/party' && request.method === 'POST') {
+      return handleParty(request, env);
+    }
+
+    if (url.pathname === '/api/dismiss' && request.method === 'POST') {
+      return handleDismiss(request, env);
     }
 
     // `/api/` 配下で上のどれにも一致しなかったものは、画面のアセットに

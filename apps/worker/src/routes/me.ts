@@ -1,4 +1,4 @@
-import { computeStats, JOBS } from '@mq/core';
+import { computeStats, JOBS, unlockedJobs } from '@mq/core';
 import type { Character, Job } from '@mq/core';
 import { requirePlayer } from '../auth.js';
 import { getPartyCharacters, getPlayerGold } from '../store.js';
@@ -47,6 +47,13 @@ export async function handleMe(request: Request, env: Env): Promise<Response> {
       stats: computeStats(character, job),
       learnedSkillIds: character.learnedSkills,
       equippedSkillIds: character.equippedActive,
+      // 転職画面が「就いたことのある職業とそのレベル」「いま就ける職業」を
+      // 出すための材料（設計書 §3）。就ける条件が見えないと、満たしたことに
+      // 誰も気づけない。
+      jobLevels: Object.fromEntries(
+        Object.entries(character.jobs).map(([jobId, progress]) => [jobId, progress.level]),
+      ),
+      unlockedJobIds: unlockedJobs(character, JOBS),
     };
   });
 

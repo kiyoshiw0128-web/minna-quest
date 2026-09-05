@@ -1,4 +1,4 @@
-import type { Character, JobProgress, Vote, WorldDay } from '@mq/core';
+import type { Character, JobId, JobProgress, Vote, WorldDay } from '@mq/core';
 
 export type WorldRow = {
   readonly id: string;
@@ -401,6 +401,221 @@ export async function getPartyCharacters(
       equippedPassive: JSON.parse(row.equipped_passive) as string[],
     };
   });
+}
+
+type RawSingleCharacter = RawPartyCharacter & { is_hero: number };
+
+/**
+ * 1体だけを、所有者チェック込みで読む。転職・装備の変更はどちらも
+ * 「そのキャラが本当にこのプレイヤーのものか」をSQLの時点で確認する必要がある
+ * （設計書 §8 テスト10）。WHERE に player_id を含めることで、他人のIDを渡されたら
+ * この時点でnullになり、以降のcoreロジックにも書き込みにも進まない。
+ *
+ * パーティに入っているかどうかは問わない。解雇済みでもキャラの記録自体は
+ * 残り続ける（設計書 §5）ので、転職・装備の対象からは外さない。
+ */
+export async function getCharacterForPlayer(
+  db: D1Database, playerId: string, characterId: string,
+): Promise<{ character: Character; isHero: boolean } | null> {
+  const row = await db
+    .prepare(
+      `SELECT id, name, adventure_level, adventure_exp, aptitude,
+              current_job, equipped_active, equipped_passive, is_hero
+         FROM characters WHERE id = ? AND player_id = ?`,
+    )
+    .bind(characterId, playerId)
+    .first<RawSingleCharacter>();
+  if (row === null) return null;
+
+  const [jobRows, learnedRows] = await Promise.all([
+    db
+      .prepare('SELECT job_id, level, exp FROM job_levels WHERE character_id = ?')
+      .bind(characterId)
+      .all<{ job_id: string; level: number; exp: number }>(),
+    db
+      .prepare('SELECT kind, id FROM learned WHERE character_id = ?')
+      .bind(characterId)
+      .all<{ kind: string; id: string }>(),
+  ]);
+
+  const jobs: Record<string, JobProgress> = {};
+  for (const job of jobRows.results) jobs[job.job_id] = { level: job.level, exp: job.exp };
+
+  const learnedSkills: string[] = [];
+  const learnedPassives: string[] = [];
+  for (const learned of learnedRows.results) {
+    if (learned.kind === 'skill') learnedSkills.push(learned.id);
+    else learnedPassives.push(learned.id);
+  }
+
+  const character: Character = {
+    id: row.id,
+    name: row.name,
+    adventureLevel: row.adventure_level,
+    adventureExp: row.adventure_exp,
+    aptitude: JSON.parse(row.aptitude) as Character['aptitude'],
+    currentJob: row.current_job,
+    jobs,
+    learnedSkills,
+    learnedPassives,
+    equippedActive: JSON.parse(row.equipped_active) as string[],
+    equippedPassive: JSON.parse(row.equipped_passive) as string[],
+  };
+  return { character, isHero: row.is_hero === 1 };
+}
+
+/**
+ * 転職を1トランザクションで反映する。current_job の更新・（初めて就く職業なら）
+ * job_levels の追加・新しく覚えた技/パッシブの追加をまとめて行う。
+ *
+ * 分けて書くと「currentJobだけ変わって技を1つも覚えていない」
+ * 「job_levelsの行が無いのにcurrent_jobだけそれを指している」といった
+ * 半端な状態が残りうる（招待の消費・日の締め・雇用と同じ理由）。
+ *
+ * 各文は `EXISTS (SELECT 1 FROM characters WHERE id = ? AND player_id = ?)` を
+ * 個別に持つ。db.batch内の文は互いに独立して実行されるため、1文目の
+ * WHERE条件が0行でも他の文は止まらない。ガードをコピーしておかないと
+ * 「所有者チェックに落ちたのに技だけ追加される」事故になる。
+ */
+export async function changeCharacterJob(
+  db: D1Database,
+  params: {
+    characterId: string;
+    playerId: string;
+    jobId: JobId;
+    newJobLevel: JobProgress | null;
+    newSkillIds: readonly string[];
+    newPassiveIds: readonly string[];
+  },
+): Promise<boolean> {
+  const { characterId, playerId, jobId, newJobLevel, newSkillIds, newPassiveIds } = params;
+  const OWNED = 'EXISTS (SELECT 1 FROM characters WHERE id = ? AND player_id = ?)';
+  const ownedBind = (): [string, string] => [characterId, playerId];
+
+  const statements: D1PreparedStatement[] = [
+    db
+      .prepare('UPDATE characters SET current_job = ? WHERE id = ? AND player_id = ?')
+      .bind(jobId, characterId, playerId),
+    ...(newJobLevel === null
+      ? []
+      : [
+          db
+            .prepare(
+              `INSERT INTO job_levels (character_id, job_id, level, exp)
+               SELECT ?, ?, ?, ? WHERE ${OWNED}`,
+            )
+            .bind(characterId, jobId, newJobLevel.level, newJobLevel.exp, ...ownedBind()),
+        ]),
+    ...newSkillIds.map((skillId) =>
+      db
+        .prepare(
+          `INSERT INTO learned (character_id, kind, id)
+           SELECT ?, 'skill', ? WHERE ${OWNED}
+           ON CONFLICT (character_id, kind, id) DO NOTHING`,
+        )
+        .bind(characterId, skillId, ...ownedBind()),
+    ),
+    ...newPassiveIds.map((passiveId) =>
+      db
+        .prepare(
+          `INSERT INTO learned (character_id, kind, id)
+           SELECT ?, 'passive', ? WHERE ${OWNED}
+           ON CONFLICT (character_id, kind, id) DO NOTHING`,
+        )
+        .bind(characterId, passiveId, ...ownedBind()),
+    ),
+  ];
+
+  const [updateResult] = await db.batch(statements);
+  return (updateResult.meta.changes ?? 0) === 1;
+}
+
+/**
+ * アクティブ・パッシブの装備枠を1文でまとめて書き換える。
+ * 2文に分けないのは、片方だけ検証に通った状態でDBに反映されるのを防ぐため
+ * （設計書 §8 テスト8）。判定自体はルート側がcoreの関数で済ませてから呼ぶので、
+ * ここは1行のUPDATEで足りる。
+ */
+export async function setEquipment(
+  db: D1Database,
+  playerId: string,
+  characterId: string,
+  activeIds: readonly string[],
+  passiveIds: readonly string[],
+): Promise<boolean> {
+  const result = await db
+    .prepare(
+      `UPDATE characters SET equipped_active = ?, equipped_passive = ?
+        WHERE id = ? AND player_id = ?`,
+    )
+    .bind(JSON.stringify(activeIds), JSON.stringify(passiveIds), characterId, playerId)
+    .run();
+  return (result.meta.changes ?? 0) === 1;
+}
+
+/**
+ * そのプレイヤーが持つ全キャラ（パーティ外・解雇済みも含む）のIDと
+ * 主人公フラグ。並べ替えの検証（自分のキャラだけか・主人公が入っているか）を
+ * JS側で行うために使う。
+ */
+export async function getOwnedCharacterFlags(
+  db: D1Database, playerId: string,
+): Promise<ReadonlyMap<string, boolean>> {
+  const rows = await db
+    .prepare('SELECT id, is_hero FROM characters WHERE player_id = ?')
+    .bind(playerId)
+    .all<{ id: string; is_hero: number }>();
+  return new Map(rows.results.map((row) => [row.id, row.is_hero === 1]));
+}
+
+/**
+ * パーティの並びをまるごと置き換える。検証済みの `order` をそのままslotに
+ * 落とすだけで、DELETE→INSERTを1バッチに収めて片方だけ効く事故を防ぐ。
+ *
+ * 各INSERTにも所有者の存在確認を付けておくのは、JS側の事前検証と書き込みの
+ * 間に解雇などが割り込むTOCTOUを塞ぐため（hireRecruitの空き枠探しと同じ考え方）。
+ * 検証済みの件数だけ変更されなければ、呼び出し側にfalseを返して失敗を伝える。
+ */
+export async function setPartyOrder(
+  db: D1Database, playerId: string, order: readonly string[],
+): Promise<boolean> {
+  const statements: D1PreparedStatement[] = [
+    db.prepare('DELETE FROM party WHERE player_id = ?').bind(playerId),
+    ...order.map((characterId, slot) =>
+      db
+        .prepare(
+          `INSERT INTO party (player_id, character_id, slot)
+           SELECT ?, ?, ? WHERE EXISTS (SELECT 1 FROM characters WHERE id = ? AND player_id = ?)`,
+        )
+        .bind(playerId, characterId, slot, characterId, playerId),
+    ),
+  ];
+
+  const results = await db.batch(statements);
+  const inserted = results.slice(1).reduce((sum, result) => sum + (result.meta.changes ?? 0), 0);
+  return inserted === order.length;
+}
+
+/**
+ * 雇用メンバーをパーティから外す。characters行そのものは消さない
+ * （設計書 §5：過去の戦闘記録から参照できなくなるため）。
+ *
+ * `is_hero = 0` をWHEREに含めることで、主人公のIDが渡されても
+ * この1文だけで弾ける（ルート側の事前チェックと二重に守る）。
+ */
+export async function dismissFromParty(
+  db: D1Database, playerId: string, characterId: string,
+): Promise<boolean> {
+  const result = await db
+    .prepare(
+      `DELETE FROM party WHERE player_id = ? AND character_id = ?
+        AND EXISTS (
+          SELECT 1 FROM characters WHERE id = ? AND player_id = ? AND is_hero = 0
+        )`,
+    )
+    .bind(playerId, characterId, characterId, playerId)
+    .run();
+  return (result.meta.changes ?? 0) === 1;
 }
 
 /** その日の戦闘に最初に勝ったプレイヤーのID。誰も勝っていなければ null（設計書 §6.3）。 */
