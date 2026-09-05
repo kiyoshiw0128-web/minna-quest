@@ -97,6 +97,8 @@ export function PartyScreen({ token, onUnauthorized }: Props) {
       <h1>仲間</h1>
       <p>所持金: {me.gold} ゴールド</p>
 
+      <RestoreKey token={token} />
+
       <section>
         <h2>パーティ（{me.party.length} / 4）</h2>
         {me.party.map((member) => (
@@ -163,5 +165,31 @@ function RecruitCard({
         雇う
       </button>
     </div>
+  );
+}
+
+/**
+ * 別の端末から戻るための合言葉。トークンそのものを見せている。
+ *
+ * 見せる判断について。これは実質パスワードなので、普通なら画面に出さない。
+ * ただしこの遊びでは、参加の証がブラウザの保存領域にしか無く、招待コードは
+ * 1人1枚の使い切りである。合言葉を出さないと、端末を変えるたびに招待コードが
+ * 1枚消えていく。身内数人で遊ぶものなので、他人に渡らない前提を取り、
+ * 「知られたら他人に成り代わられる」ことを本人に伝えたうえで見せる方を選んだ。
+ */
+function RestoreKey({ token }: { token: string }) {
+  return (
+    <details>
+      <summary>別の端末から戻るための合言葉</summary>
+      <p>
+        この文字列を控えておくと、別の端末やブラウザから「合言葉で戻る」で
+        同じ冒険に戻れます。招待コードは減りません。
+      </p>
+      <p>
+        <strong>人に見せないでください。</strong>これを知っている人は、
+        あなたとして遊べてしまいます。
+      </p>
+      <p><code>{token}</code></p>
+    </details>
   );
 }

@@ -1,7 +1,6 @@
 import { useState } from 'react';
 import type { FormEvent } from 'react';
-import { join, ApiError } from '../api.js';
-import { saveToken } from '../token.js';
+import { join, fetchMe, ApiError, UnauthorizedError } from '../api.js';
 
 type Props = {
   onJoined: (token: string) => void;
@@ -9,18 +8,41 @@ type Props = {
 
 type Status = { kind: 'idle' } | { kind: 'loading' } | { kind: 'error'; message: string };
 
+type Mode = 'join' | 'restore';
+
 /**
- * 招待コードと名前で参加する画面。トークン未保有のときだけ表示される。
+ * 参加、または合言葉で戻る画面。トークン未保有のときだけ表示される。
+ *
+ * **戻る手段が要る理由。** 招待コードは1人1枚の使い切りで、参加の証は
+ * ブラウザの保存領域にしか無い。別の端末で開く、プライベートウィンドウを閉じる、
+ * サイトデータを消す、のどれでも参加からやり直しになり、そのたびに招待コードが
+ * 1枚減っていく。スマホとパソコンで開くだけで2枚要る、という状態だった。
+ * 合言葉（＝トークンそのもの）を貼れば戻れるようにして、これを塞ぐ。
+ *
  * コードが「無効」か「使用済み」かはサーバ自身が区別していないので、
  * ここでも同じ文言をそのまま出す（総当たりの手がかりを増やさないため）。
  */
 export function JoinScreen({ onJoined }: Props) {
+  const [mode, setMode] = useState<Mode>('join');
   const [code, setCode] = useState('');
   const [name, setName] = useState('');
+  const [secret, setSecret] = useState('');
   const [status, setStatus] = useState<Status>({ kind: 'idle' });
 
+  const loading = status.kind === 'loading';
   const trimmedName = name.trim();
-  const canSubmit = code !== '' && trimmedName !== '' && status.kind !== 'loading';
+  const trimmedSecret = secret.trim();
+  const canSubmit = loading
+    ? false
+    : mode === 'join'
+      ? code !== '' && trimmedName !== ''
+      : trimmedSecret !== '';
+
+  function switchMode(next: Mode): void {
+    setMode(next);
+    // 片方の失敗の文言がもう片方に残ると、何に対する失敗か分からなくなる。
+    setStatus({ kind: 'idle' });
+  }
 
   async function handleSubmit(event: FormEvent): Promise<void> {
     event.preventDefault();
@@ -28,10 +50,20 @@ export function JoinScreen({ onJoined }: Props) {
 
     setStatus({ kind: 'loading' });
     try {
-      const result = await join(code, trimmedName);
-      saveToken(result.token);
-      onJoined(result.token);
+      if (mode === 'join') {
+        const result = await join(code, trimmedName);
+        onJoined(result.token);
+        return;
+      }
+      // 合言葉が本当に通るかを確かめてから保存する。確かめずに保存すると、
+      // 打ち間違いのまま入ったように見えて、次の画面で 401 に落ちる。
+      await fetchMe(trimmedSecret);
+      onJoined(trimmedSecret);
     } catch (error) {
+      if (error instanceof UnauthorizedError) {
+        setStatus({ kind: 'error', message: '合言葉が違います' });
+        return;
+      }
       // join は未認証で叩くエンドポイントなので 401 は起こり得ない。
       // ApiError・ネットワーク例外を同じ扱いにして、原因を問わず再試行させる。
       const message = error instanceof ApiError ? error.message : '通信に失敗しました';
@@ -41,28 +73,46 @@ export function JoinScreen({ onJoined }: Props) {
 
   return (
     <main>
-      <h1>みんなクエストに参加</h1>
+      <h1>みんなクエスト</h1>
+
+      <nav>
+        <button type="button" onClick={() => switchMode('join')} aria-current={mode === 'join'}>
+          はじめて参加する
+        </button>
+        <button type="button" onClick={() => switchMode('restore')} aria-current={mode === 'restore'}>
+          合言葉で戻る
+        </button>
+      </nav>
+
       <form onSubmit={handleSubmit}>
-        <label>
-          招待コード
-          <input
-            value={code}
-            onChange={(event) => setCode(event.target.value)}
-            disabled={status.kind === 'loading'}
-          />
-        </label>
-        <label>
-          名前
-          <input
-            value={name}
-            onChange={(event) => setName(event.target.value)}
-            disabled={status.kind === 'loading'}
-          />
-        </label>
+        {mode === 'join' ? (
+          <>
+            <label>
+              招待コード
+              <input value={code} onChange={(event) => setCode(event.target.value)} disabled={loading} />
+            </label>
+            <label>
+              名前
+              <input value={name} onChange={(event) => setName(event.target.value)} disabled={loading} />
+            </label>
+          </>
+        ) : (
+          <>
+            <p>
+              すでに参加している場合は、合言葉を貼ると同じ冒険に戻れます。
+              招待コードは減りません。合言葉は「仲間」の画面に出ています。
+            </p>
+            <label>
+              合言葉
+              <input value={secret} onChange={(event) => setSecret(event.target.value)} disabled={loading} />
+            </label>
+          </>
+        )}
         <button type="submit" disabled={!canSubmit}>
-          {status.kind === 'loading' ? '参加中…' : '参加する'}
+          {loading ? '確認中…' : mode === 'join' ? '参加する' : '戻る'}
         </button>
       </form>
+
       {status.kind === 'error' && <p role="alert">{status.message}</p>}
     </main>
   );
