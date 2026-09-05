@@ -786,6 +786,167 @@ const PARTY_SLOTS = 4;
  * パーティの空き枠探しは `NOT EXISTS` で0〜3のうち埋まっていない最小の枠を選ぶ。
  * (player_id, slot) が主キーなので、同じ枠に2人入る事故はDBの制約自体が防ぐ。
  */
+/**
+ * 闘技場（設計書 §4）のそのプレイヤーの到達階。`arena_progress` に列としては
+ * 持たず、倒した階の最大値から求める。1階も倒していなければ0
+ * （挑める階は常に「到達階+1」なので、0なら1階から挑める）。
+ */
+export async function getArenaReachedFloor(db: D1Database, playerId: string): Promise<number> {
+  const raw = await db
+    .prepare('SELECT MAX(floor) AS reached FROM arena_progress WHERE player_id = ?')
+    .bind(playerId)
+    .first<{ reached: number | null }>();
+  return raw?.reached ?? 0;
+}
+
+/** そのプレイヤーが倒した階ごとの初回クリア時刻。倒していない階は含まれない。 */
+export async function getArenaClearedAt(
+  db: D1Database, playerId: string,
+): Promise<ReadonlyMap<number, string>> {
+  const rows = await db
+    .prepare('SELECT floor, cleared_at FROM arena_progress WHERE player_id = ?')
+    .bind(playerId)
+    .all<{ floor: number; cleared_at: string }>();
+  return new Map(rows.results.map((row) => [row.floor, row.cleared_at]));
+}
+
+/**
+ * 各階を全体で最初に倒した人。倒されていない階は含まれない
+ * （設計書 §3.3「最初に倒した人が誰かも残す」）。
+ */
+export async function getArenaFirstClears(
+  db: D1Database,
+): Promise<ReadonlyMap<number, { playerId: string; clearedAt: string }>> {
+  const rows = await db
+    .prepare('SELECT floor, player_id, cleared_at FROM arena_first')
+    .all<{ floor: number; player_id: string; cleared_at: string }>();
+  return new Map(rows.results.map((row) => [row.floor, { playerId: row.player_id, clearedAt: row.cleared_at }]));
+}
+
+export type ArenaRankingRow = { readonly playerId: string; readonly name: string; readonly reachedFloor: number };
+
+/**
+ * 同じ世界の全員の到達階（設計書 §5「世界の全員の到達階」）。
+ * `LEFT JOIN` なので1階も倒していないプレイヤーも reachedFloor=0 で出てくる。
+ * 個人戦だが「みんなで」の遊びなので、他人がどこまで登ったかは常に見える。
+ */
+export async function getArenaRanking(
+  db: D1Database, worldId: string,
+): Promise<readonly ArenaRankingRow[]> {
+  const rows = await db
+    .prepare(
+      `SELECT p.id AS player_id, p.name AS name, COALESCE(MAX(ap.floor), 0) AS reached_floor
+         FROM players p
+         LEFT JOIN arena_progress ap ON ap.player_id = p.id
+        WHERE p.world_id = ?
+        GROUP BY p.id, p.name
+        ORDER BY reached_floor DESC, p.name ASC`,
+    )
+    .bind(worldId)
+    .all<{ player_id: string; name: string; reached_floor: number }>();
+  return rows.results.map((row) => ({ playerId: row.player_id, name: row.name, reachedFloor: row.reached_floor }));
+}
+
+/**
+ * 闘技場の勝利の後始末を1トランザクションで行う：報酬の付与（金貨・経験値・新規習得）、
+ * `arena_progress` への記録、`arena_first` への「最初の1人」の記録
+ * （設計書 §5「報酬の付与・進捗の記録・最初の1人の記録は同じバッチ」）。
+ *
+ * `recordBattleWin` と同じ形：報酬系の文はすべて
+ * `NOT EXISTS (SELECT 1 FROM arena_progress WHERE player_id=? AND floor=?)` を
+ * ガードに持つ。`arena_progress` への INSERT 自体もこのガードを持つので、
+ * 2回目以降の挑戦（すでにこの階を倒している）ではこの1文が0行のまま終わり、
+ * 連鎖してすべての報酬文が0行になる。**この行の有無そのものが「初回か」の判定であり、
+ * 列を別に持たない**（設計書 §4 の「到達階は列に持たない」と同じ理由：
+ * 行と判定用の列が食い違う余地を最初から作らない）。
+ *
+ * `players` / `characters` の UPDATE に `id = ?` を必ず残しているのは、
+ * NOT_CLEARED_YET のEXISTS句だけでは「このプレイヤー・この階について
+ * 未クリアかどうか」という真偽値にしかならず、`id = ?` を落とすと
+ * 条件を満たす全プレイヤー・全キャラの行が一括で書き換わってしまうため
+ * （設計書 §8 テスト9・他人の進捗を書き換えられないことの根拠）。
+ *
+ * `arena_first` は `arena_progress` とは独立したガード（`WHERE NOT EXISTS`、
+ * floorだけで判定）。すでに報酬を受け取った（＝再挑戦の）プレイヤーが
+ * 再度勝っても、まだ誰も倒していない階なら自分が「最初の1人」として残る。
+ * 2人がほぼ同時に初クリアしても、先に書き込めた方だけがここで1行を取る
+ * （advanceDay の defeated_by、recordBattleWin の defeated_by と同じ考え方）。
+ */
+export async function recordArenaWin(
+  db: D1Database,
+  params: {
+    playerId: string;
+    floor: number;
+    clearedAt: string;
+    goldAward: number;
+    party: readonly BattleRewardCharacter[];
+  },
+): Promise<{ rewarded: boolean; firstClear: boolean }> {
+  const { playerId, floor, clearedAt, goldAward, party } = params;
+
+  const NOT_CLEARED_YET =
+    'NOT EXISTS (SELECT 1 FROM arena_progress WHERE player_id = ? AND floor = ?)';
+  const guardBind = (): [string, number] => [playerId, floor];
+
+  const statements: D1PreparedStatement[] = [
+    db
+      .prepare(`UPDATE players SET gold = gold + ? WHERE id = ? AND ${NOT_CLEARED_YET}`)
+      .bind(goldAward, playerId, ...guardBind()),
+    ...party.flatMap((member) => [
+      db
+        .prepare(
+          `UPDATE characters SET adventure_level = ?, adventure_exp = ?
+            WHERE id = ? AND ${NOT_CLEARED_YET}`,
+        )
+        .bind(member.adventureLevel, member.adventureExp, member.characterId, ...guardBind()),
+      db
+        .prepare(
+          `UPDATE job_levels SET level = ?, exp = ?
+            WHERE character_id = ? AND job_id = ? AND ${NOT_CLEARED_YET}`,
+        )
+        .bind(member.jobLevel, member.jobExp, member.characterId, member.jobId, ...guardBind()),
+      ...member.newSkillIds.map((skillId) =>
+        db
+          .prepare(
+            `INSERT INTO learned (character_id, kind, id)
+             SELECT ?, 'skill', ? WHERE ${NOT_CLEARED_YET}
+             ON CONFLICT (character_id, kind, id) DO NOTHING`,
+          )
+          .bind(member.characterId, skillId, ...guardBind()),
+      ),
+      ...member.newPassiveIds.map((passiveId) =>
+        db
+          .prepare(
+            `INSERT INTO learned (character_id, kind, id)
+             SELECT ?, 'passive', ? WHERE ${NOT_CLEARED_YET}
+             ON CONFLICT (character_id, kind, id) DO NOTHING`,
+          )
+          .bind(member.characterId, passiveId, ...guardBind()),
+      ),
+    ]),
+    db
+      .prepare(
+        `INSERT INTO arena_progress (player_id, floor, cleared_at)
+         SELECT ?, ?, ? WHERE ${NOT_CLEARED_YET}`,
+      )
+      .bind(playerId, floor, clearedAt, ...guardBind()),
+    db
+      .prepare(
+        `INSERT INTO arena_first (floor, player_id, cleared_at)
+         SELECT ?, ?, ? WHERE NOT EXISTS (SELECT 1 FROM arena_first WHERE floor = ?)`,
+      )
+      .bind(floor, playerId, clearedAt, floor),
+  ];
+
+  const results = await db.batch(statements);
+  const rewardResult = results[results.length - 2];
+  const firstClearResult = results[results.length - 1];
+  return {
+    rewarded: (rewardResult.meta.changes ?? 0) === 1,
+    firstClear: (firstClearResult.meta.changes ?? 0) === 1,
+  };
+}
+
 export async function hireRecruit(
   db: D1Database,
   params: { playerId: string; cost: number; character: Character },

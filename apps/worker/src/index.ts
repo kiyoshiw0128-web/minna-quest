@@ -1,4 +1,5 @@
 import { catchUp } from './close.js';
+import { handleArenaRanking, handleGetArena, handlePostArena } from './routes/arena.js';
 import { handleGetBattle, handlePostBattle } from './routes/battle.js';
 import { handleDismiss } from './routes/dismiss.js';
 import { handleEquip } from './routes/equip.js';
@@ -70,6 +71,18 @@ export default {
 
     if (url.pathname === '/api/dismiss' && request.method === 'POST') {
       return handleDismiss(request, env);
+    }
+
+    if (url.pathname === '/api/arena' && request.method === 'GET') {
+      return handleGetArena(request, env);
+    }
+
+    if (url.pathname === '/api/arena' && request.method === 'POST') {
+      return handlePostArena(request, env);
+    }
+
+    if (url.pathname === '/api/arena/ranking' && request.method === 'GET') {
+      return handleArenaRanking(request, env);
     }
 
     // `/api/` 配下で上のどれにも一致しなかったものは、画面のアセットに
