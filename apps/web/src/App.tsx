@@ -5,10 +5,13 @@ import { TodayScreen } from './screens/TodayScreen.js';
 import { BattleScreen } from './screens/BattleScreen.js';
 import { PartyScreen } from './screens/PartyScreen.js';
 import { HistoryScreen } from './screens/HistoryScreen.js';
+import { ArenaScreen } from './screens/ArenaScreen.js';
 
-// タブは「今日」「戦闘」「仲間」「履歴」の4つ（設計書 §3）。酒場とパーティを
-// 別タブにすると雇うたびに行き来することになるので「仲間」に統合してある。
-type Tab = 'today' | 'battle' | 'party' | 'history';
+// タブは「今日」「戦闘」「仲間」「履歴」「闘技場」の5つ（設計書 段階5 §6）。
+// 酒場とパーティを別タブにすると雇うたびに行き来することになるので
+// 「仲間」に統合してある。闘技場は本編と独立して常設する腕試しの場なので、
+// 「戦闘」に混ぜず別タブにする（設計書 §1「いつでも挑める腕試しとして並走」）。
+type Tab = 'today' | 'battle' | 'party' | 'history' | 'arena';
 
 /** localStorage が読めたかどうか。読めないブラウザ設定があるため状態として持つ。 */
 type StorageState = { kind: 'ok'; token: string | null } | { kind: 'unavailable' };
@@ -99,11 +102,15 @@ export function App() {
         <button type="button" onClick={() => setTab('history')} aria-current={tab === 'history'}>
           履歴
         </button>
+        <button type="button" onClick={() => setTab('arena')} aria-current={tab === 'arena'}>
+          闘技場
+        </button>
       </nav>
       {tab === 'today' && <TodayScreen token={token} onUnauthorized={handleUnauthorized} />}
       {tab === 'battle' && <BattleScreen token={token} onUnauthorized={handleUnauthorized} />}
       {tab === 'party' && <PartyScreen token={token} onUnauthorized={handleUnauthorized} />}
       {tab === 'history' && <HistoryScreen token={token} onUnauthorized={handleUnauthorized} />}
+      {tab === 'arena' && <ArenaScreen token={token} onUnauthorized={handleUnauthorized} />}
     </div>
   );
 }

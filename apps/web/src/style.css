@@ -482,6 +482,77 @@ div:has(> table) {
   background: var(--accent-soft);
 }
 
+/* ---- 塔（闘技場） ---- */
+
+/*
+ * 塔は「上から積み上がった階」に見せたいが、この画面は上から下に読むので
+ * 縦のリストのまま、1階ずつ横長の札にする。.choice と同じ「押せる札」の
+ * 言語を使い、闘技場だけの別語彙を増やさない。状態（挑戦可・突破済み・未到達）
+ * は色と縁で分け、テキストでも必ず言う（色だけに頼らない）。
+ */
+.tower {
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+}
+
+.tower-floor {
+  display: flex;
+  align-items: center;
+  gap: 0.8rem;
+  width: 100%;
+  min-height: 3rem;
+  padding: 0.6rem 0.9rem;
+  text-align: left;
+  border-left-width: 4px;
+  border-radius: 6px;
+}
+
+.tower-floor-no {
+  flex: none;
+  width: 3.4rem;
+  font-weight: bold;
+  color: var(--accent);
+}
+
+.tower-floor-state {
+  flex: 1;
+  color: var(--muted);
+}
+
+.tower-floor-first {
+  flex: none;
+  font-size: 0.78rem;
+  color: var(--muted);
+}
+
+/* 挑戦可能な階。いちばん目を引くべき行。 */
+.tower-floor[data-state='open'] {
+  border-left-color: var(--alert);
+}
+
+/* 突破済みの階。戻って練習できることが分かればよいので、地味にする。 */
+.tower-floor[data-state='cleared'] {
+  border-left-color: var(--good);
+}
+
+.tower-floor[data-state='cleared'] .tower-floor-state {
+  color: var(--good);
+}
+
+/* まだ見えない階（未到達、または裏ボスを19階クリア前に見た場合）。
+   押せない見た目にして、闘技場の他の行と紛れないようにする。 */
+.tower-floor[data-state='unknown'] {
+  border-left-color: var(--line);
+  opacity: 0.6;
+}
+
+.tower-floor[aria-pressed='true'] {
+  border-color: var(--accent);
+  border-left-color: var(--accent);
+  box-shadow: 0 0 0 1px var(--accent) inset;
+}
+
 /* ---- 折りたたみ ---- */
 
 details {

@@ -231,3 +231,47 @@ export function hireRecruit(token: string, recruitId: string): Promise<HireResul
     ...withAuth(token),
   });
 }
+
+// worker/src/routes/arena.ts の GET 応答をそのまま写す。開いていない階
+// （まだ到達していない・20階を19階クリア前に指定した場合）は enemy が null になる
+// （設計書 §6「裏ボスは、19階を倒すまで名前も出さない」）。ここで型からも
+// 「未到達の階に敵はいない」を表しておく。
+export type ArenaFloorSummary = {
+  floor: number;
+  opened: boolean;
+  clearedAt: string | null;
+  firstClearedBy: string | null;
+};
+
+export type ArenaResult = {
+  reachedFloor: number;
+  challengeFloor: number | null;
+  floors: ArenaFloorSummary[];
+  targetFloor: number | null;
+  enemy: Enemy | null;
+  party: PartyMember[];
+};
+
+/** floor を省くと、サーバは既定で「次に挑む階」を返す（worker/src/routes/arena.ts）。 */
+export function fetchArena(token: string, floor?: number): Promise<ArenaResult> {
+  const query = floor === undefined ? '' : `?floor=${floor}`;
+  return request(`/api/arena${query}`, withAuth(token));
+}
+
+export type ArenaSubmitResult = { log: BattleLog; rewarded: boolean; firstClear: boolean };
+
+export function submitArena(token: string, floor: number, plan: BattlePlan): Promise<ArenaSubmitResult> {
+  return request('/api/arena', {
+    method: 'POST',
+    body: JSON.stringify({ floor, plan }),
+    ...withAuth(token),
+  });
+}
+
+export type ArenaRankingRow = { playerId: string; name: string; reachedFloor: number };
+
+export type ArenaRankingResult = { ranking: ArenaRankingRow[] };
+
+export function fetchArenaRanking(token: string): Promise<ArenaRankingResult> {
+  return request('/api/arena/ranking', withAuth(token));
+}
