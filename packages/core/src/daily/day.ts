@@ -9,9 +9,25 @@ export function isBossDay(dayNo: number): boolean {
   return dayNo > 0 && dayNo % BOSS_INTERVAL === 0;
 }
 
-/** その日が属する章。1日目から7日目までが第1章。 */
+/**
+ * いま用意してある最後の章。
+ *
+ * ここで頭打ちにするのは、第4章以降の中身（イベント・ボス）がまだ無いため。
+ * 章だけ進めると、条件を満たすイベントが尽きて同じ3択が並び続けるか、
+ * 存在しない章のボスを探しに行くことになる。中身を足したらこの数を上げる。
+ *
+ * **世界は止まらない。** 日数は進み続け、第3章のまま冒険は続く。
+ * 終わりを作らない設計なので（闘技場が区切りを担う）、これは「打ち切り」ではなく
+ * 「今のところ第3章まで」という意味である。
+ */
+export const MAX_CHAPTER = 3;
+
+/**
+ * その日が属する章。1日目から7日目までが第1章。
+ * 用意してある最後の章で頭打ちになる。
+ */
 export function chapterOf(dayNo: number): number {
-  return Math.floor((dayNo - 1) / BOSS_INTERVAL) + 1;
+  return Math.min(MAX_CHAPTER, Math.floor((dayNo - 1) / BOSS_INTERVAL) + 1);
 }
 
 export type WorldDay = {

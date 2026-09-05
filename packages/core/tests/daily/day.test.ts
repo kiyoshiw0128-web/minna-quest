@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { isBossDay, chapterOf, closeDay, BOSS_INTERVAL } from '../../src/daily/day.js';
+import { isBossDay, chapterOf, closeDay, BOSS_INTERVAL , MAX_CHAPTER } from '../../src/daily/day.js';
 import type { WorldDay } from '../../src/daily/day.js';
 import type { Vote } from '../../src/daily/vote.js';
 
@@ -111,5 +111,26 @@ describe('closeDay', () => {
     const closed = closeDay(day(), [], 5);
     expect(closed.chosenId).not.toBeNull();
     expect(closed.optionIds).toContain(closed.chosenId);
+  });
+});
+
+/**
+ * 章の頭打ち。第4章以降の中身がまだ無いので、章は用意した最後の章で止まる。
+ * 止めないと、条件を満たすイベントが尽きて同じ3択が並ぶか、存在しない章の
+ * ボスを探しに行くことになる。日数そのものは進み続ける。
+ */
+describe('章の頭打ち', () => {
+  it('用意した最後の章で止まる', () => {
+    expect(chapterOf(1)).toBe(1);
+    expect(chapterOf(BOSS_INTERVAL * (MAX_CHAPTER - 1) + 1)).toBe(MAX_CHAPTER);
+    // ずっと先の日でも章は増えない。
+    expect(chapterOf(BOSS_INTERVAL * 50)).toBe(MAX_CHAPTER);
+    expect(chapterOf(9999)).toBe(MAX_CHAPTER);
+  });
+
+  it('頭打ちのあとも日数は進み、ボスの日は来続ける', () => {
+    const farDay = BOSS_INTERVAL * 20;
+    expect(isBossDay(farDay)).toBe(true);
+    expect(chapterOf(farDay)).toBe(MAX_CHAPTER);
   });
 });

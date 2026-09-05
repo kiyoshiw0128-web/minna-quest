@@ -106,17 +106,17 @@ export const EVENTS = {
   dragonlingClash: {
     id: 'dragonlingClash', name: '悪竜の眷属との激突', kind: 'battle',
     enemyId: 'direWyvern',
-    condition: { minChapter: 4 },
+    condition: { minChapter: 3 },
   },
   stoneGolemBlockade: {
     id: 'stoneGolemBlockade', name: '石の巨人が道を塞ぐ', kind: 'battle',
     enemyId: 'stoneGolem',
-    condition: { minChapter: 4 },
+    condition: { minChapter: 3 },
   },
   voidWraithAmbush: {
     id: 'voidWraithAmbush', name: '影の亡霊に囚われる', kind: 'battle',
     enemyId: 'voidWraith',
-    condition: { minChapter: 5 },
+    condition: { minChapter: 3 },
   },
 
   // ここから非戦闘の追記分（2026-09-05）。既存16エントリは並び・内容とも変えていない。
@@ -278,6 +278,6 @@ export const EVENTS = {
   forgottenLibrary: {
     id: 'forgottenLibrary', name: '忘れられた書庫', kind: 'story',
     outcome: { gold: 55 },
-    condition: { minChapter: 4 },
+    condition: { minChapter: 3 },
   },
 } as const satisfies Record<string, DailyEvent>;

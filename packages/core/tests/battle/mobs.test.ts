@@ -9,7 +9,7 @@ import { PASSIVES } from '../../src/data/passives.js';
 import { ENEMIES, BANDIT_SCOUT } from '../../src/data/enemies.js';
 import { EVENTS } from '../../src/data/events.js';
 import type { DailyEvent } from '../../src/daily/event.js';
-import { BOSS_INTERVAL } from '../../src/daily/day.js';
+import { BOSS_INTERVAL, MAX_CHAPTER } from '../../src/daily/day.js';
 import type { Character } from '../../src/progression/types.js';
 import type { Enemy } from '../../src/battle/enemy.js';
 import type { Skill } from '../../src/battle/skill.js';
@@ -153,6 +153,10 @@ describe('敵の強さと出現する章の噛み合い', () => {
    * 章の途中で一度負けること自体は問題にならない。
    */
   function maxFightsWithin(chapter: number): number {
+    // 最終章は終わらない。章が頭打ちになったあとも日数は進み続けるので、
+    // ここに上限は無い。上限があるかのように見なすと、最終章に置ける敵の
+    // 強さが不当に縛られる。
+    if (chapter >= MAX_CHAPTER) return Number.POSITIVE_INFINITY;
     return chapter * BOSS_INTERVAL - 1;
   }
 

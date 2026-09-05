@@ -83,7 +83,7 @@ export {
 } from './daily/event.js';
 export { tallyVotes } from './daily/vote.js';
 export { jstDayNumber, JST_OFFSET_MINUTES } from './daily/calendar.js';
-export { isBossDay, chapterOf, closeDay, BOSS_INTERVAL } from './daily/day.js';
+export { isBossDay, chapterOf, closeDay, BOSS_INTERVAL, MAX_CHAPTER } from './daily/day.js';
 export {
   aptitudeQuality,
   recruitCost,
