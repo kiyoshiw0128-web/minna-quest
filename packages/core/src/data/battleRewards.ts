@@ -56,4 +56,15 @@ export const BATTLE_REWARDS: Readonly<Record<string, BattleReward>> = {
   // adventureExpToNext(23)=31740。2300/31740=7.2%。recruitCost(23)=2760。380/2760=13.8%。
   // 第2章の最強雑魚なのでバルゴスに次ぐ額にした。
   voidWraith: { gold: 380, exp: 2300 },
+
+  /**
+   * 第2・3章のボス。balgosと同じ比率（exp は adventureExpToNext のおよそ74%、
+   * gold は recruitCost(素質14/28) のおよそ56%）をそのまま当てはめた。
+   * 章ボスは雑魚と違って毎章1回しか勝てないので、雑魚より重い報酬にする
+   * balgosの考え方をそのまま引き継いでいる。
+   */
+  // adventureExpToNext(6)=2160。1600/2160=74%。recruitCost(6)=720。400/720=55.6%。
+  gouza: { gold: 400, exp: 1600 },
+  // adventureExpToNext(9)=4860。3600/4860=74.1%。recruitCost(9)=1080。600/1080=55.6%。
+  vornil: { gold: 600, exp: 3600 },
 };

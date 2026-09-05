@@ -250,6 +250,130 @@ export const VOID_WRAITH = {
   resist: { dark: 0.5, holy: 1.6 },
 } as const satisfies Enemy;
 
+/**
+ * ここから第2章のボス。第1章のバルゴス・雑魚8体の定義・数値は一切変えていない。
+ *
+ * 章ボスは7日ごと（daily/day.ts の BOSS_INTERVAL）に来るので、第2章のボスは
+ * 14日目に来る。7日目にバルゴスへ勝った実績のある備えたプレイヤーが、
+ * さらに6日（8〜13日目）ぶん雑魚（森の狼・ゴブリンの掠奪者・人喰い鬼）を
+ * 狩って伸びた姿を実測の基準にする。
+ *
+ * `computeStats` で warrior/mage/priest を冒険Lv6・そのジョブLvで組み、
+ * `toPartyMember` を通して `simulate` にかけると、Lv6が3人（そのレベルで
+ * 習得済みの技だけ）で勝てて、Lv3が3人では負ける水準として下の数値が出た
+ * （`tests/battle/bosses2and3.test.ts` に実測がある）。Lv6は
+ * adventureExpToNext の二乗カーブ（progression/curve.ts）で見ると、
+ * バルゴス撃破の400経験値に加えて8〜13日目で雑魚を4〜6戦ぶん勝った程度で
+ * 届く水準（累計3300前後）で、7日目の実像（Lv2〜3）から地続きの伸びとして無理がない。
+ *
+ * **行動表の仕掛け：物理ではなく魔法の窓。** バルゴスは「被ダメ+50%の自分への
+ * 呪い（溜め）」→大技という物理寄りの仕掛けだったが、ゴウザは自分のMATを
+ * 上げる呪詠（3ターン）→呪詛の波動（全体魔法）という、魔法版の同じ形にした。
+ * 違うのは対処の道具：物理のダメージ軽減技をこの職業構成はまだ持たないので、
+ * 唯一の対抗手段は僧侶のguardChant（全体MDF+50%、3ターン）を波動が来る前に
+ * 前もって張っておくことだけになる。張らずに撃たれると、育ちきっていない
+ * 冒険Lv6のパーティは誰か1人が波動で戦線離脱し、そのまま押し切られる
+ * （実測：guardChantを張らず殴るだけの「素朴に一番強い技を連打する」プランは
+ * 8ターン以内に決着しない）。波動を撃った直後にゴウザ自身のMDFが40%落ちる
+ * （呪詛の代償）ので、そこに氷の槍を集中させると打ち取りが早まるが、
+ * 張らずに耐えられない以上、これは近道であって必須の読みではない。
+ *
+ * HPの半分で激昂し、以後は呪詠の予告なしに波動を連発する。ここから先は
+ * 「一度は凌げても、凌ぎ続けられるか」に問いが変わる。
+ */
+const gouzaClaw = {
+  id: 'gouzaClaw', name: '爪撃', mpCost: 0, cooldown: 0,
+  element: 'none', target: 'enemy',
+  damage: { kind: 'physical', power: 90 },
+} as const satisfies Skill;
+
+const gouzaChant = {
+  id: 'gouzaChant', name: '呪詠', mpCost: 0, cooldown: 0,
+  element: 'none', target: 'self',
+  effects: [{ to: 'self', effect: { kind: 'statMod', stat: 'mat', rate: 0.6, turns: 3 } }],
+} as const satisfies Skill;
+
+const gouzaCurseNova = {
+  id: 'gouzaCurseNova', name: '呪詛の波動', mpCost: 0, cooldown: 0,
+  element: 'dark', target: 'allEnemies',
+  damage: { kind: 'magical', power: 520 },
+  effects: [{ to: 'self', effect: { kind: 'statMod', stat: 'mdf', rate: -0.4, turns: 2 } }],
+} as const satisfies Skill;
+
+export const GOUZA = {
+  id: 'gouza',
+  name: '鬼呪術師ゴウザ',
+  stats: { maxHp: 500, maxMp: 999, atk: 45, def: 15, mat: 40, mdf: 20, spd: 15 },
+  skills: [gouzaClaw, gouzaChant, gouzaCurseNova],
+  pattern: [
+    { skillId: 'gouzaClaw' },
+    { skillId: 'gouzaChant' },
+    { skillId: 'gouzaCurseNova' },
+    { skillId: 'gouzaClaw' },
+  ],
+  enrage: {
+    hpRate: 0.5,
+    pattern: [{ skillId: 'gouzaCurseNova' }, { skillId: 'gouzaClaw' }],
+  },
+} as const satisfies Enemy;
+
+/**
+ * ここから第3章のボス。21日目に来る。14日目のゴウザに勝った実績のある
+ * パーティが、さらに6日（15〜20日目）雑魚を狩って伸びた姿を基準にする。
+ * `tests/battle/bosses2and3.test.ts` の実測で、冒険Lv9が3人（そのレベルで
+ * 習得済みの技だけ）で勝てて、Lv6が3人では負ける水準としてこの数値が出た。
+ * Lv9はadventureExpToNextの累計（4860手前）で見ても、ゴウザ撃破分と
+ * 15〜20日目の雑魚数戦を足した地続きの伸びの範囲に収まる。
+ *
+ * **行動表の仕掛け：反応できない時間への先読み。** バルゴスは窓が来た瞬間に
+ * 攻め込む読み、ゴウザは波動の前にMDFを張っておく読みだった。ヴォルニルは
+ * さらに一段先で、「咆哮（全体1ターン気絶）の次のターンには薙ぎ払い（全体魔法）が
+ * 来る」と行動表からわかっていても、気絶している間は何もできない。
+ * 打てる手は気絶する前、つまり咆哮そのものより前のターンに前もって
+ * guardChant（全体MDF+50%、3ターン）を張っておくことだけ。張った効果は
+ * 気絶中も続くので、動けないターンの薙ぎ払いにもちゃんと効く。
+ *
+ * 素朴に一番強い技を連打するだけのプラン（警戒せずMDFを張らない）でも
+ * 冒険Lv9が3人なら善戦はするが、8ターン以内には削り切れない
+ * （実測：guardChantを張った場合は7ターンで勝てるが、張らない場合は
+ * 8ターンで決着しない）。HPの半分からは咆哮と薙ぎ払いを交互に連発する
+ * 激昂に切り替わり、気絶で溶ける時間がさらに増える。
+ */
+const vornilClaw = {
+  id: 'vornilClaw', name: '爪撃', mpCost: 0, cooldown: 0,
+  element: 'none', target: 'enemy',
+  damage: { kind: 'physical', power: 100 },
+} as const satisfies Skill;
+
+const vornilDreadRoar = {
+  id: 'vornilDreadRoar', name: '深淵の咆哮', mpCost: 0, cooldown: 0,
+  element: 'none', target: 'allEnemies',
+  effects: [{ to: 'target', effect: { kind: 'stun', turns: 1 } }],
+} as const satisfies Skill;
+
+const vornilTailSweep = {
+  id: 'vornilTailSweep', name: '尾の薙ぎ払い', mpCost: 0, cooldown: 0,
+  element: 'dark', target: 'allEnemies',
+  damage: { kind: 'magical', power: 280 },
+} as const satisfies Skill;
+
+export const VORNIL = {
+  id: 'vornil',
+  name: '深淵竜ヴォルニル',
+  stats: { maxHp: 750, maxMp: 999, atk: 70, def: 25, mat: 55, mdf: 30, spd: 12 },
+  skills: [vornilClaw, vornilDreadRoar, vornilTailSweep],
+  pattern: [
+    { skillId: 'vornilClaw' },
+    { skillId: 'vornilDreadRoar' },
+    { skillId: 'vornilTailSweep' },
+    { skillId: 'vornilClaw' },
+  ],
+  enrage: {
+    hpRate: 0.5,
+    pattern: [{ skillId: 'vornilTailSweep' }, { skillId: 'vornilDreadRoar' }],
+  },
+} as const satisfies Enemy;
+
 export const ENEMIES = {
   balgos: BALGOS,
   banditScout: BANDIT_SCOUT,
