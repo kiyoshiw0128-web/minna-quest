@@ -10,7 +10,9 @@
 # 黙って進むより、止まって手順を示すほうがよい。
 set -e
 
-output=$(wrangler d1 migrations list minna-quest --remote 2>&1)
+# npx 経由で呼ぶのは、このスクリプトを直接 sh で起動したときに
+# node_modules/.bin が PATH に無く、コマンドが見つからないため。
+output=$(npx wrangler d1 migrations list minna-quest --remote 2>&1)
 
 if printf '%s' "$output" | grep -q 'No migrations to apply'; then
   echo "未適用のマイグレーションはありません。"
