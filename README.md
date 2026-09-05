@@ -67,9 +67,10 @@ corepack pnpm --filter @mq/worker exec tsx scripts/seed.ts "みんなの冒険" 
 corepack pnpm --filter @mq/worker exec wrangler d1 execute minna-quest --remote --file=seed.sql
 rm seed.sql
 
-# 4. 画面をビルドしてからデプロイする（この順序を守ること。Worker だけ
-#    デプロイすると、apps/web/dist が古いまま／無いままデプロイ物に
-#    同梱され、古い画面が出るか何も出ない）
+# 4. 画面のビルド → 未適用のマイグレーション → デプロイ をまとめて行う。
+#    3つを別々に走らせると、片方だけ通った状態で本番が壊れる。実際に
+#    2026-09-05、マイグレーションを適用しないままデプロイして、
+#    新しいコードが存在しない列を参照する状態になった。
 corepack pnpm run release
 ```
 
