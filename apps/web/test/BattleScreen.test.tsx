@@ -245,3 +245,27 @@ describe('二重送信の防止（設計書 §6）', () => {
     await waitFor(() => expect(screen.getByRole('button', { name: 'このプランで挑む' })).not.toBeDisabled());
   });
 });
+
+/**
+ * 行動表と自分の手を見比べるのがこの画面の目的なので、行動表が技のIDのまま
+ * 出ていると機能しない。ログ側は名前で出るため、同じ技だと気づけない。
+ * 実際にローカルで動かしたとき、行動表だけ「dragonBreath」と出ていた。
+ */
+describe('行動表の読みやすさ', () => {
+  it('敵の行動表は技のIDではなく名前で出る', async () => {
+    installFetchMock({
+      'GET /api/world': worldResponse(),
+      'GET /api/battle': battleResponse(),
+    });
+
+    render(<BattleScreen token="t" onUnauthorized={vi.fn()} />);
+    await screen.findByText('プラン（8ターン）');
+
+    const enemyRow = screen.getByText('通常').closest('tr') as HTMLElement;
+    const cells = within(enemyRow).getAllByRole('cell');
+    for (const cell of cells) {
+      expect(cell.textContent).toBe('斬る');
+      expect(cell.textContent).not.toBe('slash');
+    }
+  });
+});

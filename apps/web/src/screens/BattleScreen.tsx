@@ -273,17 +273,23 @@ function EnemyTable({
   enemy: Extract<BattleInfo, { hasBattle: true }>['enemy'];
   turns: readonly number[];
 }) {
+  // 行動表は技のIDしか持たないので、敵の技一覧から名前を引く。IDのまま出すと
+  // 「dragonBreath」と並び、ログ側は「火炎の息」と出るので、同じ技だと分からない。
+  // この表と自分の手を見比べるのがこの画面の目的なので、読めないと機能しない。
+  const skillNames = new Map(enemy.skills.map((skill): [string, string] => [skill.id, skill.name]));
+
   return (
     <div style={{ overflowX: 'auto' }}>
       <table>
         <caption>行動表はターン数で循環する。HPが一定割合以下になると激昂し、下の表に切り替わる。</caption>
         <tbody>
-          <PatternRow label="通常" pattern={enemy.pattern} turns={turns} />
+          <PatternRow label="通常" pattern={enemy.pattern} turns={turns} skillNames={skillNames} />
           {enemy.enrage !== undefined && (
             <PatternRow
               label={`激昂後（HP${Math.round(enemy.enrage.hpRate * 100)}%以下）`}
               pattern={enemy.enrage.pattern}
               turns={turns}
+              skillNames={skillNames}
             />
           )}
         </tbody>
@@ -296,19 +302,35 @@ function PatternRow({
   label,
   pattern,
   turns,
+  skillNames,
 }: {
   label: string;
   pattern: readonly { skillId: string }[];
   turns: readonly number[];
+  skillNames: ReadonlyMap<string, string>;
 }) {
   return (
     <tr>
       <th scope="row">{label}</th>
       {turns.map((turn) => (
-        <td key={turn}>{pattern[turn % pattern.length]?.skillId ?? '-'}</td>
+        <td key={turn}>{patternCell(pattern, turn, skillNames)}</td>
       ))}
     </tr>
   );
+}
+
+/**
+ * 行動表の1マス。名前が引けなければIDをそのまま出す。空欄にすると
+ * 「その技が無い」のか「名前が引けなかった」のか区別がつかなくなる。
+ */
+function patternCell(
+  pattern: readonly { skillId: string }[],
+  turn: number,
+  skillNames: ReadonlyMap<string, string>,
+): string {
+  const entry = pattern[turn % pattern.length];
+  if (entry === undefined) return '-';
+  return skillNames.get(entry.skillId) ?? entry.skillId;
 }
 
 /** 各人のステータスと、装備中の技のMP・クールダウン・威力・属性（設計書 §4.3）。 */
