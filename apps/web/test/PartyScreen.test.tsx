@@ -19,6 +19,7 @@ function meResponse(gold: number) {
           id: 'hero1', name: 'ゆうしゃ', jobId: 'warrior', adventureLevel: 3, jobLevel: 3,
           stats: { maxHp: 100, maxMp: 20, atk: 15, def: 10, mat: 10, mdf: 10, spd: 12 },
           learnedSkillIds: ['slash'], equippedSkillIds: ['slash'],
+          learnedPassiveIds: [], equippedPassiveIds: [], isHero: false,
           // GET /api/me が転職画面のために足したもの（設計書 §3）。
           jobLevels: { warrior: 3 }, unlockedJobIds: ['warrior', 'monk', 'mage', 'priest', 'thief', 'ranger'],
         },
@@ -39,6 +40,7 @@ function meResponseAsMonk(gold: number) {
           id: 'hero1', name: 'ゆうしゃ', jobId: 'monk', adventureLevel: 3, jobLevel: 1,
           stats: { maxHp: 100, maxMp: 20, atk: 15, def: 10, mat: 10, mdf: 10, spd: 12 },
           learnedSkillIds: ['slash'], equippedSkillIds: ['slash'],
+          learnedPassiveIds: [], equippedPassiveIds: [], isHero: false,
           jobLevels: { warrior: 3, monk: 1 },
           unlockedJobIds: ['warrior', 'monk', 'mage', 'priest', 'thief', 'ranger'],
         },
@@ -59,6 +61,7 @@ function meResponseWithProvoke(gold: number) {
           id: 'hero1', name: 'ゆうしゃ', jobId: 'warrior', adventureLevel: 4, jobLevel: 4,
           stats: { maxHp: 100, maxMp: 20, atk: 15, def: 10, mat: 10, mdf: 10, spd: 12 },
           learnedSkillIds: ['slash', 'provoke'], equippedSkillIds: ['slash'],
+          learnedPassiveIds: [], equippedPassiveIds: [], isHero: false,
           jobLevels: { warrior: 4 }, unlockedJobIds: ['warrior', 'monk', 'mage', 'priest', 'thief', 'ranger'],
         },
       ],
@@ -78,12 +81,14 @@ function meResponseTwoMembers(gold: number) {
           id: 'hero1', name: 'ゆうしゃ', jobId: 'warrior', adventureLevel: 3, jobLevel: 3,
           stats: { maxHp: 100, maxMp: 20, atk: 15, def: 10, mat: 10, mdf: 10, spd: 12 },
           learnedSkillIds: ['slash'], equippedSkillIds: ['slash'],
+          learnedPassiveIds: [], equippedPassiveIds: [], isHero: false,
           jobLevels: { warrior: 3 }, unlockedJobIds: ['warrior', 'monk', 'mage', 'priest', 'thief', 'ranger'],
         },
         {
           id: 'hire1', name: 'たろう', jobId: 'warrior', adventureLevel: 1, jobLevel: 1,
           stats: { maxHp: 80, maxMp: 10, atk: 10, def: 8, mat: 5, mdf: 5, spd: 8 },
           learnedSkillIds: ['slash'], equippedSkillIds: ['slash'],
+          learnedPassiveIds: [], equippedPassiveIds: [], isHero: false,
           jobLevels: { warrior: 1 }, unlockedJobIds: ['warrior', 'monk', 'mage', 'priest', 'thief', 'ranger'],
         },
       ],
@@ -289,5 +294,47 @@ describe('仲間画面（設計書 §5）', () => {
         && typeof init.body === 'string' && init.body.includes('"order"'));
       expect(call?.[1]?.body).toBe(JSON.stringify({ order: ['hire1', 'hero1'] }));
     });
+  });
+});
+
+/**
+ * 装備の更新でパッシブが消えないことの検査。
+ *
+ * GET /api/me がパッシブを返していなかったため、画面は「いま何を装備して
+ * いるか」を知らないまま更新を送っていた。アクティブだけ直して更新すると、
+ * 触っていないパッシブが空で上書きされて消える状態だった。
+ */
+describe('装備の更新でパッシブが消えない', () => {
+  it('パッシブを触らずにアクティブだけ変えても、パッシブは保たれる', async () => {
+    installFetchMock({
+      'GET /api/me': jsonResponse(200, {
+        ok: true,
+        data: {
+          name: 'きよし', gold: 0,
+          party: [{
+            id: 'c1', name: 'きよし', jobId: 'warrior', adventureLevel: 5, jobLevel: 5,
+            stats: { maxHp: 200, maxMp: 40, atk: 30, def: 20, mat: 15, mdf: 15, spd: 12 },
+            learnedSkillIds: ['slash', 'provoke'], equippedSkillIds: ['slash'],
+            learnedPassiveIds: ['ironSkin'], equippedPassiveIds: ['ironSkin'],
+            isHero: true,
+            jobLevels: { warrior: 5 }, unlockedJobIds: ['warrior'],
+          }],
+        },
+      }),
+      'GET /api/tavern': jsonResponse(200, { ok: true, data: { dayNo: 1, recruits: [] } }),
+      'POST /api/equip': jsonResponse(200, { ok: true, data: {} }),
+    });
+
+    render(<PartyScreen token="t" onUnauthorized={vi.fn()} />);
+    await screen.findByText(/所持金/);
+
+    // アクティブ技をもう1つ足すだけ。パッシブには触らない。
+    await userEvent.click(screen.getByLabelText(/挑発をアクティブに装備/));
+    await userEvent.click(screen.getByRole('button', { name: '装備を更新する' }));
+
+    const call = (fetch as unknown as { mock: { calls: unknown[][] } }).mock.calls
+      .find((c) => String(c[0]).includes('/api/equip'));
+    const body = JSON.parse(String((call?.[1] as RequestInit).body));
+    expect(body.passiveIds).toEqual(['ironSkin']);
   });
 });

@@ -113,6 +113,9 @@ export type MePartyMember = {
   stats: StatBlock;
   learnedSkillIds: string[];
   equippedSkillIds: string[];
+  learnedPassiveIds: string[];
+  equippedPassiveIds: string[];
+  isHero: boolean;
   // worker/src/routes/me.ts が転職画面のために足したもの（設計書 §3・§6）。
   // 就いたことのある職業とそのジョブレベル、いま就ける職業のID一覧。
   jobLevels: Record<string, number>;

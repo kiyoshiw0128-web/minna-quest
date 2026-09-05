@@ -73,29 +73,6 @@ function passiveEffectLabel(passive: Passive): string {
   return `${effect.turns}ターン行動不能`;
 }
 
-/**
- * このキャラが実際に習得しているパッシブID。
- *
- * GET /api/me は学習済みアクティブ技（learnedSkillIds）は返すが、パッシブは
- * 返さない。ただし jobLevels（就いたことのある職業とそのレベル）さえ分かれば、
- * 職業マスタの learnset を辿ることで packages/core の applyLearns と同じ結論に
- * client 側だけで到達できる（学習は「そのジョブレベルに到達した時点で確定」
- * であり、以後職業を変えても失われない）。ここで再計算するのはサーバを
- * 変えないための代替であって、判定ロジックの二重定義ではない
- * （core の学習表そのものをそのまま読んでいるだけ）。
- */
-function derivedLearnedPassiveIds(jobLevels: Record<string, number>): string[] {
-  const ids = new Set<string>();
-  for (const [jobId, level] of Object.entries(jobLevels)) {
-    const job = JOBS[jobId as keyof typeof JOBS] as Job | undefined;
-    if (job === undefined) continue;
-    for (const entry of job.learnset) {
-      if (entry.kind === 'passive' && entry.level <= level) ids.add(entry.id);
-    }
-  }
-  return [...ids];
-}
-
 /** 覚える対象の名前。kind によって技マスタとパッシブマスタのどちらを引くか変わる。 */
 function learnEntryName(entry: LearnEntry): string {
   return entry.kind === 'skill' ? skillName(entry.id) : (PASSIVES[entry.id as keyof typeof PASSIVES]?.name ?? entry.id);
@@ -306,14 +283,18 @@ function PartyMemberCard({
           ↓ 後ろへ
         </button>
         {/*
-          主人公・雇用メンバーのどちらかはこの画面からは分からない（設計書のAPIが
-          個体の印を返さないため）。事前に隠さず、押せてしまう代わりに
-          「主人公は解雇できません」というサーバの文言をそのまま出す
-          （設計書 §6 の「サーバの文言をそのまま出す」方針をここでも踏襲する）。
+          主人公は外せず解雇もできないので、そもそも押せないようにする。
+          押せるボタンを出しておいてサーバに断られるのは、できない理由を
+          先に伝えられるのに伝えていないだけになる。サーバ側のガードは
+          そのまま残っており、ここは案内であって防御ではない。
         */}
-        <button type="button" disabled={busy} onClick={onDismiss}>
-          解雇する
-        </button>
+        {member.isHero ? (
+          <span>主人公は外せません</span>
+        ) : (
+          <button type="button" disabled={busy} onClick={onDismiss}>
+            解雇する
+          </button>
+        )}
       </div>
       {dismissError !== null && <p role="alert">{dismissError}</p>}
 
@@ -397,9 +378,8 @@ function JobOption({
 /**
  * 装備パネル。習得済みの技からアクティブ6・パッシブ2を選ぶ、この画面の核。
  *
- * 現在装備中のパッシブはサーバから取得できない（api.ts のコメント参照）ため、
- * パッシブは常に未選択から選び直す形になる。アクティブは equippedSkillIds が
- * あるのでそのまま初期値にできる。
+ * アクティブもパッシブも、いま装備しているものを初期値に置く。ここを
+ * 空から始めると、パッシブを触らずに更新しただけで装備が消える。
  */
 function EquipPanel({
   member,
@@ -413,8 +393,8 @@ function EquipPanel({
   onSave: (activeIds: string[], passiveIds: string[]) => void;
 }) {
   const [activeIds, setActiveIds] = useState<string[]>(member.equippedSkillIds);
-  const [passiveIds, setPassiveIds] = useState<string[]>([]);
-  const learnedPassiveIds = derivedLearnedPassiveIds(member.jobLevels);
+  const [passiveIds, setPassiveIds] = useState<string[]>(member.equippedPassiveIds);
+  const learnedPassiveIds = member.learnedPassiveIds;
 
   function toggle(ids: string[], setIds: (ids: string[]) => void, id: string, max: number): void {
     if (ids.includes(id)) {
@@ -428,11 +408,6 @@ function EquipPanel({
   return (
     <section>
       <h3>装備（アクティブ {activeIds.length} / 6・パッシブ {passiveIds.length} / 2）</h3>
-      <p>
-        現在装備中のパッシブはこの画面では分からないため、パッシブは毎回
-        未選択から選び直してください。何も選ばずに更新すると、パッシブ枠は
-        空になります。
-      </p>
 
       <h4>アクティブ技</h4>
       {member.learnedSkillIds.length === 0 && <p>まだ技を習得していません。</p>}

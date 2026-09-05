@@ -1,7 +1,7 @@
 import { computeStats, JOBS, unlockedJobs } from '@mq/core';
 import type { Character, Job } from '@mq/core';
 import { requirePlayer } from '../auth.js';
-import { getPartyCharacters, getPlayerGold } from '../store.js';
+import { getOwnedCharacterFlags, getPartyCharacters, getPlayerGold } from '../store.js';
 import { fail, ok } from '../respond.js';
 import type { Env } from '../env.js';
 
@@ -30,9 +30,10 @@ export async function handleMe(request: Request, env: Env): Promise<Response> {
   const player = await requirePlayer(env.DB, request);
   if (player === null) return fail('unauthorized', 401);
 
-  const [gold, characters] = await Promise.all([
+  const [gold, characters, heroFlags] = await Promise.all([
     getPlayerGold(env.DB, player.id),
     getPartyCharacters(env.DB, player.id),
+    getOwnedCharacterFlags(env.DB, player.id),
   ]);
   if (gold === null) return fail('player not found', 404);
 
@@ -47,6 +48,14 @@ export async function handleMe(request: Request, env: Env): Promise<Response> {
       stats: computeStats(character, job),
       learnedSkillIds: character.learnedSkills,
       equippedSkillIds: character.equippedActive,
+      // パッシブも返す。返さないと画面が「いま何を装備しているか」を
+      // 知らないまま装備の更新を送ることになり、触っていないパッシブが
+      // 空で上書きされて消える。実際にそうなっていた。
+      learnedPassiveIds: character.learnedPassives,
+      equippedPassiveIds: character.equippedPassive,
+      // 主人公は外せず解雇もできない。画面がそれを知らないと、
+      // 押せるボタンを出しておいてサーバに断られる、という形になる。
+      isHero: heroFlags.get(character.id) === true,
       // 転職画面が「就いたことのある職業とそのレベル」「いま就ける職業」を
       // 出すための材料（設計書 §3）。就ける条件が見えないと、満たしたことに
       // 誰も気づけない。
