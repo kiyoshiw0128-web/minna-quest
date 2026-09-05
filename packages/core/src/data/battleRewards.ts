@@ -38,7 +38,7 @@ export type BattleReward = { readonly gold: number; readonly exp: number };
  * balgosが章ボスとして特別重い報酬を持つ一方、雑魚は何度も倒す前提だから）。
  */
 export const BATTLE_REWARDS: Readonly<Record<string, BattleReward>> = {
-  balgos: { gold: 150, exp: 100 },
+  balgos: { gold: 200, exp: 400 },
   // adventureExpToNext(1)=60。15/60=25%。何度も出会う一番弱い雑魚なので低め。
   banditScout: { gold: 20, exp: 15 },
   // adventureExpToNext(3)=540。60/540=11%。recruitCost(3)=360。45/360=12.5%。

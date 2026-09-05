@@ -431,3 +431,38 @@ describe('複数日がまとめて締まったとき', () => {
     }
   });
 });
+
+/**
+ * 7日ごとのボスの日（全体設計 §5.5）。
+ *
+ * 雑魚敵を足してイベントの敵の割り当てを変えた際、章ボスがどのイベントからも
+ * 参照されなくなり、完全に到達不能になっていた。イベント側の検査は通るので、
+ * 「ボスの日にボスが出る」ことを別に見ないと気づけない。
+ */
+describe('ボスの日', () => {
+  it('7日目は、選ばれた選択肢が戦闘でなくても章ボスが出る', async () => {
+    // 7日目の選択肢は戦闘ではない出来事（分かれ道）にしておく。
+    await seedWorld(7, 'crossroads');
+    await addPlayer(PLAYER_A, TOKEN_A);
+    await seedWinningHero(PLAYER_A, HERO_A);
+
+    const response = await (await battleRequest(TOKEN_A, 'GET')).json() as {
+      data: { hasBattle: boolean; dayNo: number; enemy?: { id: string } };
+    };
+    expect(response.data.hasBattle).toBe(true);
+    expect(response.data.dayNo).toBe(7);
+    expect(response.data.enemy?.id).toBe('balgos');
+  });
+
+  it('ボスの日でない日は、選ばれた選択肢の敵が出る', async () => {
+    await seedWorld(1, 'banditAmbush');
+    await addPlayer(PLAYER_A, TOKEN_A);
+    await seedWinningHero(PLAYER_A, HERO_A);
+
+    const response = await (await battleRequest(TOKEN_A, 'GET')).json() as {
+      data: { hasBattle: boolean; enemy?: { id: string } };
+    };
+    expect(response.data.hasBattle).toBe(true);
+    expect(response.data.enemy?.id).not.toBe('balgos');
+  });
+});

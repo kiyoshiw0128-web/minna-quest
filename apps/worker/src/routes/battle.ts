@@ -1,5 +1,6 @@
 import {
-  BATTLE_REWARDS, ENEMIES, EVENTS, JOBS, PASSIVES, SKILLS, gainExp, simulate, toPartyMember,
+  BATTLE_REWARDS, ENEMIES, EVENTS, JOBS, PASSIVES, SKILLS, bossForChapter, chapterOf, gainExp,
+  isBossDay, simulate, toPartyMember,
 } from '@mq/core';
 import type { BattlePlan, Character, DailyEvent, Enemy, Job } from '@mq/core';
 import { requirePlayer } from '../auth.js';
@@ -16,7 +17,23 @@ const ENEMY_TABLE: Readonly<Record<string, Enemy>> = ENEMIES;
  * その日確定した選択肢が戦闘なら敵を返す。締まっていない日・戦闘でない日は
  * null（設計書 §6.1 / §6.2）。
  */
-function resolveBattleEnemy(chosenId: string | null): Enemy | null {
+/**
+ * その日の相手を決める。
+ *
+ * **7日ごとのボスの日は、投票の結果より章ボスが優先する。** 全体設計 §5.5 が
+ * 「7日ごとに章ボス。ボスは全員共通」と定めているため、その日に何を選んでいても
+ * 立ちはだかるのはボスである。ここを通さないとボスが一度も出てこない
+ * （実際、雑魚敵を足してイベントの割り当てを変えた際に、バルゴスがどの
+ * イベントからも参照されなくなり、完全に到達不能になっていた）。
+ *
+ * その章のボスが未作成なら、ボスの日でも通常のイベントで進む。存在しない章に
+ * 別の章のボスを流用すると、難易度も物語も合わないものが出てくる。
+ */
+function resolveBattleEnemy(chosenId: string | null, dayNo: number): Enemy | null {
+  if (isBossDay(dayNo)) {
+    const boss = bossForChapter(chapterOf(dayNo));
+    if (boss !== null) return boss;
+  }
   if (chosenId === null) return null;
   const event = POOL.find((candidate) => candidate.id === chosenId);
   if (event === undefined || event.kind !== 'battle' || event.enemyId === undefined) return null;
@@ -89,7 +106,7 @@ export async function handleGetBattle(request: Request, env: Env): Promise<Respo
   const day = await getDay(env.DB, world.id, dayNo);
   if (day === null) return fail('day not found', 404);
 
-  const enemy = resolveBattleEnemy(day.chosenId);
+  const enemy = resolveBattleEnemy(day.chosenId, day.dayNo);
   if (enemy === null) return ok({ dayNo: day.dayNo, hasBattle: false });
 
   const characters = await getPartyCharacters(env.DB, player.id);
@@ -156,7 +173,7 @@ export async function handlePostBattle(request: Request, env: Env): Promise<Resp
   const day = await getDay(env.DB, world.id, dayNo);
   if (day === null) return fail('day not found', 404);
 
-  const enemy = resolveBattleEnemy(day.chosenId);
+  const enemy = resolveBattleEnemy(day.chosenId, day.dayNo);
   if (enemy === null) return fail('no battle today');
 
   const characters = await getPartyCharacters(env.DB, player.id);
