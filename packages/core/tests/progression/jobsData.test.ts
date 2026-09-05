@@ -26,6 +26,8 @@ const PRIMARY_AXIS: Readonly<Record<string, readonly StatKey[]>> = {
   paladin: ['def'],
   spellblade: ['atk', 'mat'],
   sage: ['mat'],
+  beastTamer: ['atk'],
+  beastKing: ['atk', 'spd'],
 };
 
 /**

@@ -167,4 +167,45 @@ export const JOBS = {
       { jobId: 'priest', level: 20 },
     ],
   },
+
+  // ここから追加分。既存6基本職・3上級職の数値・IDは変えていない。
+
+  beastTamer: {
+    id: 'beastTamer', name: '魔物使い', tier: 'basic',
+    statBonus: { atk: 3, mdf: 1, maxHp: 6 },
+    // ATK主体だが、技はペットに命じるもの中心（petFang/petGuard/petHowl/
+    // petMend/petPounce）。ペットを連れていないと丸ごと不発になるので、
+    // 素の攻撃技hawkEyeを1本混ぜて、ペット未所持でも最低限は戦えるようにする。
+    learnset: [
+      { level: 1, kind: 'skill', id: 'petFang' },
+      { level: 4, kind: 'skill', id: 'hawkEye' },
+      { level: 8, kind: 'skill', id: 'petGuard' },
+      { level: 10, kind: 'passive', id: 'battleInstinct' },
+      { level: 12, kind: 'skill', id: 'petHowl' },
+      { level: 16, kind: 'skill', id: 'petMend' },
+      { level: 21, kind: 'skill', id: 'petPounce' },
+      { level: 24, kind: 'passive', id: 'lightFeet' },
+    ],
+    requires: [],
+  },
+  beastKing: {
+    id: 'beastKing', name: '獣王', tier: 'advanced',
+    statBonus: { atk: 3, spd: 2, mat: 2, maxHp: 5 },
+    // 魔物使いのペット技と狩人の遠隔技を束ねる上級職。petRally（全体ATKバフ）と
+    // beastClaw（獣王だけの切り札）はここで初めて手に入る。
+    learnset: [
+      { level: 1, kind: 'skill', id: 'petFang' },
+      { level: 6, kind: 'skill', id: 'windArrow' },
+      { level: 9, kind: 'skill', id: 'petPounce' },
+      { level: 13, kind: 'skill', id: 'petRally' },
+      { level: 16, kind: 'passive', id: 'berserkerFury' },
+      { level: 18, kind: 'skill', id: 'thunderArrow' },
+      { level: 23, kind: 'skill', id: 'beastClaw' },
+      { level: 25, kind: 'passive', id: 'lightFeet' },
+    ],
+    requires: [
+      { jobId: 'beastTamer', level: 20 },
+      { jobId: 'ranger', level: 15 },
+    ],
+  },
 } as const satisfies Record<string, Job>;

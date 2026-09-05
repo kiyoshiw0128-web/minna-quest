@@ -278,4 +278,90 @@ export const SKILLS = {
     element: 'ice', target: 'enemy',
     damage: { kind: 'magical', power: 300 },
   },
+
+  // ここから魔物使い／獣王のペット技。既存29技の数値・IDは変えていない。
+  //
+  // requiresPet: true の技は、ペットを連れていないと丸ごと不発になる
+  // （engine側の仕様は skill.ts / action.ts / simulate.ts を参照）。
+  // 「使えるかどうかを賭けにする」条件を負わせているぶん、同程度のMP・CDを
+  // 払う通常の技より一段強くしてある。実測はすべて /tmp/mq/calc.ts で
+  // computeStats + computeDamage を通し、冒険Lv20・素質C・ジョブLv20の
+  // 魔物使い（atk148・def67・mat67・mdf87・spd32）／獣王（atk148・def67・
+  // mat107・mdf67・spd72）を相手DEF60・MDF40・HP2000で撃って比較した。
+
+  /**
+   * 魔物使いの初段攻撃。同じmp6・cd1の狩人hawkEye（power140→129）に対し、
+   * power160→148とpierce無しのままpowerだけ底上げしてある。
+   * 無条件で撃てるhawkEyeより強いのは、ペットを連れていない限り
+   * この技自体が存在しないのと同じだから。
+   */
+  petFang: {
+    id: 'petFang', name: '相棒の牙', mpCost: 6, cooldown: 1,
+    element: 'none', target: 'enemy',
+    damage: { kind: 'physical', power: 160 },
+    requiresPet: true,
+  },
+  /**
+   * 自己バフ版provoke（def/mdf+0.5・mp6・cd3）の強化版。
+   * ペットが盾になって庇う想定なので、同じ土俵の技よりrateを一段高くしてある。
+   */
+  petGuard: {
+    id: 'petGuard', name: '相棒の守り', mpCost: 7, cooldown: 3,
+    element: 'none', target: 'self',
+    effects: [
+      { to: 'self', effect: { kind: 'statMod', stat: 'def', rate: 0.6, turns: 3 } },
+      { to: 'self', effect: { kind: 'statMod', stat: 'mdf', rate: 0.6, turns: 3 } },
+    ],
+    requiresPet: true,
+  },
+  /** ペットが敵を威嚇して怯ませる。小威力+敵ATKデバフ。armorBreak（DEFデバフ）と対になる弱体軸。 */
+  petHowl: {
+    id: 'petHowl', name: '威嚇の遠吠え', mpCost: 9, cooldown: 3,
+    element: 'none', target: 'enemy',
+    damage: { kind: 'physical', power: 90 },
+    effects: [{ to: 'target', effect: { kind: 'statMod', stat: 'atk', rate: -0.4, turns: 3 } }],
+    requiresPet: true,
+  },
+  /**
+   * ペットが傷口を舐めて手当てする回復技。holyLight（heal160・healScale既定mat・
+   * mp9・cd0）より回復量を積み、その代わりmp1・cd1を余分に払わせてある。
+   */
+  petMend: {
+    id: 'petMend', name: '相棒の手当て', mpCost: 10, cooldown: 1,
+    element: 'none', target: 'lowestHpAlly',
+    heal: 200,
+    requiresPet: true,
+  },
+  /**
+   * 魔物使いの切り札その1。heavyBlow（power320・mp14・cd3・296ダメージ）より
+   * mpを2多く払う代わりに、power330で305ダメージまで伸ばしてある。
+   */
+  petPounce: {
+    id: 'petPounce', name: '渾身の飛びかかり', mpCost: 16, cooldown: 3,
+    element: 'none', target: 'enemy',
+    damage: { kind: 'physical', power: 330 },
+    requiresPet: true,
+  },
+  /**
+   * 全体ATKバフ。vowOfProtection（allAllies・def+0.4・mp10・cd4）と同じ
+   * mp・cdで、rateだけ0.5に積んである。パーティ全体の攻めを底上げする
+   * 魔物使い／獣王共通の支援技。
+   */
+  petRally: {
+    id: 'petRally', name: '鼓舞の遠吠え', mpCost: 10, cooldown: 4,
+    element: 'none', target: 'allAllies',
+    effects: [{ to: 'target', effect: { kind: 'statMod', stat: 'atk', rate: 0.5, turns: 3 } }],
+    requiresPet: true,
+  },
+  /**
+   * 獣王だけが覚える切り札。vitalShot（ratio25・cap400、maxHp2000の相手には
+   * 上限400で頭打ち）を、通常の物理技のまま上回るように power480→444とした。
+   * cap落ちしないぶん、HPが高い相手ほど割合技より伸びる。
+   */
+  beastClaw: {
+    id: 'beastClaw', name: '獣王の爪', mpCost: 20, cooldown: 4,
+    element: 'none', target: 'enemy',
+    damage: { kind: 'physical', power: 480 },
+    requiresPet: true,
+  },
 } as const satisfies Record<string, Skill>;

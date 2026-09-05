@@ -137,4 +137,57 @@ describe('育成の通し', () => {
     expect(bare).toBeGreaterThan(0);
     expect(withPassive).toBeLessThan(bare);
   });
+
+  /**
+   * ユーザーが明示的に求めた保証：ある職業で覚えた技は、別の職業に移っても、
+   * 戻ってきても消えない。applyLearns は learnedSkills に足すだけで
+   * 引かないので保証されるはずだが、それは実装の詳細であって仕様ではない。
+   * ここでは魔物使い→戦士→魔物使いという実際の転職を通しで確認する。
+   */
+  it('魔物使いで覚えた技は転職しても、戻ってきても消えない', () => {
+    const tamer = createCharacter({ id: 'hero', name: '主人公', aptitude: flat, job: 'beastTamer' }, JOBS);
+    expect(tamer.learnedSkills).toContain('petFang');
+
+    const asWarrior = unwrap(changeJob(tamer, 'warrior', JOBS));
+    expect(asWarrior.learnedSkills).toContain('petFang');
+
+    const backToTamer = unwrap(changeJob(asWarrior, 'beastTamer', JOBS));
+    expect(backToTamer.learnedSkills).toContain('petFang');
+    // 戻ってきたときの魔物使いの進み具合（レベル1のまま）も保持されている
+    expect(backToTamer.jobs['beastTamer']).toEqual({ level: 1, exp: 0 });
+  });
+
+  /**
+   * ペット技（requiresPet: true）は、simulateにhasPetを渡すかどうかで
+   * 実際に発動が分かれることを確認する。canUseを直接呼ぶのではなく、
+   * simulateの結果イベントとして見るのは、サーバがsimulateの出力しか
+   * 見ないため（simulate.tsのSimulateOptions参照）。
+   */
+  it('ペット技はペットを連れていないとnoPetでスキップされ、連れていれば発動する', () => {
+    const tamer = createCharacter({ id: 'hero', name: '主人公', aptitude: flat, job: 'beastTamer' }, JOBS);
+    const equipped = unwrap(equipActive(tamer, ['petFang']));
+    const member = toPartyMember(equipped, JOBS.beastTamer, SKILLS, PASSIVES);
+
+    const foe: Enemy = {
+      id: 'foe', name: '的',
+      stats: { maxHp: 9999, maxMp: 0, atk: 1, def: 1, mat: 1, mdf: 1, spd: 1 },
+      skills: [SKILLS.slash],
+      pattern: [{ skillId: 'slash' }],
+    };
+
+    const withoutPet = simulate([member], foe, { hero: ['petFang'] }, { maxTurns: 1 });
+    const skipped = withoutPet.events.find(
+      (event) => event.t === 'skip' && event.actorId === 'hero',
+    );
+    expect(skipped).toEqual({ t: 'skip', actorId: 'hero', reason: 'noPet' });
+    // 的は反撃してこないのでダメージイベントが出るとすればhero発。noPetのときは0でなければならない。
+    expect(withoutPet.events.some((event) => event.t === 'damage' && event.targetId === 'foe')).toBe(
+      false,
+    );
+
+    const withPet = simulate([member], foe, { hero: ['petFang'] }, { maxTurns: 1, hasPet: true });
+    expect(withPet.events.some((event) => event.t === 'damage' && event.targetId === 'foe')).toBe(
+      true,
+    );
+  });
 });
