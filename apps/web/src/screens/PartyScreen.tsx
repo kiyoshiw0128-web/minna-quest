@@ -1,8 +1,9 @@
 import { useCallback, useEffect, useState } from 'react';
-import { JOBS, SKILLS } from '@mq/core';
-import type { Recruit } from '@mq/core';
+import { JOBS, PASSIVES, SKILLS } from '@mq/core';
+import type { DamageSpec, Element, Job, LearnEntry, Passive, Recruit, Skill } from '@mq/core';
 import {
-  ApiError, UnauthorizedError, fetchMe, fetchTavern, hireRecruit,
+  ApiError, UnauthorizedError, changeCharacterJob, dismissCharacter, fetchMe, fetchTavern, hireRecruit,
+  reorderParty, updateEquipment,
 } from '../api.js';
 import type { MeResult, MePartyMember, TavernResult } from '../api.js';
 
@@ -19,6 +20,17 @@ type LoadState =
 /** 雇用は同時に1件まで。複数のボタンを連打されても二重に送らせない。 */
 type HireState = { kind: 'idle' } | { kind: 'hiring'; recruitId: string } | { kind: 'error'; message: string };
 
+/**
+ * 転職・装備・並べ替え・解雇に共通の実行状態。key で「今どの操作が動いているか
+ * ／どの操作が失敗したか」を区別する（characterId や 'party' など操作ごとに一意な文字列）。
+ * 全部まとめて1つの状態にしているのは、この画面のどのボタンも「押したら
+ * サーバに投げて、成功したら読み直す」という同じ形をしているため。
+ */
+type ActionState =
+  | { kind: 'idle' }
+  | { kind: 'busy'; key: string }
+  | { kind: 'error'; key: string; message: string };
+
 function jobName(jobId: string): string {
   return JOBS[jobId as keyof typeof JOBS]?.name ?? jobId;
 }
@@ -27,10 +39,84 @@ function skillName(skillId: string): string {
   return SKILLS[skillId as keyof typeof SKILLS]?.name ?? skillId;
 }
 
+const ELEMENT_LABEL: Record<Element, string> = {
+  none: 'なし', fire: '火', ice: '氷', thunder: '雷', holy: '光', dark: '闇',
+};
+
+/**
+ * 技の「威力」欄。BattleScreen.tsx の damageLabel と同じ内容だが、
+ * どちらもファイル内で完結する短い関数なので、共有ヘルパーに切り出すほどの
+ * 重複ではないと判断してそのまま複製している（apps/worker/src/routes/me.ts の
+ * jobOf に同じ考え方のコメントがある）。
+ */
+function damageLabel(damage: DamageSpec | undefined): string {
+  if (damage === undefined) return '-';
+  switch (damage.kind) {
+    case 'physical':
+      return `物理 ${damage.power}`;
+    case 'magical':
+      return `魔法 ${damage.power}`;
+    case 'fixed':
+      return `固定 ${damage.amount}`;
+    case 'ratio':
+      return `残HPの${damage.percent}%（上限${damage.cap}）`;
+  }
+}
+
+const STAT_LABEL: Record<string, string> = { atk: 'ATK', def: 'DEF', mat: 'MAT', mdf: 'MDF', spd: 'SPD' };
+
+/** パッシブは常時効果なので、MP・クールダウンの代わりに効果そのものを短く出す。 */
+function passiveEffectLabel(passive: Passive): string {
+  const effect = passive.effect;
+  if (effect.kind === 'statMod') return `${STAT_LABEL[effect.stat] ?? effect.stat} +${Math.round(effect.rate * 100)}%`;
+  if (effect.kind === 'damageTaken') return `被ダメージ ${Math.round(effect.rate * 100)}%`;
+  return `${effect.turns}ターン行動不能`;
+}
+
+/**
+ * このキャラが実際に習得しているパッシブID。
+ *
+ * GET /api/me は学習済みアクティブ技（learnedSkillIds）は返すが、パッシブは
+ * 返さない。ただし jobLevels（就いたことのある職業とそのレベル）さえ分かれば、
+ * 職業マスタの learnset を辿ることで packages/core の applyLearns と同じ結論に
+ * client 側だけで到達できる（学習は「そのジョブレベルに到達した時点で確定」
+ * であり、以後職業を変えても失われない）。ここで再計算するのはサーバを
+ * 変えないための代替であって、判定ロジックの二重定義ではない
+ * （core の学習表そのものをそのまま読んでいるだけ）。
+ */
+function derivedLearnedPassiveIds(jobLevels: Record<string, number>): string[] {
+  const ids = new Set<string>();
+  for (const [jobId, level] of Object.entries(jobLevels)) {
+    const job = JOBS[jobId as keyof typeof JOBS] as Job | undefined;
+    if (job === undefined) continue;
+    for (const entry of job.learnset) {
+      if (entry.kind === 'passive' && entry.level <= level) ids.add(entry.id);
+    }
+  }
+  return [...ids];
+}
+
+/** 覚える対象の名前。kind によって技マスタとパッシブマスタのどちらを引くか変わる。 */
+function learnEntryName(entry: LearnEntry): string {
+  return entry.kind === 'skill' ? skillName(entry.id) : (PASSIVES[entry.id as keyof typeof PASSIVES]?.name ?? entry.id);
+}
+
+/** 今の職業でまだ習得していない中で、最も近いレベルの習得予定。無ければ null（打ち止め）。 */
+function nextLearnEntry(job: Job, currentLevel: number): LearnEntry | null {
+  const upcoming = [...job.learnset].filter((entry) => entry.level > currentLevel).sort((a, b) => a.level - b.level);
+  return upcoming[0] ?? null;
+}
+
+/** 「戦士Lv20・僧侶Lv15」のように解禁条件を1行にする（設計書 §6 の例文に合わせる）。 */
+function requirementText(job: Job): string {
+  return job.requires.map((requirement) => `${jobName(requirement.jobId)}Lv${requirement.level}`).join('・');
+}
+
 /** 酒場とパーティを1画面にまとめる（設計書 §3 — 別タブだと雇うたびに行き来することになる）。 */
 export function PartyScreen({ token, onUnauthorized }: Props) {
   const [load, setLoad] = useState<LoadState>({ kind: 'loading' });
   const [hireState, setHireState] = useState<HireState>({ kind: 'idle' });
+  const [actionState, setActionState] = useState<ActionState>({ kind: 'idle' });
 
   const reload = useCallback(async () => {
     setLoad({ kind: 'loading' });
@@ -50,6 +136,29 @@ export function PartyScreen({ token, onUnauthorized }: Props) {
   useEffect(() => {
     void reload();
   }, [reload]);
+
+  /**
+   * 転職・装備・並べ替え・解雇の共通の実行経路。成功したら読み直す（設計書の
+   * どの操作も「サーバの判定結果がそのまま最新の状態」なので、楽観的更新は
+   * せずサーバに聞き直す方が安全）。読み直し中に画面全体が「読み込み中」に
+   * 戻ることはない（reload はここから呼ばずactionState経由のときだけ
+   * loaded のまま留める）ため、選択途中の他の入力を壊さない。
+   */
+  async function runAction(key: string, fn: () => Promise<unknown>): Promise<void> {
+    setActionState({ kind: 'busy', key });
+    try {
+      await fn();
+      setActionState({ kind: 'idle' });
+      await reload();
+    } catch (error) {
+      if (error instanceof UnauthorizedError) {
+        onUnauthorized();
+        return;
+      }
+      const message = error instanceof ApiError ? error.message : '通信に失敗しました';
+      setActionState({ kind: 'error', key, message });
+    }
+  }
 
   async function handleHire(recruit: Recruit): Promise<void> {
     setHireState({ kind: 'hiring', recruitId: recruit.id });
@@ -91,6 +200,20 @@ export function PartyScreen({ token, onUnauthorized }: Props) {
 
   const { me, tavern } = load;
   const partyFull = me.party.length >= 4;
+  const busy = actionState.kind === 'busy';
+
+  function errorFor(key: string): string | null {
+    return actionState.kind === 'error' && actionState.key === key ? actionState.message : null;
+  }
+
+  async function handleMove(index: number, direction: -1 | 1): Promise<void> {
+    const ids = me.party.map((member) => member.id);
+    const target = index + direction;
+    if (target < 0 || target >= ids.length) return;
+    const swapped = [...ids];
+    [swapped[index], swapped[target]] = [swapped[target], swapped[index]];
+    await runAction('party', () => reorderParty(token, swapped));
+  }
 
   return (
     <main>
@@ -101,8 +224,24 @@ export function PartyScreen({ token, onUnauthorized }: Props) {
 
       <section>
         <h2>パーティ（{me.party.length} / 4）</h2>
-        {me.party.map((member) => (
-          <PartyMemberCard key={member.id} member={member} />
+        {errorFor('party') !== null && <p role="alert">{errorFor('party')}</p>}
+        {me.party.map((member, index) => (
+          <PartyMemberCard
+            key={member.id}
+            member={member}
+            index={index}
+            partySize={me.party.length}
+            busy={busy}
+            errorFor={errorFor}
+            onMove={(direction) => void handleMove(index, direction)}
+            onDismiss={() => void runAction(`dismiss:${member.id}`, () => dismissCharacter(token, member.id))}
+            onChangeJob={(jobId) =>
+              void runAction(`job:${member.id}`, () => changeCharacterJob(token, member.id, jobId))
+            }
+            onUpdateEquipment={(activeIds, passiveIds) =>
+              void runAction(`equip:${member.id}`, () => updateEquipment(token, member.id, activeIds, passiveIds))
+            }
+          />
         ))}
       </section>
 
@@ -126,7 +265,29 @@ export function PartyScreen({ token, onUnauthorized }: Props) {
   );
 }
 
-function PartyMemberCard({ member }: { member: MePartyMember }) {
+function PartyMemberCard({
+  member,
+  index,
+  partySize,
+  busy,
+  errorFor,
+  onMove,
+  onDismiss,
+  onChangeJob,
+  onUpdateEquipment,
+}: {
+  member: MePartyMember;
+  index: number;
+  partySize: number;
+  busy: boolean;
+  errorFor: (key: string) => string | null;
+  onMove: (direction: -1 | 1) => void;
+  onDismiss: () => void;
+  onChangeJob: (jobId: string) => void;
+  onUpdateEquipment: (activeIds: string[], passiveIds: string[]) => void;
+}) {
+  const dismissError = errorFor(`dismiss:${member.id}`);
+
   return (
     <details>
       <summary>
@@ -136,9 +297,222 @@ function PartyMemberCard({ member }: { member: MePartyMember }) {
         HP {member.stats.maxHp} / MP {member.stats.maxMp} / ATK {member.stats.atk} / DEF {member.stats.def} /
         {' '}MAT {member.stats.mat} / MDF {member.stats.mdf} / SPD {member.stats.spd}
       </p>
-      <p>装備中の技: {member.equippedSkillIds.length === 0 ? 'なし' : member.equippedSkillIds.map(skillName).join('、')}</p>
-      <p>習得済みの技: {member.learnedSkillIds.length === 0 ? 'なし' : member.learnedSkillIds.map(skillName).join('、')}</p>
+
+      <div>
+        <button type="button" disabled={busy || index === 0} onClick={() => onMove(-1)}>
+          ↑ 前へ
+        </button>
+        <button type="button" disabled={busy || index === partySize - 1} onClick={() => onMove(1)}>
+          ↓ 後ろへ
+        </button>
+        {/*
+          主人公・雇用メンバーのどちらかはこの画面からは分からない（設計書のAPIが
+          個体の印を返さないため）。事前に隠さず、押せてしまう代わりに
+          「主人公は解雇できません」というサーバの文言をそのまま出す
+          （設計書 §6 の「サーバの文言をそのまま出す」方針をここでも踏襲する）。
+        */}
+        <button type="button" disabled={busy} onClick={onDismiss}>
+          解雇する
+        </button>
+      </div>
+      {dismissError !== null && <p role="alert">{dismissError}</p>}
+
+      <JobPanel member={member} busy={busy} error={errorFor(`job:${member.id}`)} onChangeJob={onChangeJob} />
+      <EquipPanel member={member} busy={busy} error={errorFor(`equip:${member.id}`)} onSave={onUpdateEquipment} />
     </details>
+  );
+}
+
+/** 転職パネル。就ける職業・就けない職業の両方を常に出す（設計書 §6）。 */
+function JobPanel({
+  member,
+  busy,
+  error,
+  onChangeJob,
+}: {
+  member: MePartyMember;
+  busy: boolean;
+  error: string | null;
+  onChangeJob: (jobId: string) => void;
+}) {
+  const currentJob = JOBS[member.jobId as keyof typeof JOBS] as Job | undefined;
+  const nextEntry = currentJob === undefined ? null : nextLearnEntry(currentJob, member.jobLevel);
+
+  return (
+    <section>
+      <h3>転職</h3>
+      <p>
+        {nextEntry === null
+          ? 'この職業で覚える技はもう残っていません。'
+          : `あと${nextEntry.level - member.jobLevel}レベルで「${learnEntryName(nextEntry)}」を習得します。`}
+      </p>
+      <ul>
+        {Object.values(JOBS).map((job) => (
+          <li key={job.id}>
+            <JobOption job={job} member={member} busy={busy} onChangeJob={onChangeJob} />
+          </li>
+        ))}
+      </ul>
+      {error !== null && <p role="alert">{error}</p>}
+    </section>
+  );
+}
+
+function JobOption({
+  job,
+  member,
+  busy,
+  onChangeJob,
+}: {
+  job: Job;
+  member: MePartyMember;
+  busy: boolean;
+  onChangeJob: (jobId: string) => void;
+}) {
+  const unlocked = member.unlockedJobIds.includes(job.id);
+  const isCurrent = member.jobId === job.id;
+  const visitedLevel = member.jobLevels[job.id];
+
+  // 上級職の解禁条件は満たしていなくても常に表に出す。見えなければ、
+  // 目標にできない（設計書 §6・§1）。
+  if (!unlocked) {
+    return <span>{job.name} — {requirementText(job)}が必要</span>;
+  }
+
+  return (
+    <span>
+      {job.name}
+      {visitedLevel !== undefined ? `（ジョブLv${visitedLevel}）` : '（未経験）'}
+      {isCurrent ? (
+        '　← 現在の職業'
+      ) : (
+        <button type="button" disabled={busy} onClick={() => onChangeJob(job.id)}>
+          転職する
+        </button>
+      )}
+    </span>
+  );
+}
+
+/**
+ * 装備パネル。習得済みの技からアクティブ6・パッシブ2を選ぶ、この画面の核。
+ *
+ * 現在装備中のパッシブはサーバから取得できない（api.ts のコメント参照）ため、
+ * パッシブは常に未選択から選び直す形になる。アクティブは equippedSkillIds が
+ * あるのでそのまま初期値にできる。
+ */
+function EquipPanel({
+  member,
+  busy,
+  error,
+  onSave,
+}: {
+  member: MePartyMember;
+  busy: boolean;
+  error: string | null;
+  onSave: (activeIds: string[], passiveIds: string[]) => void;
+}) {
+  const [activeIds, setActiveIds] = useState<string[]>(member.equippedSkillIds);
+  const [passiveIds, setPassiveIds] = useState<string[]>([]);
+  const learnedPassiveIds = derivedLearnedPassiveIds(member.jobLevels);
+
+  function toggle(ids: string[], setIds: (ids: string[]) => void, id: string, max: number): void {
+    if (ids.includes(id)) {
+      setIds(ids.filter((existing) => existing !== id));
+      return;
+    }
+    if (ids.length >= max) return; // 上限に達した枠はチェックボックスをdisabledにして防ぐ。
+    setIds([...ids, id]);
+  }
+
+  return (
+    <section>
+      <h3>装備（アクティブ {activeIds.length} / 6・パッシブ {passiveIds.length} / 2）</h3>
+      <p>
+        現在装備中のパッシブはこの画面では分からないため、パッシブは毎回
+        未選択から選び直してください。何も選ばずに更新すると、パッシブ枠は
+        空になります。
+      </p>
+
+      <h4>アクティブ技</h4>
+      {member.learnedSkillIds.length === 0 && <p>まだ技を習得していません。</p>}
+      <table>
+        <thead>
+          <tr>
+            <th scope="col" />
+            <th scope="col">技</th>
+            <th scope="col">MP</th>
+            <th scope="col">クールダウン</th>
+            <th scope="col">威力</th>
+            <th scope="col">属性</th>
+          </tr>
+        </thead>
+        <tbody>
+          {member.learnedSkillIds.map((skillId) => {
+            const skill = SKILLS[skillId as keyof typeof SKILLS] as Skill | undefined;
+            if (skill === undefined) return null;
+            const checked = activeIds.includes(skillId);
+            return (
+              <tr key={skillId}>
+                <td>
+                  <input
+                    type="checkbox"
+                    aria-label={`${skill.name}をアクティブに装備`}
+                    checked={checked}
+                    disabled={busy || (!checked && activeIds.length >= 6)}
+                    onChange={() => toggle(activeIds, setActiveIds, skillId, 6)}
+                  />
+                </td>
+                <td>{skill.name}</td>
+                <td>{skill.mpCost}</td>
+                <td>{skill.cooldown === 0 ? '無し' : `${skill.cooldown}ターン`}</td>
+                <td>{damageLabel(skill.damage)}</td>
+                <td>{ELEMENT_LABEL[skill.element]}</td>
+              </tr>
+            );
+          })}
+        </tbody>
+      </table>
+
+      <h4>パッシブ</h4>
+      {learnedPassiveIds.length === 0 && <p>まだパッシブを習得していません。</p>}
+      <table>
+        <thead>
+          <tr>
+            <th scope="col" />
+            <th scope="col">パッシブ</th>
+            <th scope="col">効果</th>
+          </tr>
+        </thead>
+        <tbody>
+          {learnedPassiveIds.map((passiveId) => {
+            const passive = PASSIVES[passiveId as keyof typeof PASSIVES];
+            if (passive === undefined) return null;
+            const checked = passiveIds.includes(passiveId);
+            return (
+              <tr key={passiveId}>
+                <td>
+                  <input
+                    type="checkbox"
+                    aria-label={`${passive.name}をパッシブに装備`}
+                    checked={checked}
+                    disabled={busy || (!checked && passiveIds.length >= 2)}
+                    onChange={() => toggle(passiveIds, setPassiveIds, passiveId, 2)}
+                  />
+                </td>
+                <td>{passive.name}</td>
+                <td>{passiveEffectLabel(passive)}</td>
+              </tr>
+            );
+          })}
+        </tbody>
+      </table>
+
+      <button type="button" disabled={busy} onClick={() => onSave(activeIds, passiveIds)}>
+        装備を更新する
+      </button>
+      {error !== null && <p role="alert">{error}</p>}
+    </section>
   );
 }
 

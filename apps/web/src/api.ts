@@ -113,12 +113,74 @@ export type MePartyMember = {
   stats: StatBlock;
   learnedSkillIds: string[];
   equippedSkillIds: string[];
+  // worker/src/routes/me.ts が転職画面のために足したもの（設計書 §3・§6）。
+  // 就いたことのある職業とそのジョブレベル、いま就ける職業のID一覧。
+  jobLevels: Record<string, number>;
+  unlockedJobIds: string[];
 };
 
 export type MeResult = { name: string; gold: number; party: MePartyMember[] };
 
 export function fetchMe(token: string): Promise<MeResult> {
   return request('/api/me', withAuth(token));
+}
+
+export type ChangeJobResult = {
+  characterId: string;
+  jobId: string;
+  jobLevel: number;
+  newSkillIds: string[];
+  newPassiveIds: string[];
+};
+
+/** 転職する。金貨はかからない（設計書 §3）。 */
+export function changeCharacterJob(token: string, characterId: string, jobId: string): Promise<ChangeJobResult> {
+  return request('/api/job', {
+    method: 'POST',
+    body: JSON.stringify({ characterId, jobId }),
+    ...withAuth(token),
+  });
+}
+
+export type UpdateEquipmentResult = { characterId: string; activeIds: string[]; passiveIds: string[] };
+
+/**
+ * アクティブ6枠・パッシブ2枠を1回で更新する。worker/src/routes/equip.ts が
+ * 両方まとめて判定するのに合わせ、ここでも片方だけを送る口を用意しない
+ * （設計書 §4 — 途中で失敗すると「アクティブだけ変わった」状態が残る）。
+ */
+export function updateEquipment(
+  token: string,
+  characterId: string,
+  activeIds: string[],
+  passiveIds: string[],
+): Promise<UpdateEquipmentResult> {
+  return request('/api/equip', {
+    method: 'POST',
+    body: JSON.stringify({ characterId, activeIds, passiveIds }),
+    ...withAuth(token),
+  });
+}
+
+export type ReorderPartyResult = { order: string[] };
+
+export function reorderParty(token: string, order: string[]): Promise<ReorderPartyResult> {
+  return request('/api/party', {
+    method: 'POST',
+    body: JSON.stringify({ order }),
+    ...withAuth(token),
+  });
+}
+
+export type DismissResult = { characterId: string };
+
+/** 雇用メンバーを解雇する。金は戻らない・主人公は解雇できない（設計書 §5）。 */
+export function dismissCharacter(token: string, characterId: string): Promise<DismissResult> {
+  return request('/api/dismiss', {
+    method: 'POST',
+    body: JSON.stringify({ characterId }),
+    ...withAuth(token),
+  });
 }
 
 // worker/src/routes/battle.ts の応答をそのまま写す。hasBattle が false のときは
