@@ -1,4 +1,5 @@
 import { catchUp } from './close.js';
+import { handleGetBattle, handlePostBattle } from './routes/battle.js';
 import { handleHire } from './routes/hire.js';
 import { handleJoin } from './routes/join.js';
 import { handleTavern } from './routes/tavern.js';
@@ -36,6 +37,14 @@ export default {
 
     if (url.pathname === '/api/hire' && request.method === 'POST') {
       return handleHire(request, env);
+    }
+
+    if (url.pathname === '/api/battle' && request.method === 'GET') {
+      return handleGetBattle(request, env);
+    }
+
+    if (url.pathname === '/api/battle' && request.method === 'POST') {
+      return handlePostBattle(request, env);
     }
 
     // `/api/` 配下で上のどれにも一致しなかったものは、画面のアセットに

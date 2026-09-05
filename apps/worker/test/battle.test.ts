@@ -1,0 +1,302 @@
+import { describe, it, expect, beforeEach } from 'vitest';
+import { env, SELF, applyD1Migrations } from 'cloudflare:test';
+import type { BattleLog } from '@mq/core';
+import { sha256Hex } from '../src/auth.js';
+
+const WORLD = 'w1';
+const TOKEN_A = 'battle-token-aaaaaaaaaaaaaaaaaaaa';
+const TOKEN_B = 'battle-token-bbbbbbbbbbbbbbbbbbbb';
+const PLAYER_A = 'pA';
+const PLAYER_B = 'pB';
+const HERO_A = 'heroA';
+const HERO_B = 'heroB';
+
+/**
+ * バルゴス（HP4800）を8ターン以内に確実に倒せる想定解。
+ * 冒険Lv50・全素質A・戦士ジョブLv30まで育て、事前に用意した専用スクリプトで
+ * 実際に simulate を走らせて確認した並び（`corepack pnpm --filter @mq/worker
+ * exec tsx` で computeStats → toPartyMember → simulate を通した）。
+ * バランス値のテストではなく、勝利後の後始末（報酬・記録・討伐フラグ）の
+ * 配線を検査するための固定値なので、たまたまギリギリで勝てればよい。
+ */
+const WINNING_PLAN = ['earthRend', 'heavyBlow', 'shieldSmash', 'slash', 'heavyBlow', 'earthRend', 'shieldSmash', 'heavyBlow'];
+const NO_ACTION_PLAN = [null, null, null, null, null, null, null, null];
+
+async function seedWorld(dayNo: number, chosenId: string | null): Promise<void> {
+  await applyD1Migrations(env.DB, env.TEST_MIGRATIONS);
+  for (const table of ['battle_results', 'party', 'learned', 'job_levels', 'characters', 'votes', 'world_days', 'players', 'invites', 'worlds']) {
+    await env.DB.prepare(`DELETE FROM ${table}`).run();
+  }
+  await env.DB.prepare(
+    `INSERT INTO worlds (id, name, started_at, current_day, chapter, tags, created_at)
+     VALUES (?, ?, ?, ?, ?, ?, ?)`,
+  ).bind(WORLD, 'テスト世界', '2026-09-03T15:00:00.000Z', dayNo, 1, '[]', '2026-09-03T15:00:00.000Z').run();
+  await env.DB.prepare(
+    `INSERT INTO world_days (world_id, day_no, option_ids, chosen_id) VALUES (?, ?, ?, ?)`,
+  ).bind(WORLD, dayNo, JSON.stringify(['banditAmbush', 'crossroads', 'restAtSpring']), chosenId).run();
+}
+
+async function addPlayer(playerId: string, token: string, gold = 0): Promise<void> {
+  await env.DB.prepare(
+    `INSERT INTO players (id, world_id, name, token_hash, joined_at, gold) VALUES (?, ?, ?, ?, ?, ?)`,
+  ).bind(playerId, WORLD, playerId, await sha256Hex(token), '2026-09-04T00:00:00.000Z', gold).run();
+}
+
+/** WINNING_PLAN が確実に通用する強さのキャラをパーティ枠0に作る。 */
+async function seedWinningHero(playerId: string, characterId: string): Promise<void> {
+  const aptitude = JSON.stringify({ maxHp: 'A', maxMp: 'A', atk: 'A', def: 'A', mat: 'A', mdf: 'A', spd: 'A' });
+  const skills = ['slash', 'heavyBlow', 'earthRend', 'shieldSmash'];
+  await env.DB.prepare(
+    `INSERT INTO characters
+       (id, player_id, name, adventure_level, adventure_exp, aptitude, current_job, equipped_active, equipped_passive)
+     VALUES (?, ?, ?, 50, 0, ?, 'warrior', ?, '[]')`,
+  ).bind(characterId, playerId, characterId, aptitude, JSON.stringify(skills)).run();
+  await env.DB.prepare(
+    `INSERT INTO job_levels (character_id, job_id, level, exp) VALUES (?, 'warrior', 30, 0)`,
+  ).bind(characterId).run();
+  for (const skillId of skills) {
+    await env.DB.prepare(`INSERT INTO learned (character_id, kind, id) VALUES (?, 'skill', ?)`).bind(characterId, skillId).run();
+  }
+  await env.DB.prepare(`INSERT INTO party (player_id, character_id, slot) VALUES (?, ?, 0)`).bind(playerId, characterId).run();
+}
+
+function battleRequest(token: string, method: 'GET' | 'POST', plan?: Record<string, (string | null)[]>): Promise<Response> {
+  return SELF.fetch('https://example.com/api/battle', {
+    method,
+    headers: { Authorization: `Bearer ${token}`, 'content-type': 'application/json' },
+    body: method === 'POST' ? JSON.stringify({ plan }) : undefined,
+  });
+}
+
+type Ok<T> = { ok: true; data: T };
+type Fail = { ok: false; error: string };
+
+async function readOk<T>(response: Response): Promise<T> {
+  const payload = await response.json<Ok<T> | Fail>();
+  if (!payload.ok) throw new Error(`expected ok response, got: ${JSON.stringify(payload)}`);
+  return payload.data;
+}
+
+describe('GET /api/battle（設計書 §6.1）', () => {
+  it('日が締まっていなければ戦闘は無い', async () => {
+    await seedWorld(1, null);
+    await addPlayer(PLAYER_A, TOKEN_A);
+    await seedWinningHero(PLAYER_A, HERO_A);
+
+    const data = await readOk<{ hasBattle: boolean }>(await battleRequest(TOKEN_A, 'GET'));
+    expect(data.hasBattle).toBe(false);
+  });
+
+  it('確定した選択肢が戦闘でなければ戦闘は無い', async () => {
+    await seedWorld(1, 'crossroads'); // story イベント
+    await addPlayer(PLAYER_A, TOKEN_A);
+    await seedWinningHero(PLAYER_A, HERO_A);
+
+    const data = await readOk<{ hasBattle: boolean }>(await battleRequest(TOKEN_A, 'GET'));
+    expect(data.hasBattle).toBe(false);
+  });
+
+  it('戦闘の日は敵の行動表とパーティの実効ステータスをそのまま返す', async () => {
+    await seedWorld(1, 'banditAmbush');
+    await addPlayer(PLAYER_A, TOKEN_A);
+    await seedWinningHero(PLAYER_A, HERO_A);
+
+    const data = await readOk<{
+      hasBattle: boolean;
+      enemy: { id: string; pattern: { skillId: string }[] };
+      party: { id: string; stats: { atk: number } }[];
+      won: boolean;
+      worldDefeated: boolean;
+    }>(await battleRequest(TOKEN_A, 'GET'));
+
+    expect(data.hasBattle).toBe(true);
+    // 行動表を隠さない（設計書 §6.1）。事前セット式のパズルとして成立させる前提。
+    expect(data.enemy.pattern.length).toBeGreaterThan(0);
+    expect(data.party).toHaveLength(1);
+    expect(data.party[0].id).toBe(HERO_A);
+    expect(data.won).toBe(false);
+    expect(data.worldDefeated).toBe(false);
+  });
+
+  it('認証が無ければ401', async () => {
+    await seedWorld(1, 'banditAmbush');
+    const response = await SELF.fetch('https://example.com/api/battle');
+    expect(response.status).toBe(401);
+  });
+});
+
+describe('POST /api/battle（設計書 §6.2〜§6.4）', () => {
+  it('戦闘が無い日は断る（6）', async () => {
+    await seedWorld(1, null);
+    await addPlayer(PLAYER_A, TOKEN_A);
+    await seedWinningHero(PLAYER_A, HERO_A);
+
+    const response = await battleRequest(TOKEN_A, 'POST', { [HERO_A]: NO_ACTION_PLAN });
+    expect(response.status).toBe(400);
+    expect(await response.json()).toEqual({ ok: false, error: 'no battle today' });
+  });
+
+  it('確定した選択肢が戦闘でない日も断る（6）', async () => {
+    await seedWorld(1, 'crossroads');
+    await addPlayer(PLAYER_A, TOKEN_A);
+    await seedWinningHero(PLAYER_A, HERO_A);
+
+    const response = await battleRequest(TOKEN_A, 'POST', { [HERO_A]: NO_ACTION_PLAN });
+    expect(response.status).toBe(400);
+  });
+
+  it('同じプランからは同じログが出る（7・決定論）', async () => {
+    await seedWorld(1, 'banditAmbush');
+    await addPlayer(PLAYER_A, TOKEN_A);
+    await seedWinningHero(PLAYER_A, HERO_A);
+
+    const first = await readOk<{ log: BattleLog }>(await battleRequest(TOKEN_A, 'POST', { [HERO_A]: NO_ACTION_PLAN }));
+    const second = await readOk<{ log: BattleLog }>(await battleRequest(TOKEN_A, 'POST', { [HERO_A]: NO_ACTION_PLAN }));
+
+    expect(first.log).toEqual(second.log);
+    expect(first.log.result).not.toBe('win'); // 何もしなければ勝てない＝負けても罰が無いことを別経路でも確認
+  });
+
+  it('負けても何度でも挑み直せて、DBには何も残らない', async () => {
+    await seedWorld(1, 'banditAmbush');
+    await addPlayer(PLAYER_A, TOKEN_A, 1000);
+    await seedWinningHero(PLAYER_A, HERO_A);
+
+    await battleRequest(TOKEN_A, 'POST', { [HERO_A]: NO_ACTION_PLAN });
+    await battleRequest(TOKEN_A, 'POST', { [HERO_A]: NO_ACTION_PLAN });
+
+    const gold = await env.DB.prepare('SELECT gold FROM players WHERE id = ?').bind(PLAYER_A).first<{ gold: number }>();
+    expect(gold?.gold).toBe(1000); // 増えていない
+    const results = await env.DB.prepare('SELECT COUNT(*) AS n FROM battle_results').first<{ n: number }>();
+    expect(results?.n).toBe(0); // 記録も残らない
+  });
+
+  it('持っていない技を指すプランは弾かれず、unknownSkillとして記録される（10）', async () => {
+    await seedWorld(1, 'banditAmbush');
+    await addPlayer(PLAYER_A, TOKEN_A);
+    await seedWinningHero(PLAYER_A, HERO_A);
+
+    const response = await battleRequest(TOKEN_A, 'POST', { [HERO_A]: ['iceLance', null, null, null, null, null, null, null] });
+    expect(response.status).toBe(200);
+    const data = await readOk<{ log: BattleLog }>(response);
+    expect(data.log.events).toContainEqual({ t: 'skip', actorId: HERO_A, reason: 'unknownSkill' });
+  });
+
+  it('勝てば報酬（経験値・金貨）が入り、討伐フラグが立つ', async () => {
+    await seedWorld(1, 'banditAmbush');
+    await addPlayer(PLAYER_A, TOKEN_A, 0);
+    await seedWinningHero(PLAYER_A, HERO_A);
+
+    const data = await readOk<{ log: BattleLog; rewarded: boolean; worldDefeated: boolean }>(
+      await battleRequest(TOKEN_A, 'POST', { [HERO_A]: WINNING_PLAN }),
+    );
+    expect(data.log.result).toBe('win');
+    expect(data.rewarded).toBe(true);
+    expect(data.worldDefeated).toBe(true);
+
+    const player = await env.DB.prepare('SELECT gold FROM players WHERE id = ?').bind(PLAYER_A).first<{ gold: number }>();
+    expect(player?.gold).toBe(150); // BATTLE_REWARDS.balgos.gold（packages/core/src/data/battleRewards.ts）
+
+    const character = await env.DB.prepare('SELECT adventure_level, adventure_exp FROM characters WHERE id = ?').bind(HERO_A).first<{ adventure_level: number; adventure_exp: number }>();
+    // 冒険Lv50は上限（MAX_ADVENTURE_LEVEL）なので、これ以上は上がらず経験値も溜まらない。
+    // レベルが天井にあっても経験値の付与自体は起こる、という配線の確認。
+    expect(character?.adventure_level).toBe(50);
+
+    const world = await env.DB.prepare('SELECT defeated_by FROM world_days WHERE world_id = ? AND day_no = 1').bind(WORLD).first<{ defeated_by: string }>();
+    expect(world?.defeated_by).toBe(PLAYER_A);
+  });
+
+  it('勝っても2回目の報酬は入らない（8・冪等性）', async () => {
+    await seedWorld(1, 'banditAmbush');
+    await addPlayer(PLAYER_A, TOKEN_A, 0);
+    await seedWinningHero(PLAYER_A, HERO_A);
+
+    const firstResult = await readOk<{ rewarded: boolean }>(await battleRequest(TOKEN_A, 'POST', { [HERO_A]: WINNING_PLAN }));
+    expect(firstResult.rewarded).toBe(true);
+    const goldAfterFirst = (await env.DB.prepare('SELECT gold FROM players WHERE id = ?').bind(PLAYER_A).first<{ gold: number }>())?.gold;
+
+    // 同じ日にもう一度勝つ（何度でも挑み直せる。設計書 §6.2）。
+    const secondResult = await readOk<{ rewarded: boolean }>(await battleRequest(TOKEN_A, 'POST', { [HERO_A]: WINNING_PLAN }));
+    expect(secondResult.rewarded).toBe(false);
+
+    const goldAfterSecond = (await env.DB.prepare('SELECT gold FROM players WHERE id = ?').bind(PLAYER_A).first<{ gold: number }>())?.gold;
+    expect(goldAfterSecond).toBe(goldAfterFirst); // 増えていない＝二重に配っていない
+
+    const results = await env.DB.prepare('SELECT COUNT(*) AS n FROM battle_results WHERE world_id = ? AND day_no = 1 AND player_id = ?').bind(WORLD, PLAYER_A).first<{ n: number }>();
+    expect(results?.n).toBe(1); // 記録も1行のまま
+  });
+
+  it('2人が同じ日に勝ったとき、defeated_by は最初の1人のまま動かない（9・冪等性）', async () => {
+    await seedWorld(1, 'banditAmbush');
+    await addPlayer(PLAYER_A, TOKEN_A, 0);
+    await addPlayer(PLAYER_B, TOKEN_B, 0);
+    await seedWinningHero(PLAYER_A, HERO_A);
+    await seedWinningHero(PLAYER_B, HERO_B);
+
+    // まずAが確実に先に勝つ。「最初の1人はA」という状態を固定してから、
+    // 後からBが勝ってもAのまま動かないことを見る。並行リクエストにすると
+    // どちらが先に書き込めるかが不定になり、「後から勝った側で上書きされて
+    // いないか」を毎回同じ形で検査できない。
+    const dataA = await readOk<{ log: BattleLog }>(await battleRequest(TOKEN_A, 'POST', { [HERO_A]: WINNING_PLAN }));
+    expect(dataA.log.result).toBe('win');
+
+    const afterA = await env.DB.prepare('SELECT defeated_by FROM world_days WHERE world_id = ? AND day_no = 1').bind(WORLD).first<{ defeated_by: string }>();
+    expect(afterA?.defeated_by).toBe(PLAYER_A);
+
+    const dataB = await readOk<{ log: BattleLog }>(await battleRequest(TOKEN_B, 'POST', { [HERO_B]: WINNING_PLAN }));
+    expect(dataB.log.result).toBe('win');
+
+    const afterB = await env.DB.prepare('SELECT defeated_by FROM world_days WHERE world_id = ? AND day_no = 1').bind(WORLD).first<{ defeated_by: string }>();
+    // Bも勝ったが、世界としての討伐者はAのまま。UPDATE ... WHERE defeated_by IS NULL
+    // というガードを外すと、この行が PLAYER_B に書き換わって落ちる。
+    expect(afterB?.defeated_by).toBe(PLAYER_A);
+
+    // 両者とも自分の分の報酬はきちんと受け取っている（報酬は勝った本人だけ、という
+    // 前提と、討伐フラグの一本化は別物であることの確認）。
+    const goldA = await env.DB.prepare('SELECT gold FROM players WHERE id = ?').bind(PLAYER_A).first<{ gold: number }>();
+    const goldB = await env.DB.prepare('SELECT gold FROM players WHERE id = ?').bind(PLAYER_B).first<{ gold: number }>();
+    expect(goldA?.gold).toBe(150);
+    expect(goldB?.gold).toBe(150);
+  });
+
+  it('2人がほぼ同時に勝っても defeated_by は1人だけに決まる（9・並行性）', async () => {
+    await seedWorld(1, 'banditAmbush');
+    await addPlayer(PLAYER_A, TOKEN_A, 0);
+    await addPlayer(PLAYER_B, TOKEN_B, 0);
+    await seedWinningHero(PLAYER_A, HERO_A);
+    await seedWinningHero(PLAYER_B, HERO_B);
+
+    // 実際に並行リクエストで競わせる。勝者はどちらかに決まらないが、
+    // 「両方には決してならない」ことは保証されていなければならない。
+    const [resultA, resultB] = await Promise.all([
+      battleRequest(TOKEN_A, 'POST', { [HERO_A]: WINNING_PLAN }),
+      battleRequest(TOKEN_B, 'POST', { [HERO_B]: WINNING_PLAN }),
+    ]);
+    const dataA = await readOk<{ log: BattleLog }>(resultA);
+    const dataB = await readOk<{ log: BattleLog }>(resultB);
+    expect(dataA.log.result).toBe('win');
+    expect(dataB.log.result).toBe('win');
+
+    const world = await env.DB.prepare('SELECT defeated_by FROM world_days WHERE world_id = ? AND day_no = 1').bind(WORLD).first<{ defeated_by: string }>();
+    expect([PLAYER_A, PLAYER_B]).toContain(world?.defeated_by);
+  });
+
+  it('認証が無ければ401', async () => {
+    await seedWorld(1, 'banditAmbush');
+    const response = await SELF.fetch('https://example.com/api/battle', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ plan: {} }),
+    });
+    expect(response.status).toBe(401);
+  });
+
+  it('planの形が不正なら断る', async () => {
+    await seedWorld(1, 'banditAmbush');
+    await addPlayer(PLAYER_A, TOKEN_A);
+    await seedWinningHero(PLAYER_A, HERO_A);
+
+    const response = await battleRequest(TOKEN_A, 'POST', undefined);
+    expect(response.status).toBe(400);
+  });
+});

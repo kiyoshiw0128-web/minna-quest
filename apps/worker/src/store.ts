@@ -1,4 +1,4 @@
-import type { Character, Vote, WorldDay } from '@mq/core';
+import type { Character, JobProgress, Vote, WorldDay } from '@mq/core';
 
 export type WorldRow = {
   readonly id: string;
@@ -323,6 +323,221 @@ export async function claimInviteAndInsertPlayer(
       .bind(params.playerId, params.hero.id),
   ]);
   return (claimResult.meta.changes ?? 0) === 1;
+}
+
+type RawPartyCharacter = {
+  id: string; name: string; adventure_level: number; adventure_exp: number;
+  aptitude: string; current_job: string; equipped_active: string; equipped_passive: string;
+};
+
+/**
+ * `IN (?, ?, ...)` 用のプレースホルダを要素数ぶん作る。0件のときは呼び出し側で
+ * クエリ自体をスキップすること（空の IN 句はSQLとして書けない）。
+ */
+function placeholders(count: number): string {
+  return Array.from({ length: count }, () => '?').join(', ');
+}
+
+/**
+ * パーティの並び順（slot昇順）で Character の配列を返す。戦闘（toPartyMember）も
+ * 報酬の付与も、この並びと中身をそのまま使う。
+ *
+ * job_levels と learned は character_id の IN 句でまとめて引き、JS側で
+ * キャラごとに組み立てる。パーティは最大4人なので、キャラの数だけ
+ * 問い合わせを重ねるより見通しがよい。
+ */
+export async function getPartyCharacters(
+  db: D1Database, playerId: string,
+): Promise<readonly Character[]> {
+  const rows = await db
+    .prepare(
+      `SELECT c.id, c.name, c.adventure_level, c.adventure_exp, c.aptitude,
+              c.current_job, c.equipped_active, c.equipped_passive
+         FROM party p JOIN characters c ON c.id = p.character_id
+        WHERE p.player_id = ?
+        ORDER BY p.slot ASC`,
+    )
+    .bind(playerId)
+    .all<RawPartyCharacter>();
+
+  const ids = rows.results.map((row) => row.id);
+  if (ids.length === 0) return [];
+
+  const [jobRows, learnedRows] = await Promise.all([
+    db
+      .prepare(`SELECT character_id, job_id, level, exp FROM job_levels WHERE character_id IN (${placeholders(ids.length)})`)
+      .bind(...ids)
+      .all<{ character_id: string; job_id: string; level: number; exp: number }>(),
+    db
+      .prepare(`SELECT character_id, kind, id FROM learned WHERE character_id IN (${placeholders(ids.length)})`)
+      .bind(...ids)
+      .all<{ character_id: string; kind: string; id: string }>(),
+  ]);
+
+  return rows.results.map((row): Character => {
+    const jobs: Record<string, JobProgress> = {};
+    for (const job of jobRows.results) {
+      if (job.character_id === row.id) jobs[job.job_id] = { level: job.level, exp: job.exp };
+    }
+    const learnedSkills: string[] = [];
+    const learnedPassives: string[] = [];
+    for (const learned of learnedRows.results) {
+      if (learned.character_id !== row.id) continue;
+      if (learned.kind === 'skill') learnedSkills.push(learned.id);
+      else learnedPassives.push(learned.id);
+    }
+    return {
+      id: row.id,
+      name: row.name,
+      adventureLevel: row.adventure_level,
+      adventureExp: row.adventure_exp,
+      aptitude: JSON.parse(row.aptitude) as Character['aptitude'],
+      currentJob: row.current_job,
+      jobs,
+      learnedSkills,
+      learnedPassives,
+      equippedActive: JSON.parse(row.equipped_active) as string[],
+      equippedPassive: JSON.parse(row.equipped_passive) as string[],
+    };
+  });
+}
+
+/** その日の戦闘に最初に勝ったプレイヤーのID。誰も勝っていなければ null（設計書 §6.3）。 */
+export async function getDefeatedBy(
+  db: D1Database, worldId: string, dayNo: number,
+): Promise<string | null> {
+  const raw = await db
+    .prepare('SELECT defeated_by FROM world_days WHERE world_id = ? AND day_no = ?')
+    .bind(worldId, dayNo)
+    .first<{ defeated_by: string | null }>();
+  return raw?.defeated_by ?? null;
+}
+
+export type BattleResultRow = { result: string; rewardedAt: string };
+
+/** そのプレイヤーのその日の戦闘結果。記録が無ければ null（=まだ勝っていない）。 */
+export async function getBattleResult(
+  db: D1Database, worldId: string, dayNo: number, playerId: string,
+): Promise<BattleResultRow | null> {
+  const raw = await db
+    .prepare(
+      'SELECT result, rewarded_at FROM battle_results WHERE world_id = ? AND day_no = ? AND player_id = ?',
+    )
+    .bind(worldId, dayNo, playerId)
+    .first<{ result: string; rewarded_at: string }>();
+  return raw === null ? null : { result: raw.result, rewardedAt: raw.rewarded_at };
+}
+
+export type BattleRewardCharacter = {
+  characterId: string;
+  jobId: string;
+  adventureLevel: number;
+  adventureExp: number;
+  jobLevel: number;
+  jobExp: number;
+  newSkillIds: readonly string[];
+  newPassiveIds: readonly string[];
+};
+
+/**
+ * 戦闘勝利の後始末を1トランザクションで行う：報酬の付与（金貨・経験値・新規習得）、
+ * battle_results への記録、世界としての討伐フラグの更新（設計書 §6.3 / §6.4）。
+ * 分けて書くと「経験値だけ入って記録が残らない」「記録は残ったのに金貨が
+ * 入っていない」といった半端な状態が起こりうる。過去に同種の穴が2回見つかっている
+ * （招待の消費・日の締め）ので、ここでも同じ形にする。
+ *
+ * 報酬系の文（金貨・冒険レベル/経験値・ジョブレベル/経験値・新規習得）はすべて
+ * `NOT EXISTS (SELECT 1 FROM battle_results WHERE world_id=? AND day_no=? AND player_id=?)`
+ * をガードに持つ。battle_results への INSERT はバッチの最後の方に置くので、
+ * これらのガードはどの報酬文からも「まだこの日のこのプレイヤーの勝利が
+ * 記録されていない、バッチ開始時点の状態」を見る
+ * （advanceDay の金貨配布が締めの文より前に置いた EXISTS で締め前の状態を
+ * 見るのと同じ考え方）。
+ *
+ * したがって、このプレイヤーがこの日すでに報酬を受け取っていれば、
+ * 呼び出し側が計算した「新しいレベル・経験値」をそのまま渡しても、
+ * これらの文はすべて0行のまま何も変えない。二度目の報酬が入り込む
+ * 余地はSQLの側でふさがれている。
+ *
+ * world_days.defeated_by の更新はこれとは独立したガード（IS NULL）。
+ * 報酬をすでに受け取ったプレイヤーが再度勝っても、世界の討伐フラグ自体は
+ * 「まだ誰も倒していなければ」自分のIDで埋まる。2人が同じ日に勝っても、
+ * 先に書き込めた方だけがここで1行更新を取り、もう片方は0行のまま変わらない。
+ */
+export async function recordBattleWin(
+  db: D1Database,
+  params: {
+    worldId: string;
+    dayNo: number;
+    playerId: string;
+    rewardedAt: string;
+    goldAward: number;
+    party: readonly BattleRewardCharacter[];
+  },
+): Promise<{ rewarded: boolean; defeated: boolean }> {
+  const { worldId, dayNo, playerId, rewardedAt, goldAward, party } = params;
+
+  const NOT_REWARDED_YET =
+    'NOT EXISTS (SELECT 1 FROM battle_results WHERE world_id = ? AND day_no = ? AND player_id = ?)';
+  const guardBind = (): [string, number, string] => [worldId, dayNo, playerId];
+
+  const statements: D1PreparedStatement[] = [
+    db
+      .prepare(`UPDATE players SET gold = gold + ? WHERE id = ? AND ${NOT_REWARDED_YET}`)
+      .bind(goldAward, playerId, ...guardBind()),
+    ...party.flatMap((member) => [
+      db
+        .prepare(
+          `UPDATE characters SET adventure_level = ?, adventure_exp = ?
+            WHERE id = ? AND ${NOT_REWARDED_YET}`,
+        )
+        .bind(member.adventureLevel, member.adventureExp, member.characterId, ...guardBind()),
+      db
+        .prepare(
+          `UPDATE job_levels SET level = ?, exp = ?
+            WHERE character_id = ? AND job_id = ? AND ${NOT_REWARDED_YET}`,
+        )
+        .bind(member.jobLevel, member.jobExp, member.characterId, member.jobId, ...guardBind()),
+      ...member.newSkillIds.map((skillId) =>
+        db
+          .prepare(
+            `INSERT INTO learned (character_id, kind, id)
+             SELECT ?, 'skill', ? WHERE ${NOT_REWARDED_YET}
+             ON CONFLICT (character_id, kind, id) DO NOTHING`,
+          )
+          .bind(member.characterId, skillId, ...guardBind()),
+      ),
+      ...member.newPassiveIds.map((passiveId) =>
+        db
+          .prepare(
+            `INSERT INTO learned (character_id, kind, id)
+             SELECT ?, 'passive', ? WHERE ${NOT_REWARDED_YET}
+             ON CONFLICT (character_id, kind, id) DO NOTHING`,
+          )
+          .bind(member.characterId, passiveId, ...guardBind()),
+      ),
+    ]),
+    db
+      .prepare(
+        `INSERT INTO battle_results (world_id, day_no, player_id, result, rewarded_at)
+         SELECT ?, ?, ?, 'win', ? WHERE ${NOT_REWARDED_YET}`,
+      )
+      .bind(worldId, dayNo, playerId, rewardedAt, ...guardBind()),
+    db
+      .prepare(
+        `UPDATE world_days SET defeated_by = ?
+          WHERE world_id = ? AND day_no = ? AND defeated_by IS NULL`,
+      )
+      .bind(playerId, worldId, dayNo),
+  ];
+
+  const results = await db.batch(statements);
+  const rewardResult = results[results.length - 2];
+  const defeatedResult = results[results.length - 1];
+  return {
+    rewarded: (rewardResult.meta.changes ?? 0) === 1,
+    defeated: (defeatedResult.meta.changes ?? 0) === 1,
+  };
 }
 
 export async function getPlayerGold(db: D1Database, playerId: string): Promise<number | null> {

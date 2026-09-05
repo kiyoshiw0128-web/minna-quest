@@ -101,3 +101,6 @@ export type { Recruit } from './daily/recruit.js';
 
 export { EVENTS } from './data/events.js';
 export { NAMES } from './data/names.js';
+
+export { BATTLE_REWARDS } from './data/battleRewards.js';
+export type { BattleReward } from './data/battleRewards.js';
