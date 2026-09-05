@@ -22,6 +22,15 @@ const HERO_B = 'heroB';
 const WINNING_PLAN = ['earthRend', 'heavyBlow', 'shieldSmash', 'slash', 'heavyBlow', 'earthRend', 'shieldSmash', 'heavyBlow'];
 const NO_ACTION_PLAN = [null, null, null, null, null, null, null, null];
 
+/**
+ * 締まった日 `dayNo` と、その翌日（未締め）を作る。`current_day` は翌日を指す。
+ *
+ * **この形が本番で実際に起きる唯一の形である。** `advanceDay` は日を締めるのと
+ * 同時に翌日の行を作って `current_day` をそこへ進めるので、`current_day` の行は
+ * 常に未締めになる。当初この関数は締め済みの日をそのまま `current_day` に
+ * 置いていて、実際には存在しない状態を検査していた。そのせいで
+ * 「戦闘が永久に始まらない」という不具合をテストが素通りさせていた。
+ */
 async function seedWorld(dayNo: number, chosenId: string | null): Promise<void> {
   await applyD1Migrations(env.DB, env.TEST_MIGRATIONS);
   for (const table of ['battle_results', 'party', 'learned', 'job_levels', 'characters', 'votes', 'world_days', 'players', 'invites', 'worlds']) {
@@ -30,10 +39,14 @@ async function seedWorld(dayNo: number, chosenId: string | null): Promise<void> 
   await env.DB.prepare(
     `INSERT INTO worlds (id, name, started_at, current_day, chapter, tags, created_at)
      VALUES (?, ?, ?, ?, ?, ?, ?)`,
-  ).bind(WORLD, 'テスト世界', '2026-09-03T15:00:00.000Z', dayNo, 1, '[]', '2026-09-03T15:00:00.000Z').run();
+  ).bind(WORLD, 'テスト世界', '2026-09-03T15:00:00.000Z', dayNo + 1, 1, '[]', '2026-09-03T15:00:00.000Z').run();
+  const options = JSON.stringify(['banditAmbush', 'crossroads', 'restAtSpring']);
   await env.DB.prepare(
     `INSERT INTO world_days (world_id, day_no, option_ids, chosen_id) VALUES (?, ?, ?, ?)`,
-  ).bind(WORLD, dayNo, JSON.stringify(['banditAmbush', 'crossroads', 'restAtSpring']), chosenId).run();
+  ).bind(WORLD, dayNo, options, chosenId).run();
+  await env.DB.prepare(
+    `INSERT INTO world_days (world_id, day_no, option_ids, chosen_id) VALUES (?, ?, ?, NULL)`,
+  ).bind(WORLD, dayNo + 1, options).run();
 }
 
 async function addPlayer(playerId: string, token: string, gold = 0): Promise<void> {
@@ -60,11 +73,17 @@ async function seedWinningHero(playerId: string, characterId: string): Promise<v
   await env.DB.prepare(`INSERT INTO party (player_id, character_id, slot) VALUES (?, ?, 0)`).bind(playerId, characterId).run();
 }
 
-function battleRequest(token: string, method: 'GET' | 'POST', plan?: Record<string, (string | null)[]>): Promise<Response> {
-  return SELF.fetch('https://example.com/api/battle', {
+function battleRequest(
+  token: string,
+  method: 'GET' | 'POST',
+  plan?: Record<string, (string | null)[]>,
+  dayNo?: number,
+): Promise<Response> {
+  const query = method === 'GET' && dayNo !== undefined ? `?dayNo=${dayNo}` : '';
+  return SELF.fetch(`https://example.com/api/battle${query}`, {
     method,
     headers: { Authorization: `Bearer ${token}`, 'content-type': 'application/json' },
-    body: method === 'POST' ? JSON.stringify({ plan }) : undefined,
+    body: method === 'POST' ? JSON.stringify({ plan, dayNo }) : undefined,
   });
 }
 
@@ -298,5 +317,112 @@ describe('POST /api/battle（設計書 §6.2〜§6.4）', () => {
 
     const response = await battleRequest(TOKEN_A, 'POST', undefined);
     expect(response.status).toBe(400);
+  });
+});
+
+/**
+ * 実際の締め処理（catchUp）を走らせてから戦闘を引く。
+ *
+ * 他のテストは締まった日をDBに直接差し込むので、`current_day` と締めの関係を
+ * 取り違えていても通ってしまう。実際にそれが起きた。ここは締めを本物に任せ、
+ * 「投票して、締まって、戦えるようになる」という本番の流れをそのまま辿る。
+ */
+describe('締めを本物に任せた場合の戦闘の見え方', () => {
+  it('締まる前は戦闘が無く、締めた後に戦えるようになる', async () => {
+    await applyD1Migrations(env.DB, env.TEST_MIGRATIONS);
+    for (const table of ['battle_results', 'party', 'learned', 'job_levels', 'characters', 'votes', 'world_days', 'players', 'invites', 'worlds']) {
+      await env.DB.prepare(`DELETE FROM ${table}`).run();
+    }
+    // 2日前に始まった世界。1日目はまだ締まっていない。
+    const startedAt = '2026-09-01T00:00:00.000Z';
+    await env.DB.prepare(
+      `INSERT INTO worlds (id, name, started_at, current_day, chapter, tags, created_at)
+       VALUES (?, ?, ?, 1, 1, '[]', ?)`,
+    ).bind(WORLD, 'テスト世界', startedAt, startedAt).run();
+    await env.DB.prepare(
+      `INSERT INTO world_days (world_id, day_no, option_ids, chosen_id) VALUES (?, 1, ?, NULL)`,
+    ).bind(WORLD, JSON.stringify(['banditAmbush', 'crossroads', 'restAtSpring'])).run();
+
+    await addPlayer(PLAYER_A, TOKEN_A);
+    await seedWinningHero(PLAYER_A, HERO_A);
+
+    // 1日目に戦闘の選択肢へ投票する。
+    await env.DB.prepare(
+      `INSERT INTO votes (world_id, day_no, player_id, option_id, voted_at) VALUES (?, 1, ?, 'banditAmbush', ?)`,
+    ).bind(WORLD, PLAYER_A, startedAt).run();
+
+    // 締める前。確定した選択肢がまだ無いので戦闘は無い。
+    const before = await (await battleRequest(TOKEN_A, 'GET')).json() as { data: { hasBattle: boolean } };
+    expect(before.data.hasBattle).toBe(false);
+
+    // 本物の締め処理を走らせる。
+    const { catchUp } = await import('../src/close.js');
+    const closed = await catchUp(env.DB, WORLD, new Date('2026-09-02T00:00:00.000Z'));
+    expect(closed).toBe(1);
+
+    // 締めた後。1日目の確定した選択肢が戦闘なので、戦えるようになる。
+    const after = await (await battleRequest(TOKEN_A, 'GET')).json() as {
+      data: { hasBattle: boolean; dayNo: number };
+    };
+    expect(after.data.hasBattle).toBe(true);
+    expect(after.data.dayNo).toBe(1);
+  });
+});
+
+/**
+ * 何日か開けてから戻ってきた場合。`catchUp` が複数日をまとめて締めるので、
+ * 直近の1日しか見られないと、その間にあった戦闘が丸ごと飛ぶ。
+ * 全体設計 §5.5 は溜まった戦いを順に片付けて追いつけることを明示している。
+ */
+describe('複数日がまとめて締まったとき', () => {
+  it('直近でない過去の戦闘の日も指定して挑める', async () => {
+    await applyD1Migrations(env.DB, env.TEST_MIGRATIONS);
+    for (const table of ['battle_results', 'party', 'learned', 'job_levels', 'characters', 'votes', 'world_days', 'players', 'invites', 'worlds']) {
+      await env.DB.prepare(`DELETE FROM ${table}`).run();
+    }
+    const startedAt = '2026-09-01T00:00:00.000Z';
+    await env.DB.prepare(
+      `INSERT INTO worlds (id, name, started_at, current_day, chapter, tags, created_at)
+       VALUES (?, ?, ?, 1, 1, '[]', ?)`,
+    ).bind(WORLD, 'テスト世界', startedAt, startedAt).run();
+    await env.DB.prepare(
+      `INSERT INTO world_days (world_id, day_no, option_ids, chosen_id) VALUES (?, 1, ?, NULL)`,
+    ).bind(WORLD, JSON.stringify(['banditAmbush', 'crossroads', 'restAtSpring'])).run();
+
+    await addPlayer(PLAYER_A, TOKEN_A);
+    await seedWinningHero(PLAYER_A, HERO_A);
+    await env.DB.prepare(
+      `INSERT INTO votes (world_id, day_no, player_id, option_id, voted_at) VALUES (?, 1, ?, 'banditAmbush', ?)`,
+    ).bind(WORLD, PLAYER_A, startedAt).run();
+
+    // 3日ぶんまとめて締める。1日目は戦闘、その後は投票が無いので別の選択肢になる。
+    const { catchUp } = await import('../src/close.js');
+    const closed = await catchUp(env.DB, WORLD, new Date('2026-09-04T00:00:00.000Z'));
+    expect(closed).toBeGreaterThan(1);
+
+    // 既定（直近の締まった日）は戦闘ではない。
+    const latest = await (await battleRequest(TOKEN_A, 'GET')).json() as { data: { hasBattle: boolean } };
+    expect(latest.data.hasBattle).toBe(false);
+
+    // 1日目を指定すれば挑める。ここが飛ぶと、離れていた間の戦いが失われる。
+    const past = await (await battleRequest(TOKEN_A, 'GET', undefined, 1)).json() as {
+      data: { hasBattle: boolean; dayNo: number };
+    };
+    expect(past.data.hasBattle).toBe(true);
+    expect(past.data.dayNo).toBe(1);
+  });
+
+  it('締まっていない今日と未来の日は指定できない', async () => {
+    await seedWorld(3, 'banditAmbush');
+    await addPlayer(PLAYER_A, TOKEN_A);
+    await seedWinningHero(PLAYER_A, HERO_A);
+
+    // seedWorld(3) は current_day を 4 にするので、締まっているのは 3 まで。
+    for (const dayNo of [4, 5]) {
+      const response = await (await battleRequest(TOKEN_A, 'GET', undefined, dayNo)).json() as {
+        data: { hasBattle: boolean };
+      };
+      expect(response.data.hasBattle).toBe(false);
+    }
   });
 });

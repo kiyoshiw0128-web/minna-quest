@@ -35,6 +35,46 @@ function jobOf(character: Character): Job {
   return job;
 }
 
+/**
+ * 戦う日を決める。既定は「直近で締まった日」＝ `currentDay - 1`。
+ *
+ * `catchUp` は「今日より前の未締めの日」だけを締め、締めるたびに翌日の行を作って
+ * `current_day` をそこへ進める。したがって `world.currentDay` の行は常に未締めで、
+ * `chosen_id` は必ず NULL になる。当初この関数は `currentDay` を見ていたため、
+ * 「その日の確定した選択肢が戦闘か」の判定が永久に偽になり、戦闘が一度も
+ * 始まらない状態だった。DBに締め済みの `currentDay` を直接差し込むテストでは
+ * 通ってしまい、実際には起こりえない状態を検査していた。
+ *
+ * 物語の側でもこれが正しい。プレイヤーが今日対処するのは「昨日の多数決で
+ * 決まったこと」であり、全体設計 §5.1 の1日の流れがそう書いてある。
+ *
+ * **過去の日も指定できる。** 何日か開けてから戻ると `catchUp` が複数日を
+ * まとめて締めるので、既定の1日だけを見ていると途中の戦闘が丸ごと飛ぶ。
+ * 全体設計 §5.5 は、溜まった戦いを順に片付けて追いつけること（追体験）を
+ * 明示しているので、締まった日であればどれでも挑めるようにする。
+ *
+ * 1日目は締まった日がまだ無いので、戦闘も無い。
+ */
+function resolveBattleDayNo(currentDay: number, requested: number | null): number | null {
+  const latestClosed = currentDay - 1;
+  if (latestClosed < 1) return null;
+  if (requested === null) return latestClosed;
+  // 未来の日と、まだ締まっていない今日は指定できない。締まっていない日には
+  // 確定した選択肢が無く、戦う相手が決まらない。
+  if (!Number.isInteger(requested) || requested < 1 || requested > latestClosed) return null;
+  return requested;
+}
+
+/** クエリ・本文から日の指定を読む。数値でなければ「指定なし」として扱う。 */
+function requestedDayNo(value: unknown): number | null {
+  if (typeof value === 'number') return value;
+  if (typeof value === 'string' && value.trim() !== '') {
+    const parsed = Number(value);
+    return Number.isNaN(parsed) ? null : parsed;
+  }
+  return null;
+}
+
 export async function handleGetBattle(request: Request, env: Env): Promise<Response> {
   const player = await requirePlayer(env.DB, request);
   if (player === null) return fail('unauthorized', 401);
@@ -42,7 +82,11 @@ export async function handleGetBattle(request: Request, env: Env): Promise<Respo
   const world = await getWorld(env.DB, player.worldId);
   if (world === null) return fail('world not found', 404);
 
-  const day = await getDay(env.DB, world.id, world.currentDay);
+  const asked = requestedDayNo(new URL(request.url).searchParams.get('dayNo'));
+  const dayNo = resolveBattleDayNo(world.currentDay, asked);
+  if (dayNo === null) return ok({ dayNo: world.currentDay, hasBattle: false });
+
+  const day = await getDay(env.DB, world.id, dayNo);
   if (day === null) return fail('day not found', 404);
 
   const enemy = resolveBattleEnemy(day.chosenId);
@@ -70,7 +114,7 @@ export async function handleGetBattle(request: Request, env: Env): Promise<Respo
   });
 }
 
-type BattleBody = { plan?: unknown };
+type BattleBody = { plan?: unknown; dayNo?: unknown };
 
 /**
  * リクエストの plan を BattlePlan の形（characterId -> (技ID|null)[]）に整える。
@@ -106,7 +150,10 @@ export async function handlePostBattle(request: Request, env: Env): Promise<Resp
   const world = await getWorld(env.DB, player.worldId);
   if (world === null) return fail('world not found', 404);
 
-  const day = await getDay(env.DB, world.id, world.currentDay);
+  const dayNo = resolveBattleDayNo(world.currentDay, requestedDayNo(body.dayNo));
+  if (dayNo === null) return fail('no battle today');
+
+  const day = await getDay(env.DB, world.id, dayNo);
   if (day === null) return fail('day not found', 404);
 
   const enemy = resolveBattleEnemy(day.chosenId);
