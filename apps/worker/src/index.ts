@@ -2,6 +2,7 @@ import { catchUp } from './close.js';
 import { handleGetBattle, handlePostBattle } from './routes/battle.js';
 import { handleHire } from './routes/hire.js';
 import { handleJoin } from './routes/join.js';
+import { handleMe } from './routes/me.js';
 import { handleTavern } from './routes/tavern.js';
 import { handleToday } from './routes/today.js';
 import { handleVote } from './routes/vote.js';
@@ -29,6 +30,10 @@ export default {
 
     if (url.pathname === '/api/world' && request.method === 'GET') {
       return handleWorld(request, env);
+    }
+
+    if (url.pathname === '/api/me' && request.method === 'GET') {
+      return handleMe(request, env);
     }
 
     if (url.pathname === '/api/tavern' && request.method === 'GET') {
