@@ -252,19 +252,20 @@ export async function findUnusedInviteWorldId(
  * ここでは「渡された Character をそのまま行に落とす」ことだけに専念する。
  */
 function characterInsertStatements(
-  db: D1Database, character: Character, playerId: string,
+  db: D1Database, character: Character, playerId: string, isHero: boolean,
 ): D1PreparedStatement[] {
   return [
     db
       .prepare(
         `INSERT INTO characters
-           (id, player_id, name, adventure_level, adventure_exp, aptitude, current_job, equipped_active, equipped_passive)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+           (id, player_id, name, adventure_level, adventure_exp, aptitude, current_job, equipped_active, equipped_passive, is_hero)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       )
       .bind(
         character.id, playerId, character.name, character.adventureLevel, character.adventureExp,
         JSON.stringify(character.aptitude), character.currentJob,
         JSON.stringify(character.equippedActive), JSON.stringify(character.equippedPassive),
+        isHero ? 1 : 0,
       ),
     ...Object.entries(character.jobs).map(([jobId, progress]) =>
       db
@@ -317,7 +318,7 @@ export async function claimInviteAndInsertPlayer(
         `INSERT INTO players (id, world_id, name, token_hash, joined_at) VALUES (?, ?, ?, ?, ?)`,
       )
       .bind(params.playerId, params.worldId, params.name, params.tokenHash, params.usedAt),
-    ...characterInsertStatements(db, params.hero, params.playerId),
+    ...characterInsertStatements(db, params.hero, params.playerId, true),
     db
       .prepare('INSERT INTO party (player_id, character_id, slot) VALUES (?, ?, 0)')
       .bind(params.playerId, params.hero.id),
