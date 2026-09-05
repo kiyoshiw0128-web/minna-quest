@@ -240,7 +240,14 @@ function BattleBody({
         </p>
       )}
       {battle.worldDefeated && (
-        <p role="status">この敵は世界としてすでに討伐されています（他の誰かが倒しました）。</p>
+        // 自分が倒した場合に「他の誰かが倒しました」と出ると事実と食い違う。
+        // 誰が最初に倒したかまではAPIが返さないので、自分が勝っているかどうかで
+        // 言い分けるに留める。断定できないことを断定しない。
+        <p role="status">
+          {battle.won
+            ? 'この敵は世界としてすでに討伐されています。'
+            : 'この敵は世界としてすでに討伐されています（他の誰かが倒しました）。'}
+        </p>
       )}
 
       <h2>{battle.enemy.name} の行動表</h2>
@@ -281,7 +288,13 @@ function EnemyTable({
   return (
     <div style={{ overflowX: 'auto' }}>
       <table>
-        <caption>行動表はターン数で循環する。HPが一定割合以下になると激昂し、下の表に切り替わる。</caption>
+        {/* 激昂の説明は、激昂する敵のときだけ出す。無い敵にも出すと
+            「下の表」が存在せず、読み手が探すことになる。 */}
+        <caption>
+          {enemy.enrage === undefined
+            ? '行動表はターン数で循環する。'
+            : '行動表はターン数で循環する。HPが一定割合以下になると激昂し、下の表に切り替わる。'}
+        </caption>
         <tbody>
           <PatternRow label="通常" pattern={enemy.pattern} turns={turns} skillNames={skillNames} />
           {enemy.enrage !== undefined && (
