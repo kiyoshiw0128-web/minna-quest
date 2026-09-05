@@ -78,6 +78,14 @@ export function App() {
           参加状態を保存できませんでした。このタブを閉じると、参加からやり直しになります。
         </p>
       )}
+      {/*
+        タブに入ると、この遊びの名前がどこにも出なくなっていた。毎日ひらく
+        画面なので、開いた瞬間に何の画面か分かる手がかりを1つ置く。
+        見出しではなく飾りなので、h1 は各画面のものを使い続ける。
+      */}
+      <div className="brand" aria-hidden="true">
+        みんなdeクエスト
+      </div>
       <nav>
         <button type="button" onClick={() => setTab('today')} aria-current={tab === 'today'}>
           今日

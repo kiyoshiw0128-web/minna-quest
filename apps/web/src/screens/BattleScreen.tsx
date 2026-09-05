@@ -475,7 +475,7 @@ function BattleResultView({
       <h3>結果: {summarizeResult(result.log.events)}</h3>
       <p>{result.rewarded ? '報酬が入りました。' : '報酬は入りませんでした。'}</p>
       {groups.map((group) => (
-        <div key={group.turn}>
+        <div key={group.turn} className="log-turn">
           <h4>ターン{group.turn}</h4>
           <ul>
             {group.lines.map((line, i) => (

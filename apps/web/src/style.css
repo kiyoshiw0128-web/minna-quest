@@ -28,6 +28,8 @@
   --alert: #9b2226;
   --good: #2f6d4f;
   --shadow: rgba(80, 60, 30, 0.18);
+  --bg-glow: rgba(255, 246, 224, 0.75);
+  --grain: rgba(138, 111, 71, 0.035);
 }
 
 @media (prefers-color-scheme: dark) {
@@ -44,6 +46,8 @@
     --alert: #ff8a95;
     --good: #7fd6a8;
     --shadow: rgba(0, 0, 0, 0.5);
+    --bg-glow: rgba(90, 110, 160, 0.16);
+    --grain: rgba(255, 255, 255, 0.018);
   }
 }
 
@@ -52,33 +56,69 @@
 }
 
 body {
-  margin: 0;
-  padding: 0.75rem 0.75rem 3rem;
+  padding: 1rem 0.9rem 4rem;
   font-family: 'Hiragino Mincho ProN', 'Yu Mincho', 'Noto Serif JP', serif;
-  line-height: 1.7;
-  background: var(--bg);
+  line-height: 1.75;
   color: var(--fg);
   /* 端末の幅いっぱいに広がると読み疲れる。毎日ひらく画面なので幅を抑える。 */
   max-width: 46rem;
   margin: 0 auto;
   -webkit-text-size-adjust: 100%;
+
+  /*
+   * 単色の面だと「ブラウザに文書が出ている」感じから抜けない。
+   * ごく薄い斜めの縞と周縁の陰りを重ねて、紙の上に見えるようにする。
+   * 画像は使わない。1枚読み込むだけで、毎日ひらく画面が一段遅くなる。
+   */
+  background-color: var(--bg);
+  background-image:
+    radial-gradient(120% 80% at 50% -10%, var(--bg-glow), transparent 60%),
+    repeating-linear-gradient(
+      45deg,
+      var(--grain) 0 2px,
+      transparent 2px 6px
+    );
+  background-attachment: fixed;
 }
 
 /* ---- 見出し ---- */
 
 h1 {
-  font-size: 1.5rem;
-  letter-spacing: 0.08em;
-  margin: 0.25rem 0 1rem;
-  padding-bottom: 0.5rem;
-  border-bottom: 2px solid var(--line-strong);
+  font-size: 1.55rem;
+  letter-spacing: 0.12em;
+  margin: 0.25rem 0 1.1rem;
+  padding-bottom: 0.6rem;
+  border-bottom: 1px solid var(--line-strong);
+  position: relative;
+}
+
+/* 見出しの下に二重罫。単線より「書物の章題」に見える。 */
+h1::after {
+  content: '';
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: -4px;
+  height: 1px;
+  background: var(--line);
 }
 
 h2 {
-  font-size: 1.15rem;
-  letter-spacing: 0.05em;
-  margin: 1.5rem 0 0.5rem;
+  font-size: 1.12rem;
+  letter-spacing: 0.06em;
+  margin: 1.6rem 0 0.6rem;
   color: var(--accent);
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+}
+
+/* 見出しの右に細い罫を伸ばす。区切りが見えると、面の切れ目が読み取れる。 */
+h2::after {
+  content: '';
+  flex: 1;
+  height: 1px;
+  background: linear-gradient(to right, var(--line), transparent);
 }
 
 h3 {
@@ -91,6 +131,19 @@ h4 {
   font-size: 0.95rem;
   margin: 0.8rem 0 0.3rem;
   color: var(--muted);
+}
+
+/*
+ * 題字。タブに入ると遊びの名前がどこにも出なくなっていた。
+ * 毎日ひらく画面なので、開いた瞬間に何かが分かる手がかりを1つ置く。
+ */
+.brand {
+  text-align: center;
+  font-size: 0.82rem;
+  letter-spacing: 0.42em;
+  text-indent: 0.42em;
+  color: var(--muted);
+  margin: 0 0 0.7rem;
 }
 
 /* ---- タブ（コマンドウィンドウ風） ---- */
@@ -129,12 +182,14 @@ nav button[aria-current='true'] {
 /* ---- 面 ---- */
 
 section {
-  margin: 1rem 0;
-  padding: 0.9rem 1rem;
+  margin: 1.1rem 0;
+  padding: 1rem 1.1rem;
   background: var(--bg-panel);
   border: 1px solid var(--line);
-  border-left: 3px solid var(--line-strong);
-  border-radius: 4px;
+  border-radius: 6px;
+  box-shadow:
+    0 1px 0 var(--bg-panel) inset,
+    0 2px 8px var(--shadow);
 }
 
 section section {
@@ -227,6 +282,66 @@ li > button {
   display: block;
   width: 100%;
   text-align: left;
+}
+
+/*
+ * その日の3択。押せる箱ではなく「選ぶ札」に見せる。
+ * 毎日ここだけを見て決めるので、この画面でいちばん目立つべき要素。
+ */
+.choice {
+  display: flex;
+  align-items: center;
+  gap: 0.8rem;
+  padding: 0.85rem 1rem;
+  min-height: 3.4rem;
+  font-size: 1.02rem;
+  line-height: 1.5;
+  border-radius: 6px;
+  border-left-width: 4px;
+  transition: transform 0.08s ease, border-color 0.12s ease, background 0.12s ease;
+}
+
+.choice[data-kind='battle'] {
+  border-left-color: var(--alert);
+}
+
+.choice[data-kind='story'] {
+  border-left-color: var(--good);
+}
+
+.choice-mark {
+  flex: none;
+  width: 1.9rem;
+  height: 1.9rem;
+  display: grid;
+  place-items: center;
+  font-size: 1rem;
+  border-radius: 50%;
+  background: var(--bg-sunken);
+  border: 1px solid var(--line);
+}
+
+.choice[data-kind='battle'] .choice-mark {
+  color: var(--alert);
+}
+
+.choice[data-kind='story'] .choice-mark {
+  color: var(--good);
+}
+
+.choice-body {
+  flex: 1;
+}
+
+.choice:hover:not(:disabled) {
+  transform: translateX(2px);
+}
+
+/* いま自分が入れている札。一覧の中で一目で分からないと押し直せない。 */
+.choice[aria-pressed='true'] {
+  border-color: var(--accent);
+  border-left-color: var(--accent);
+  box-shadow: 0 0 0 1px var(--accent) inset, 0 2px 8px var(--shadow);
 }
 
 /* ---- 入力 ---- */
@@ -386,12 +501,43 @@ summary {
 
 /* ---- 戦闘のログ ---- */
 
-/* ログはターンごとの塊で読む。塊の頭が見えないと追えない。 */
-section h4 {
+/*
+ * ログはターンごとの塊で読む。塊の頭が見えないと、8ターンぶんの行が
+ * ひと続きに見えて、何ターン目に何が起きたのかを追えない。
+ */
+.log-turn {
+  margin: 0.9rem 0;
+  padding-left: 0.9rem;
+  border-left: 2px solid var(--line);
+}
+
+.log-turn h4 {
+  display: inline-block;
+  margin: 0 0 0.3rem;
+  padding: 0.1rem 0.6rem;
+  font-size: 0.78rem;
+  letter-spacing: 0.1em;
+  color: var(--bg-panel);
+  background: var(--accent);
+  border-radius: 999px;
+}
+
+.log-turn ul {
+  margin: 0;
+}
+
+.log-turn li {
+  margin-bottom: 0.15rem;
+  font-size: 0.92rem;
+  color: var(--fg);
+}
+
+/* 見出しの飾り罫は、ログの塊の頭には要らない（上で別に組んでいる）。 */
+section > h4 {
   margin-top: 1rem;
   padding-bottom: 0.2rem;
   border-bottom: 1px solid var(--line);
-  color: var(--accent);
+  color: var(--muted);
 }
 
 @media (max-width: 30rem) {

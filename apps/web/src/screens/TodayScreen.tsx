@@ -118,15 +118,27 @@ function OpenDay({
           const mine = data.myVote === optionId;
           return (
             <li key={optionId}>
+              {/*
+                data-kind は見た目のためだけの印。戦闘と出来事を色と記号で
+                分けたいが、文言（「(戦闘)」）を消すとテストと読み上げの
+                両方が失われるので、文言は残したまま印を足す。
+              */}
               <button
                 type="button"
+                className="choice"
+                data-kind={event.kind ?? 'unknown'}
                 onClick={() => onVote(optionId)}
                 disabled={voteState.kind === 'voting'}
                 aria-pressed={mine}
               >
-                {mine ? '✓ ' : ''}
-                {event.label}
-                {event.kind !== null && ` (${event.kind === 'battle' ? '戦闘' : '出来事'})`}
+                <span className="choice-mark" aria-hidden="true">
+                  {event.kind === 'battle' ? '⚔' : '✦'}
+                </span>
+                <span className="choice-body">
+                  {mine ? '✓ ' : ''}
+                  {event.label}
+                  {event.kind !== null && ` (${event.kind === 'battle' ? '戦闘' : '出来事'})`}
+                </span>
               </button>
             </li>
           );
