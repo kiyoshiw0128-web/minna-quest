@@ -396,18 +396,19 @@ describe('複数日がまとめて締まったとき', () => {
     ).bind(WORLD, PLAYER_A, startedAt).run();
 
     // 3日ぶんまとめて締める。1日目は戦闘、2日目以降は投票が無いのでシードで決まる
-    // 別の選択肢になる（雑魚敵を足した今の抽選では2日目は非戦闘、3日目はたまたま
-    // 戦闘を引く。どちらに転んでも「指定した日がちゃんと引ける」ことは変わらない）。
+    // 別の選択肢になる（非戦闘イベントを足した今の抽選では2日目はたまたま戦闘
+    // （banditAmbush）、3日目は非戦闘（travelingBard）を引く。どちらに転んでも
+    // 「指定した日がちゃんと引ける」ことは変わらない）。
     const { catchUp } = await import('../src/close.js');
     const closed = await catchUp(env.DB, WORLD, new Date('2026-09-04T00:00:00.000Z'));
     expect(closed).toBeGreaterThan(1);
 
-    // 2日目を指定すれば非戦闘（このシードでは restAtSpring）。
-    const day2 = await (await battleRequest(TOKEN_A, 'GET', undefined, 2)).json() as {
+    // 3日目を指定すれば非戦闘（このシードでは travelingBard）。
+    const day2 = await (await battleRequest(TOKEN_A, 'GET', undefined, 3)).json() as {
       data: { hasBattle: boolean; dayNo: number };
     };
     expect(day2.data.hasBattle).toBe(false);
-    expect(day2.data.dayNo).toBe(2);
+    expect(day2.data.dayNo).toBe(3);
 
     // 1日目を指定すれば挑める。ここが飛ぶと、離れていた間の戦いが失われる。
     const past = await (await battleRequest(TOKEN_A, 'GET', undefined, 1)).json() as {
