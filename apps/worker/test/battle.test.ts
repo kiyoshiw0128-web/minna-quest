@@ -214,7 +214,7 @@ describe('POST /api/battle（設計書 §6.2〜§6.4）', () => {
     expect(data.worldDefeated).toBe(true);
 
     const player = await env.DB.prepare('SELECT gold FROM players WHERE id = ?').bind(PLAYER_A).first<{ gold: number }>();
-    expect(player?.gold).toBe(150); // BATTLE_REWARDS.balgos.gold（packages/core/src/data/battleRewards.ts）
+    expect(player?.gold).toBe(20); // BATTLE_REWARDS.banditScout.gold（packages/core/src/data/battleRewards.ts）
 
     const character = await env.DB.prepare('SELECT adventure_level, adventure_exp FROM characters WHERE id = ?').bind(HERO_A).first<{ adventure_level: number; adventure_exp: number }>();
     // 冒険Lv50は上限（MAX_ADVENTURE_LEVEL）なので、これ以上は上がらず経験値も溜まらない。
@@ -274,8 +274,8 @@ describe('POST /api/battle（設計書 §6.2〜§6.4）', () => {
     // 前提と、討伐フラグの一本化は別物であることの確認）。
     const goldA = await env.DB.prepare('SELECT gold FROM players WHERE id = ?').bind(PLAYER_A).first<{ gold: number }>();
     const goldB = await env.DB.prepare('SELECT gold FROM players WHERE id = ?').bind(PLAYER_B).first<{ gold: number }>();
-    expect(goldA?.gold).toBe(150);
-    expect(goldB?.gold).toBe(150);
+    expect(goldA?.gold).toBe(20); // BATTLE_REWARDS.banditScout.gold
+    expect(goldB?.gold).toBe(20);
   });
 
   it('2人がほぼ同時に勝っても defeated_by は1人だけに決まる（9・並行性）', async () => {
@@ -395,14 +395,19 @@ describe('複数日がまとめて締まったとき', () => {
       `INSERT INTO votes (world_id, day_no, player_id, option_id, voted_at) VALUES (?, 1, ?, 'banditAmbush', ?)`,
     ).bind(WORLD, PLAYER_A, startedAt).run();
 
-    // 3日ぶんまとめて締める。1日目は戦闘、その後は投票が無いので別の選択肢になる。
+    // 3日ぶんまとめて締める。1日目は戦闘、2日目以降は投票が無いのでシードで決まる
+    // 別の選択肢になる（雑魚敵を足した今の抽選では2日目は非戦闘、3日目はたまたま
+    // 戦闘を引く。どちらに転んでも「指定した日がちゃんと引ける」ことは変わらない）。
     const { catchUp } = await import('../src/close.js');
     const closed = await catchUp(env.DB, WORLD, new Date('2026-09-04T00:00:00.000Z'));
     expect(closed).toBeGreaterThan(1);
 
-    // 既定（直近の締まった日）は戦闘ではない。
-    const latest = await (await battleRequest(TOKEN_A, 'GET')).json() as { data: { hasBattle: boolean } };
-    expect(latest.data.hasBattle).toBe(false);
+    // 2日目を指定すれば非戦闘（このシードでは restAtSpring）。
+    const day2 = await (await battleRequest(TOKEN_A, 'GET', undefined, 2)).json() as {
+      data: { hasBattle: boolean; dayNo: number };
+    };
+    expect(day2.data.hasBattle).toBe(false);
+    expect(day2.data.dayNo).toBe(2);
 
     // 1日目を指定すれば挑める。ここが飛ぶと、離れていた間の戦いが失われる。
     const past = await (await battleRequest(TOKEN_A, 'GET', undefined, 1)).json() as {

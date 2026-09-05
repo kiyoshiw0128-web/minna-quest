@@ -15,8 +15,9 @@ import type { DailyEvent } from '../daily/event.js';
  * オブジェクトで持つが、整数に見えるキーはオブジェクト内で昇順に並び替わる。
  * 締めたときの並びと、あとから引き直したときの並びが食い違う。
  *
- * 敵のマスタにはまだ炎竜バルゴスしかいないため、戦闘イベントはすべて
- * バルゴスを指している。雑魚敵を足すときに差し替える。
+ * 雑魚敵を足したので、banditAmbush と scoutTheRidge が指す敵を炎竜バルゴスから
+ * 適切な雑魚に差し替えてある。まだ戦闘が確定した日を持つ世界が存在しないため、
+ * enemyId の差し替え（並びの変更ではない）はこの時点が最も安全。
  */
 export const EVENTS = {
   crossroads: {
@@ -31,7 +32,7 @@ export const EVENTS = {
   },
   banditAmbush: {
     id: 'banditAmbush', name: '山賊の待ち伏せ', kind: 'battle',
-    enemyId: 'balgos',
+    enemyId: 'banditScout',
     condition: {},
   },
   meetElder: {
@@ -66,7 +67,40 @@ export const EVENTS = {
   },
   scoutTheRidge: {
     id: 'scoutTheRidge', name: '尾根を偵察する', kind: 'battle',
-    enemyId: 'balgos',
+    enemyId: 'armoredKnight',
+    condition: { minChapter: 2 },
+  },
+
+  // ここから追記分。既存10エントリは並び・内容とも変えていない。
+
+  forestWolfAttack: {
+    id: 'forestWolfAttack', name: '森の狼に襲われる', kind: 'battle',
+    enemyId: 'forestWolf',
+    condition: {},
+  },
+  goblinCampRaid: {
+    id: 'goblinCampRaid', name: 'ゴブリンの襲撃', kind: 'battle',
+    enemyId: 'goblinRaider',
+    condition: {},
+  },
+  ogreEncounter: {
+    id: 'ogreEncounter', name: '人喰い鬼との遭遇', kind: 'battle',
+    enemyId: 'ogreBrute',
+    condition: {},
+  },
+  dragonlingClash: {
+    id: 'dragonlingClash', name: '悪竜の眷属との激突', kind: 'battle',
+    enemyId: 'direWyvern',
+    condition: { minChapter: 2 },
+  },
+  stoneGolemBlockade: {
+    id: 'stoneGolemBlockade', name: '石の巨人が道を塞ぐ', kind: 'battle',
+    enemyId: 'stoneGolem',
+    condition: { minChapter: 2 },
+  },
+  voidWraithAmbush: {
+    id: 'voidWraithAmbush', name: '影の亡霊に囚われる', kind: 'battle',
+    enemyId: 'voidWraith',
     condition: { minChapter: 2 },
   },
 } as const satisfies Record<string, DailyEvent>;

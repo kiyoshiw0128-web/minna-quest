@@ -2,6 +2,7 @@ import { describe, it, expect } from 'vitest';
 import { EVENTS } from '../../src/data/events.js';
 import { NAMES } from '../../src/data/names.js';
 import { ENEMIES } from '../../src/data/enemies.js';
+import { BATTLE_REWARDS } from '../../src/data/battleRewards.js';
 import { eligibleEvents, OPTIONS_PER_DAY } from '../../src/daily/event.js';
 import { RECRUITS_PER_DAY } from '../../src/daily/recruit.js';
 import type { DailyEvent } from '../../src/daily/event.js';
@@ -60,6 +61,12 @@ describe('イベントマスタの健全性', () => {
     for (const chapter of [1, 2]) {
       const count = eligibleEvents(events, { chapter, tags: [] }).length;
       expect(count).toBeGreaterThanOrEqual(OPTIONS_PER_DAY);
+    }
+  });
+
+  it('すべての敵に戦闘報酬が定義されている（漏れるとサーバが例外を投げる）', () => {
+    for (const enemyId of Object.keys(ENEMIES)) {
+      expect(BATTLE_REWARDS[enemyId]).toBeDefined();
     }
   });
 
