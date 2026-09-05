@@ -9,7 +9,7 @@ const HERO = 'hero1';
 
 async function setup(gold: number): Promise<void> {
   await applyD1Migrations(env.DB, env.TEST_MIGRATIONS);
-  for (const table of ['party', 'learned', 'job_levels', 'characters', 'votes', 'world_days', 'players', 'invites', 'worlds']) {
+  for (const table of ['party', 'learned', 'job_levels', 'characters', 'votes', 'world_days', 'player_pets', 'players', 'invites', 'worlds']) {
     await env.DB.prepare(`DELETE FROM ${table}`).run();
   }
   await env.DB.prepare(
@@ -88,5 +88,25 @@ describe('GET /api/me（設計書 §2）', () => {
     expect(response.status).toBe(200);
     const payload = await response.json<{ data: { party: unknown[] } }>();
     expect(payload.data.party).toEqual([]);
+  });
+
+  // 段階6・設計書 §7。「仲間」画面がペット欄を出すために足したもの。
+  it('ペットを持っていなければ空配列、連れているペットも null', async () => {
+    const response = await me(TOKEN);
+    const payload = await response.json<{ data: { pets: string[]; activePetId: string | null } }>();
+    expect(payload.data.pets).toEqual([]);
+    expect(payload.data.activePetId).toBeNull();
+  });
+
+  it('持っているペットのIDと、いま連れているペットが返る', async () => {
+    await env.DB.prepare(
+      `INSERT INTO player_pets (player_id, pet_id, obtained_at) VALUES (?, 'puppy', ?)`,
+    ).bind(PLAYER, '2026-09-04T00:00:00.000Z').run();
+    await env.DB.prepare('UPDATE players SET active_pet_id = ? WHERE id = ?').bind('puppy', PLAYER).run();
+
+    const response = await me(TOKEN);
+    const payload = await response.json<{ data: { pets: string[]; activePetId: string | null } }>();
+    expect(payload.data.pets).toEqual(['puppy']);
+    expect(payload.data.activePetId).toBe('puppy');
   });
 });

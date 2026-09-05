@@ -4,9 +4,10 @@ import {
 import type { BattlePlan, Character, Job } from '@mq/core';
 import { requirePlayer } from '../auth.js';
 import {
-  getArenaClearedAt, getArenaFirstClears, getArenaRanking, getArenaReachedFloor, getPartyCharacters,
-  getWorld, recordArenaWin,
+  getActivePetId, getArenaClearedAt, getArenaFirstClears, getArenaRanking, getArenaReachedFloor,
+  getPartyCharacters, getWorld, recordArenaWin,
 } from '../store.js';
+import { activePetEffects } from '../petEffects.js';
 import { fail, ok } from '../respond.js';
 import type { Env } from '../env.js';
 
@@ -164,7 +165,10 @@ export async function handlePostArena(request: Request, env: Env): Promise<Respo
   const characters = await getPartyCharacters(env.DB, player.id);
   const partyMembers = characters.map((character) => toPartyMember(character, jobOf(character), SKILLS, PASSIVES));
 
-  const log = simulate(partyMembers, floorDef.enemy, plan);
+  // 本編の戦闘（battle.ts）と同じく、連れているペットの効果をパーティ全員に
+  // かける（段階6・設計書 §6「本編の戦闘と闘技場の両方に同じように効かせる」）。
+  const activePetId = await getActivePetId(env.DB, player.id);
+  const log = simulate(partyMembers, floorDef.enemy, plan, { initialEffects: activePetEffects(activePetId) });
 
   if (log.result !== 'win') {
     return ok({ log, rewarded: false, firstClear: false });

@@ -47,6 +47,9 @@ export async function catchUp(db: D1Database, worldId: string, now: Date): Promi
     // 得られるものも共有でよく、誰が投票したかで差をつけない。締めと同じバッチに
     // 入れることで、締めの冪等性がそのままこの配布の冪等性になる。
     const goldAward = chosen?.outcome?.gold ?? 0;
+    // ペットも金貨と同じ扱い（段階6・設計書 §4・§5）。同じバッチに入れないと
+    // 「金貨だけ入ってペットが入らない日」が起こりうる。
+    const petAward = chosen?.outcome?.petId ?? null;
 
     const didAdvance = await advanceDay(
       db,
@@ -56,6 +59,7 @@ export async function catchUp(db: D1Database, worldId: string, now: Date): Promi
       { dayNo: nextDayNo, optionIds: options.map((event) => event.id), chosenId: null, counts: null, tiebroken: null },
       { fromDay: day.dayNo, currentDay: nextDayNo, chapter: advancedFlags.chapter, tags: advancedFlags.tags },
       goldAward,
+      petAward,
     );
     // すでに他が締めていた。正常な結果。ローカルの flags はもう古いので、
     // ここで止めて次回の起動に読み直しから任せる。

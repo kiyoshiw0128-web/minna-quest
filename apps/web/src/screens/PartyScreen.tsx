@@ -1,9 +1,9 @@
 import { useCallback, useEffect, useState } from 'react';
-import { JOBS, PASSIVES, SKILLS } from '@mq/core';
-import type { DamageSpec, Element, Job, LearnEntry, Passive, Recruit, Skill } from '@mq/core';
+import { JOBS, PASSIVES, PETS, SKILLS } from '@mq/core';
+import type { DamageSpec, Effect, Element, Job, LearnEntry, Passive, Pet, Recruit, Skill } from '@mq/core';
 import {
   ApiError, UnauthorizedError, changeCharacterJob, dismissCharacter, fetchMe, fetchTavern, hireRecruit,
-  reorderParty, updateEquipment,
+  reorderParty, setActivePet, updateEquipment,
 } from '../api.js';
 import type { MeResult, MePartyMember, TavernResult } from '../api.js';
 
@@ -65,12 +65,25 @@ function damageLabel(damage: DamageSpec | undefined): string {
 
 const STAT_LABEL: Record<string, string> = { atk: 'ATK', def: 'DEF', mat: 'MAT', mdf: 'MDF', spd: 'SPD' };
 
-/** パッシブは常時効果なので、MP・クールダウンの代わりに効果そのものを短く出す。 */
-function passiveEffectLabel(passive: Passive): string {
-  const effect = passive.effect;
+/**
+ * 効果を数字で出す（設計書 §7「効果を数字で出す。曖昧にしない」）。
+ * パッシブとペットは同じ Effect 型で表されている（設計書 §2）ので、
+ * ラベル化のロジックも1つで足りる。
+ */
+function effectLabel(effect: Effect): string {
   if (effect.kind === 'statMod') return `${STAT_LABEL[effect.stat] ?? effect.stat} +${Math.round(effect.rate * 100)}%`;
   if (effect.kind === 'damageTaken') return `被ダメージ ${Math.round(effect.rate * 100)}%`;
   return `${effect.turns}ターン行動不能`;
+}
+
+/** パッシブは常時効果なので、MP・クールダウンの代わりに効果そのものを短く出す。 */
+function passiveEffectLabel(passive: Passive): string {
+  return effectLabel(passive.effect);
+}
+
+/** ペットの効果欄。パッシブと同じ書式にする（設計書 §7）。 */
+function petEffectLabel(pet: Pet): string {
+  return effectLabel(pet.effect);
 }
 
 /** 覚える対象の名前。kind によって技マスタとパッシブマスタのどちらを引くか変わる。 */
@@ -221,6 +234,14 @@ export function PartyScreen({ token, onUnauthorized }: Props) {
           />
         ))}
       </section>
+
+      <PetSection
+        pets={me.pets ?? []}
+        activePetId={me.activePetId ?? null}
+        busy={busy}
+        error={errorFor('pet')}
+        onSelect={(petId) => void runAction('pet', () => setActivePet(token, petId))}
+      />
 
       <section>
         <h2>今日の酒場</h2>
@@ -487,6 +508,53 @@ function EquipPanel({
         装備を更新する
       </button>
       {error !== null && <p role="alert">{error}</p>}
+    </section>
+  );
+}
+
+/**
+ * ペット欄（段階6・設計書 §7）。持っているペットの一覧と、いま連れている1匹を選ぶ。
+ * 効果は @mq/core の PETS から解決する（学習済みパッシブと同じやり方。
+ * サーバの /api/me はIDだけ返す）。
+ */
+function PetSection({
+  pets,
+  activePetId,
+  busy,
+  error,
+  onSelect,
+}: {
+  pets: string[];
+  activePetId: string | null;
+  busy: boolean;
+  error: string | null;
+  onSelect: (petId: string) => void;
+}) {
+  return (
+    <section>
+      <h2>ペット</h2>
+      {pets.length === 0 && <p>まだペットに出会っていません。</p>}
+      {error !== null && <p role="alert">{error}</p>}
+      <ul>
+        {pets.map((petId) => {
+          const pet = PETS[petId as keyof typeof PETS] as Pet | undefined;
+          if (pet === undefined) return null;
+          const isActive = activePetId === petId;
+          return (
+            <li key={petId}>
+              <strong>{pet.name}</strong>
+              {isActive && '　← 連れている'}
+              <p>{pet.description}</p>
+              <p>効果: {petEffectLabel(pet)}</p>
+              {!isActive && (
+                <button type="button" disabled={busy} onClick={() => onSelect(petId)}>
+                  連れる
+                </button>
+              )}
+            </li>
+          );
+        })}
+      </ul>
     </section>
   );
 }

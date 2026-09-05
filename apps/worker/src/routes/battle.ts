@@ -5,8 +5,9 @@ import {
 import type { BattlePlan, Character, DailyEvent, Enemy, Job } from '@mq/core';
 import { requirePlayer } from '../auth.js';
 import {
-  getBattleResult, getDefeatedBy, getDay, getPartyCharacters, getWorld, recordBattleWin,
+  getActivePetId, getBattleResult, getDefeatedBy, getDay, getPartyCharacters, getWorld, recordBattleWin,
 } from '../store.js';
+import { activePetEffects } from '../petEffects.js';
 import { fail, ok } from '../respond.js';
 import type { Env } from '../env.js';
 
@@ -179,9 +180,15 @@ export async function handlePostBattle(request: Request, env: Env): Promise<Resp
   const characters = await getPartyCharacters(env.DB, player.id);
   const partyMembers = characters.map((character) => toPartyMember(character, jobOf(character), SKILLS, PASSIVES));
 
+  // 連れているペットの効果はパーティ全員にかかる（段階6・設計書 §6）。
+  // toPartyMember はキャラ1人ぶんの組み立てなのでペットのことを知らず、
+  // ここで simulate に別枠として渡す。連れていなければ空配列で、
+  // 挙動は今までと完全に同じ（後方互換）。
+  const activePetId = await getActivePetId(env.DB, player.id);
+
   // クライアントは計算しない。core は決定論なので、同じプランからは
   // 必ず同じログが出る（設計書 §6.2）。
-  const log = simulate(partyMembers, enemy, plan);
+  const log = simulate(partyMembers, enemy, plan, { initialEffects: activePetEffects(activePetId) });
 
   if (log.result !== 'win') {
     // 負けても罰は無く、挑戦の回数も記録しない（何度でも挑み直せる）。DBには何も残さない。

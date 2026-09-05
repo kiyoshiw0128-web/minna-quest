@@ -33,7 +33,7 @@ const NO_ACTION_PLAN = [null, null, null, null, null, null, null, null];
  */
 async function seedWorld(dayNo: number, chosenId: string | null): Promise<void> {
   await applyD1Migrations(env.DB, env.TEST_MIGRATIONS);
-  for (const table of ['battle_results', 'party', 'learned', 'job_levels', 'characters', 'votes', 'world_days', 'players', 'invites', 'worlds']) {
+  for (const table of ['battle_results', 'party', 'learned', 'job_levels', 'characters', 'votes', 'world_days', 'player_pets', 'players', 'invites', 'worlds']) {
     await env.DB.prepare(`DELETE FROM ${table}`).run();
   }
   await env.DB.prepare(
@@ -317,6 +317,60 @@ describe('POST /api/battle（設計書 §6.2〜§6.4）', () => {
 
     const response = await battleRequest(TOKEN_A, 'POST', undefined);
     expect(response.status).toBe(400);
+  });
+});
+
+/**
+ * 段階6・設計書 §6・§8 テスト5〜6。連れているペットの効果が戦闘に効くこと、
+ * および連れていなければ従来と結果が変わらないこと（後方互換）を見る。
+ * WINNING_PLAN のような複数ターンの勝敗ではなく、1発だけの単純なダメージ量で
+ * 比較する。バランス値（勝てる/勝てない）に依存させず、「効果がかかったこと
+ * それ自体」だけを見るため。
+ */
+describe('ペットの効果が戦闘にかかる（設計書 §6・§8 テスト5・6）', () => {
+  async function firstDamageToEnemyAmount(token: string): Promise<number> {
+    const data = await readOk<{ log: BattleLog }>(
+      await battleRequest(token, 'POST', { [HERO_A]: ['slash', null, null, null, null, null, null, null] }),
+    );
+    const damage = data.log.events.find((event) => event.t === 'damage' && event.targetId !== HERO_A);
+    if (damage === undefined || damage.t !== 'damage') throw new Error('攻撃のダメージイベントが無い');
+    return damage.amount;
+  }
+
+  it('ペットを連れていなければ、今まで通りのダメージになる（後方互換。テスト6）', async () => {
+    await seedWorld(1, 'banditAmbush');
+    await addPlayer(PLAYER_A, TOKEN_A);
+    await seedWinningHero(PLAYER_A, HERO_A);
+
+    const first = await firstDamageToEnemyAmount(TOKEN_A);
+    const second = await firstDamageToEnemyAmount(TOKEN_A);
+    // 同じプランなら何度呼んでも同じ（決定論）。
+    expect(first).toBe(second);
+    // ペットを実装する前と同じ実際の数値（段階6を入れる前に計測した固定値）。
+    // activePetEffects が「連れていなくても何か返す」ように壊れると、
+    // このダメージが変わってここで検出できる（自己比較の first===second だけでは
+    // 「常に同じ何か」を返す壊れ方を捕まえられない）。
+    expect(first).toBe(345);
+  });
+
+  it('連れているペットの効果がパーティにかかり、ダメージが変わる（テスト5）', async () => {
+    await seedWorld(1, 'banditAmbush');
+    await addPlayer(PLAYER_A, TOKEN_A);
+    await seedWinningHero(PLAYER_A, HERO_A);
+
+    const withoutPet = await firstDamageToEnemyAmount(TOKEN_A);
+
+    await env.DB.prepare(
+      `INSERT INTO player_pets (player_id, pet_id, obtained_at) VALUES (?, 'puppy', ?)`,
+    ).bind(PLAYER_A, '2026-09-04T00:00:00.000Z').run();
+    await env.DB.prepare('UPDATE players SET active_pet_id = ? WHERE id = ?').bind('puppy', PLAYER_A).run();
+
+    const withPet = await firstDamageToEnemyAmount(TOKEN_A);
+
+    // puppy は atk +15%（packages/core/src/data/pets.ts）。連れているだけで
+    // パーティ（=このパーティ唯一のメンバーである主人公）の攻撃力が上がり、
+    // 同じプランでも与えるダメージが増える。
+    expect(withPet).toBeGreaterThan(withoutPet);
   });
 });
 

@@ -4,6 +4,7 @@ import { createCharacter, JOBS } from '@mq/core';
 import {
   getWorld, getDay, listOpenDaysBefore, listClosedDays, listVotes,
   upsertVote, findPlayerByTokenHash, insertPlayer, advanceDay, hireRecruit,
+  getPlayerPetIds, getActivePetId, setActivePet,
 } from '../src/store.js';
 
 const WORLD = 'w1';
@@ -32,7 +33,7 @@ async function closeDayRaw(
 
 beforeEach(async () => {
   await applyD1Migrations(env.DB, env.TEST_MIGRATIONS);
-  for (const table of ['party', 'learned', 'job_levels', 'characters', 'votes', 'world_days', 'players', 'invites', 'worlds']) {
+  for (const table of ['party', 'learned', 'job_levels', 'characters', 'votes', 'world_days', 'player_pets', 'players', 'invites', 'worlds']) {
     await env.DB.prepare(`DELETE FROM ${table}`).run();
   }
   await seedWorld();
@@ -165,6 +166,152 @@ describe('プレイヤー', () => {
 
   it('知らないハッシュは null', async () => {
     expect(await findPlayerByTokenHash(env.DB, 'nope')).toBeNull();
+  });
+});
+
+describe('ペット（段階6・設計書 §5）', () => {
+  beforeEach(async () => {
+    await insertPlayer(env.DB, {
+      id: 'p1', worldId: WORLD, name: 'テスト', tokenHash: 'h-pet', joinedAt: '2026-09-04T00:00:00.000Z',
+    });
+  });
+
+  it('何も持っていなければ空・連れているペットも null', async () => {
+    expect(await getPlayerPetIds(env.DB, 'p1')).toEqual([]);
+    expect(await getActivePetId(env.DB, 'p1')).toBeNull();
+  });
+
+  it('setActivePet は持っているペットになら替えられる', async () => {
+    await env.DB.prepare(
+      `INSERT INTO player_pets (player_id, pet_id, obtained_at) VALUES (?, ?, ?)`,
+    ).bind('p1', 'puppy', '2026-09-04T00:00:00.000Z').run();
+
+    const applied = await setActivePet(env.DB, 'p1', 'puppy');
+    expect(applied).toBe(true);
+    expect(await getActivePetId(env.DB, 'p1')).toBe('puppy');
+  });
+
+  it('持っていないペットには替えられない（設計書 §8 テスト4）', async () => {
+    const applied = await setActivePet(env.DB, 'p1', 'kitten');
+    expect(applied).toBe(false);
+    expect(await getActivePetId(env.DB, 'p1')).toBeNull();
+  });
+
+  it('他人のペットには替えられない（自分の player_id の行しか見ない）', async () => {
+    await insertPlayer(env.DB, {
+      id: 'p2', worldId: WORLD, name: 'べつじん', tokenHash: 'h-pet-2', joinedAt: '2026-09-04T00:00:00.000Z',
+    });
+    await env.DB.prepare(
+      `INSERT INTO player_pets (player_id, pet_id, obtained_at) VALUES (?, ?, ?)`,
+    ).bind('p2', 'puppy', '2026-09-04T00:00:00.000Z').run();
+
+    const applied = await setActivePet(env.DB, 'p1', 'puppy');
+    expect(applied).toBe(false);
+    expect(await getActivePetId(env.DB, 'p1')).toBeNull();
+  });
+});
+
+describe('advanceDay とペットの配布（段階6・設計書 §4・§5）', () => {
+  async function seedPlayer(id: string): Promise<void> {
+    await insertPlayer(env.DB, {
+      id, worldId: WORLD, name: id, tokenHash: `h-${id}`, joinedAt: '2026-09-04T00:00:00.000Z',
+    });
+  }
+
+  it('締めるとペットが世界の全員に配られ、最初の1匹は自動で連れている状態になる', async () => {
+    await insertOpenDay(1, ['a']);
+    await seedPlayer('p1');
+    await seedPlayer('p2');
+
+    const advanced = await advanceDay(
+      env.DB, WORLD,
+      { dayNo: 1, optionIds: ['a'], chosenId: 'a', counts: { a: 2 }, tiebroken: false },
+      '2026-09-04T20:00:00.000Z',
+      { dayNo: 2, optionIds: ['x'], chosenId: null, counts: null, tiebroken: null },
+      { fromDay: 1, currentDay: 2, chapter: 1, tags: [] },
+      0,
+      'puppy',
+    );
+    expect(advanced).toBe(true);
+
+    expect(await getPlayerPetIds(env.DB, 'p1')).toEqual(['puppy']);
+    expect(await getPlayerPetIds(env.DB, 'p2')).toEqual(['puppy']);
+    expect(await getActivePetId(env.DB, 'p1')).toBe('puppy');
+    expect(await getActivePetId(env.DB, 'p2')).toBe('puppy');
+  });
+
+  it('すでに持っているペットは重ねて配られず、連れている先も上書きされない（設計書 §8 テスト2）', async () => {
+    await insertOpenDay(1, ['a']);
+    await seedPlayer('p1');
+    // 別の日にすでに puppy を持ち、fox を連れている状態を用意する。
+    await env.DB.prepare(
+      `INSERT INTO player_pets (player_id, pet_id, obtained_at) VALUES (?, 'puppy', ?)`,
+    ).bind('p1', '2026-09-03T00:00:00.000Z').run();
+    await env.DB.prepare('UPDATE players SET active_pet_id = ? WHERE id = ?').bind('foxKit', 'p1').run();
+
+    await advanceDay(
+      env.DB, WORLD,
+      { dayNo: 1, optionIds: ['a'], chosenId: 'a', counts: { a: 1 }, tiebroken: false },
+      '2026-09-04T20:00:00.000Z',
+      { dayNo: 2, optionIds: ['x'], chosenId: null, counts: null, tiebroken: null },
+      { fromDay: 1, currentDay: 2, chapter: 1, tags: [] },
+      0,
+      'puppy',
+    );
+
+    expect(await getPlayerPetIds(env.DB, 'p1')).toEqual(['puppy']);
+    // すでに連れていた fox のままで、puppy に上書きされない
+    // （active_pet_id IS NULL をガードにしているため）。
+    expect(await getActivePetId(env.DB, 'p1')).toBe('foxKit');
+  });
+
+  it('締める前の状態を条件にするので、締めのガードが競合すれば配布もされない（設計書 §8 テスト1）', async () => {
+    await insertOpenDay(1, ['a']);
+    await seedPlayer('p1');
+
+    // 1回目が締めて配布する。
+    const first = await advanceDay(
+      env.DB, WORLD,
+      { dayNo: 1, optionIds: ['a'], chosenId: 'a', counts: { a: 1 }, tiebroken: false },
+      '2026-09-04T20:00:00.000Z',
+      { dayNo: 2, optionIds: ['x'], chosenId: null, counts: null, tiebroken: null },
+      { fromDay: 1, currentDay: 2, chapter: 1, tags: [] },
+      0,
+      'puppy',
+    );
+    expect(first).toBe(true);
+
+    // 2回目（負けたランナー相当）は同じ日をもう一度締めようとする。
+    // ガードを外すと puppy がもう1行増えてしまう（PRIMARY KEY 違反で
+    // バッチごと失敗するか、外し方次第では二重付与になる）。
+    const second = await advanceDay(
+      env.DB, WORLD,
+      { dayNo: 1, optionIds: ['a'], chosenId: 'a', counts: { a: 1 }, tiebroken: false },
+      '2026-09-04T20:00:01.000Z',
+      { dayNo: 2, optionIds: ['y'], chosenId: null, counts: null, tiebroken: null },
+      { fromDay: 1, currentDay: 2, chapter: 1, tags: [] },
+      0,
+      'puppy',
+    );
+    expect(second).toBe(false);
+
+    expect(await getPlayerPetIds(env.DB, 'p1')).toEqual(['puppy']);
+  });
+
+  it('petAward が null なら何も配らない（戦闘イベントの日など）', async () => {
+    await insertOpenDay(1, ['a']);
+    await seedPlayer('p1');
+
+    await advanceDay(
+      env.DB, WORLD,
+      { dayNo: 1, optionIds: ['a'], chosenId: 'a', counts: { a: 1 }, tiebroken: false },
+      '2026-09-04T20:00:00.000Z',
+      { dayNo: 2, optionIds: ['x'], chosenId: null, counts: null, tiebroken: null },
+      { fromDay: 1, currentDay: 2, chapter: 1, tags: [] },
+    );
+
+    expect(await getPlayerPetIds(env.DB, 'p1')).toEqual([]);
+    expect(await getActivePetId(env.DB, 'p1')).toBeNull();
   });
 });
 

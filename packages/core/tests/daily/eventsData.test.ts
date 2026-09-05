@@ -2,6 +2,7 @@ import { describe, it, expect } from 'vitest';
 import { EVENTS } from '../../src/data/events.js';
 import { NAMES } from '../../src/data/names.js';
 import { ENEMIES } from '../../src/data/enemies.js';
+import { PETS } from '../../src/data/pets.js';
 import { BATTLE_REWARDS } from '../../src/data/battleRewards.js';
 import { eligibleEvents, applyOutcome, OPTIONS_PER_DAY } from '../../src/daily/event.js';
 import { RECRUITS_PER_DAY } from '../../src/daily/recruit.js';
@@ -80,6 +81,22 @@ describe('イベントマスタの健全性', () => {
   it('すべての敵に戦闘報酬が定義されている（漏れるとサーバが例外を投げる）', () => {
     for (const enemyId of Object.keys(ENEMIES)) {
       expect(BATTLE_REWARDS[enemyId]).toBeDefined();
+    }
+  });
+
+  // 段階6・設計書 §4：「他のイベントにも petId を足す。8匹ぶんの入手経路を用意する」。
+  it('petId を持つ選択肢はすべて実在するペットを指す', () => {
+    for (const event of events) {
+      const petId = event.outcome?.petId;
+      if (petId === undefined) continue;
+      expect(Object.keys(PETS)).toContain(petId);
+    }
+  });
+
+  it('8匹すべてに、少なくとも1つの入手経路がある', () => {
+    const grantedPetIds = new Set(events.flatMap((event) => (event.outcome?.petId !== undefined ? [event.outcome.petId] : [])));
+    for (const petId of Object.keys(PETS)) {
+      expect(grantedPetIds).toContain(petId);
     }
   });
 

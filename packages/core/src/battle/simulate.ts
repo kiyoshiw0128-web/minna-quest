@@ -4,6 +4,7 @@ import { checkEnrage, nextEnemyAction } from './enemyTurn.js';
 import { isAlive, turnOrder } from './order.js';
 import { createBattleState, findCombatant, updateCombatant } from './state.js';
 import type { BattleState, Combatant, PartyMember } from './state.js';
+import type { Effect } from './effects.js';
 import type { Enemy } from './enemy.js';
 import type { Skill } from './skill.js';
 import type { BattleEvent, BattleLog, BattleResult } from './log.js';
@@ -13,7 +14,11 @@ export const DEFAULT_MAX_TURNS = 8;
 /** キャラID -> ターンごとの技ID。null は「何もしない」。 */
 export type BattlePlan = Record<string, (string | null)[]>;
 
-export type SimulateOptions = { maxTurns?: number };
+/**
+ * initialEffects はパーティ全員にかかる初期効果（ペットの効果。設計書 §6）。
+ * 省略すれば今までと同じ（空）で、既存の戦闘結果には影響しない。
+ */
+export type SimulateOptions = { maxTurns?: number; initialEffects?: readonly Effect[] };
 
 /**
  * 戦闘をまるごと解決する。乱数を使わないので、同じ入力からは必ず同じログが出る。
@@ -26,7 +31,7 @@ export function simulate(
   options: SimulateOptions = {},
 ): BattleLog {
   const maxTurns = options.maxTurns ?? DEFAULT_MAX_TURNS;
-  let state = createBattleState(party, enemy);
+  let state = createBattleState(party, enemy, options.initialEffects ?? []);
   const events: BattleEvent[] = [];
 
   for (let turn = 1; turn <= maxTurns; turn++) {

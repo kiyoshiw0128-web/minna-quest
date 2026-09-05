@@ -1,7 +1,9 @@
 import { computeStats, JOBS, unlockedJobs } from '@mq/core';
 import type { Character, Job } from '@mq/core';
 import { requirePlayer } from '../auth.js';
-import { getOwnedCharacterFlags, getPartyCharacters, getPlayerGold } from '../store.js';
+import {
+  getActivePetId, getOwnedCharacterFlags, getPartyCharacters, getPlayerGold, getPlayerPetIds,
+} from '../store.js';
 import { fail, ok } from '../respond.js';
 import type { Env } from '../env.js';
 
@@ -30,10 +32,12 @@ export async function handleMe(request: Request, env: Env): Promise<Response> {
   const player = await requirePlayer(env.DB, request);
   if (player === null) return fail('unauthorized', 401);
 
-  const [gold, characters, heroFlags] = await Promise.all([
+  const [gold, characters, heroFlags, pets, activePetId] = await Promise.all([
     getPlayerGold(env.DB, player.id),
     getPartyCharacters(env.DB, player.id),
     getOwnedCharacterFlags(env.DB, player.id),
+    getPlayerPetIds(env.DB, player.id),
+    getActivePetId(env.DB, player.id),
   ]);
   if (gold === null) return fail('player not found', 404);
 
@@ -66,5 +70,14 @@ export async function handleMe(request: Request, env: Env): Promise<Response> {
     };
   });
 
-  return ok({ name: player.name, gold, party });
+  return ok({
+    name: player.name,
+    gold,
+    party,
+    // 「仲間」画面のペット欄用（段階6・設計書 §7）。名前・説明・効果の実体は
+    // @mq/core の PETS がフロントにバンドルされているので、IDだけ返す
+    // （learnedPassiveIds と同じ考え方）。
+    pets,
+    activePetId,
+  });
 }

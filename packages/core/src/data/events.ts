@@ -280,4 +280,44 @@ export const EVENTS = {
     outcome: { gold: 55 },
     condition: { minChapter: 3 },
   },
+
+  // --- ペットの入手経路（段階6）。既存エントリの内容には一切触れず、
+  // 末尾に追記のみで足す（ファイル冒頭の「追記のみ」の約束を守る）。
+  // strayPuppy を含めて8匹ぶん。タグなしの第1章汎用に合わせ、どれも
+  // condition: {} で早期から出会える（設計書 §4「他のイベントにも petId を足す」）。
+  wanderingKitten: {
+    id: 'wanderingKitten', name: '迷い猫', kind: 'story',
+    outcome: { petId: 'kitten', gold: 10 },
+    condition: {},
+  },
+  foxKitInTheBushes: {
+    id: 'foxKitInTheBushes', name: '茂みの子狐', kind: 'story',
+    outcome: { petId: 'foxKit', gold: 10 },
+    condition: {},
+  },
+  injuredOwlChick: {
+    id: 'injuredOwlChick', name: '傷ついた雛ふくろう', kind: 'story',
+    outcome: { petId: 'owlChick', gold: 10 },
+    condition: {},
+  },
+  slimeFollowsHome: {
+    id: 'slimeFollowsHome', name: 'ついてきたスライム', kind: 'story',
+    outcome: { petId: 'travelSlime', gold: 10 },
+    condition: {},
+  },
+  ferretInTheLuggage: {
+    id: 'ferretInTheLuggage', name: '荷物に潜むフェレット', kind: 'story',
+    outcome: { petId: 'ferret', gold: 10 },
+    condition: {},
+  },
+  fallenFalconChick: {
+    id: 'fallenFalconChick', name: '落ちてきた鷹の子', kind: 'story',
+    outcome: { petId: 'messengerFalcon', gold: 10 },
+    condition: {},
+  },
+  tortoiseCrossingTheRoad: {
+    id: 'tortoiseCrossingTheRoad', name: '道を渡るリクガメ', kind: 'story',
+    outcome: { petId: 'sturdyTortoise', gold: 10 },
+    condition: {},
+  },
 } as const satisfies Record<string, DailyEvent>;

@@ -13,7 +13,7 @@ function atDay(dayNo: number): Date {
 
 async function seed(currentDay: number, openDays: number[]): Promise<void> {
   await applyD1Migrations(env.DB, env.TEST_MIGRATIONS);
-  for (const table of ['votes', 'world_days', 'players', 'invites', 'worlds']) {
+  for (const table of ['votes', 'world_days', 'player_pets', 'players', 'invites', 'worlds']) {
     await env.DB.prepare(`DELETE FROM ${table}`).run();
   }
   await env.DB.prepare(
@@ -185,4 +185,81 @@ describe('金貨の配布（設計書 §4）', () => {
       expect(await goldOf('p1')).toBe(10);
     },
   );
+});
+
+async function petsOf(id: string): Promise<{ pets: string[]; activePetId: string | null }> {
+  const petRows = await env.DB.prepare('SELECT pet_id FROM player_pets WHERE player_id = ? ORDER BY obtained_at ASC')
+    .bind(id).all<{ pet_id: string }>();
+  const player = await env.DB.prepare('SELECT active_pet_id FROM players WHERE id = ?')
+    .bind(id).first<{ active_pet_id: string | null }>();
+  return { pets: petRows.results.map((row) => row.pet_id), activePetId: player?.active_pet_id ?? null };
+}
+
+/** 1日目の3択を差し替えて、petId を持つ選択肢だけを確定させる（gold のテストと同じ手法）。 */
+async function forceEventOnDay(dayNo: number, eventId: string): Promise<void> {
+  await env.DB.prepare('UPDATE world_days SET option_ids = ? WHERE world_id = ? AND day_no = ?')
+    .bind(JSON.stringify([eventId]), WORLD, dayNo).run();
+  await env.DB.prepare(
+    `INSERT INTO votes (world_id, day_no, player_id, option_id, voted_at) VALUES (?, ?, 'p1', ?, ?)`,
+  ).bind(WORLD, dayNo, eventId, '2026-09-04T00:00:00.000Z').run();
+}
+
+describe('ペットの配布（段階6・設計書 §5・§8 テスト1〜3）', () => {
+  it('確定した選択肢に petId があれば世界の全員に配られ、最初の1匹は自動で連れる', async () => {
+    await insertPlayer('p1');
+    await insertPlayer('p2');
+    await forceEventOnDay(1, 'wanderingKitten'); // outcome.petId は 'kitten'（packages/core/src/data/events.ts）
+
+    await catchUp(env.DB, WORLD, atDay(2));
+
+    expect(await petsOf('p1')).toEqual({ pets: ['kitten'], activePetId: 'kitten' });
+    expect(await petsOf('p2')).toEqual({ pets: ['kitten'], activePetId: 'kitten' });
+  });
+
+  it('petId を持たない選択肢（gold のみ）が確定した日は誰にも配られない', async () => {
+    await insertPlayer('p1');
+    // 既定の day1 は crossroads/restAtSpring/banditAmbush のみで、どれも petId を持たない。
+    await catchUp(env.DB, WORLD, atDay(2));
+
+    expect(await petsOf('p1')).toEqual({ pets: [], activePetId: null });
+  });
+
+  it('二重に締めてもペットは二重に配られない（並行実行でガードを競わせる。設計書 §8 テスト1）', async () => {
+    await insertPlayer('p1');
+    await forceEventOnDay(1, 'wanderingKitten');
+
+    const [first, second] = await Promise.all([
+      catchUp(env.DB, WORLD, atDay(2)),
+      catchUp(env.DB, WORLD, atDay(2)),
+    ]);
+    expect([first, second].sort((a, b) => b - a)).toEqual([1, 0]);
+
+    expect(await petsOf('p1')).toEqual({ pets: ['kitten'], activePetId: 'kitten' });
+  });
+
+  it('すでに持っているペットは、別の日に再び選ばれても重ねて配られない（設計書 §8 テスト2）', async () => {
+    await insertPlayer('p1');
+    await forceEventOnDay(1, 'wanderingKitten');
+    await catchUp(env.DB, WORLD, atDay(2));
+
+    // 2日目もまた同じ選択肢（kitten）を選ぶ。
+    await forceEventOnDay(2, 'wanderingKitten');
+    await catchUp(env.DB, WORLD, atDay(3));
+
+    expect(await petsOf('p1')).toEqual({ pets: ['kitten'], activePetId: 'kitten' });
+  });
+
+  it('2匹目を手に入れても、すでに連れているペットは変わらない（設計書 §8 テスト3の裏）', async () => {
+    await insertPlayer('p1');
+    await forceEventOnDay(1, 'wanderingKitten'); // 1匹目。自動で連れる。
+    await catchUp(env.DB, WORLD, atDay(2));
+
+    await forceEventOnDay(2, 'strayPuppy'); // 2匹目。
+    await catchUp(env.DB, WORLD, atDay(3));
+
+    const result = await petsOf('p1');
+    expect(result.pets.sort()).toEqual(['kitten', 'puppy']);
+    // 自動で連れるのは最初の1匹だけ（設計書 §5）。
+    expect(result.activePetId).toBe('kitten');
+  });
 });

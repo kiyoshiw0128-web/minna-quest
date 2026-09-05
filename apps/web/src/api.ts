@@ -122,10 +122,29 @@ export type MePartyMember = {
   unlockedJobIds: string[];
 };
 
-export type MeResult = { name: string; gold: number; party: MePartyMember[] };
+export type MeResult = {
+  name: string;
+  gold: number;
+  party: MePartyMember[];
+  // worker/src/routes/me.ts が段階6で足したもの（設計書 §7）。既存のテストの
+  // モック応答には無いことがあるため、画面側は undefined も想定して読む。
+  pets?: string[];
+  activePetId?: string | null;
+};
 
 export function fetchMe(token: string): Promise<MeResult> {
   return request('/api/me', withAuth(token));
+}
+
+export type SetActivePetResult = { activePetId: string };
+
+/** 連れるペットを替える。持っていないペットはサーバが断る（設計書 §5）。 */
+export function setActivePet(token: string, petId: string): Promise<SetActivePetResult> {
+  return request('/api/pet', {
+    method: 'POST',
+    body: JSON.stringify({ petId }),
+    ...withAuth(token),
+  });
 }
 
 export type ChangeJobResult = {

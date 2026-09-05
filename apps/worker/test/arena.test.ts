@@ -13,7 +13,7 @@ const HERO_B = 'heroB';
 
 const TABLES = [
   'arena_first', 'arena_progress', 'battle_results', 'party', 'learned',
-  'job_levels', 'characters', 'votes', 'world_days', 'players', 'invites', 'worlds',
+  'job_levels', 'characters', 'votes', 'world_days', 'player_pets', 'players', 'invites', 'worlds',
 ];
 
 /**
@@ -230,6 +230,40 @@ describe('POST /api/arena（設計書 §5・§8 テスト1・2）', () => {
       body: JSON.stringify({ floor: 1, plan: {} }),
     });
     expect(response.status).toBe(401);
+  });
+});
+
+/**
+ * 段階6・設計書 §6「本編の戦闘と闘技場の両方に同じように効かせる」の闘技場側
+ * （設計書 §8 テスト7）。battle.test.ts と同じ考え方で、勝敗ではなく
+ * 1発のダメージ量で「効果がかかったこと」だけを見る。
+ */
+describe('ペットの効果は闘技場にも同じようにかかる（設計書 §6・§8 テスト7）', () => {
+  async function firstDamageToEnemyAmount(token: string): Promise<number> {
+    const data = await readOk<{ log: BattleLog }>(
+      await arenaPost(token, 1, { [HERO_A]: ['slash', null, null, null, null, null, null, null] }),
+    );
+    const damage = data.log.events.find((event) => event.t === 'damage' && event.targetId !== HERO_A);
+    if (damage === undefined || damage.t !== 'damage') throw new Error('攻撃のダメージイベントが無い');
+    return damage.amount;
+  }
+
+  it('連れているペットの効果でダメージが変わる', async () => {
+    await seedWorld();
+    await addPlayer(PLAYER_A, TOKEN_A);
+    await seedWinningHero(PLAYER_A, HERO_A);
+
+    const withoutPet = await firstDamageToEnemyAmount(TOKEN_A);
+
+    await env.DB.prepare(
+      `INSERT INTO player_pets (player_id, pet_id, obtained_at) VALUES (?, 'puppy', ?)`,
+    ).bind(PLAYER_A, '2026-09-04T00:00:00.000Z').run();
+    await env.DB.prepare('UPDATE players SET active_pet_id = ? WHERE id = ?').bind('puppy', PLAYER_A).run();
+
+    const withPet = await firstDamageToEnemyAmount(TOKEN_A);
+
+    // puppy は atk +15%（packages/core/src/data/pets.ts）。
+    expect(withPet).toBeGreaterThan(withoutPet);
   });
 });
 

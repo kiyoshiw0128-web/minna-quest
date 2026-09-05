@@ -338,3 +338,86 @@ describe('装備の更新でパッシブが消えない', () => {
     expect(body.passiveIds).toEqual(['ironSkin']);
   });
 });
+
+/**
+ * ペット欄（段階6・設計書 §7）。既存の meResponse には pets/activePetId が
+ * 無いので、それが起きても画面が壊れない（空扱いで済む）ことも合わせて見る。
+ */
+function meResponseWithPets(activePetId: string | null) {
+  return jsonResponse(200, {
+    ok: true,
+    data: {
+      name: 'いちろう',
+      gold: 500,
+      party: [
+        {
+          id: 'hero1', name: 'ゆうしゃ', jobId: 'warrior', adventureLevel: 3, jobLevel: 3,
+          stats: { maxHp: 100, maxMp: 20, atk: 15, def: 10, mat: 10, mdf: 10, spd: 12 },
+          learnedSkillIds: ['slash'], equippedSkillIds: ['slash'],
+          learnedPassiveIds: [], equippedPassiveIds: [], isHero: false,
+          jobLevels: { warrior: 3 }, unlockedJobIds: ['warrior', 'monk', 'mage', 'priest', 'thief', 'ranger'],
+        },
+      ],
+      pets: ['puppy', 'kitten'],
+      activePetId,
+    },
+  });
+}
+
+describe('ペット欄（設計書 §7）', () => {
+  it('持っているペットの名前・説明・効果が出て、連れているペットが分かる', async () => {
+    installFetchMock({
+      'GET /api/me': meResponseWithPets('puppy'),
+      'GET /api/tavern': tavernResponse(),
+    });
+
+    render(<PartyScreen token="t" onUnauthorized={vi.fn()} />);
+
+    // 効果を数字で出す（設計書 §7「曖昧にしない」）。puppy は atk +15%。
+    expect(await screen.findByText('効果: ATK +15%')).toBeInTheDocument();
+    expect(await screen.findByText(/忠実に主人を守ろうとする/)).toBeInTheDocument();
+
+    const puppyRow = (await screen.findByText('迷子の子犬モモ')).closest('li');
+    if (puppyRow === null) throw new Error('puppy の行が見つからない');
+    expect(within(puppyRow).getByText(/連れている/)).toBeInTheDocument();
+    // 連れている本人には「連れる」ボタンを出さない。
+    expect(within(puppyRow).queryByRole('button', { name: '連れる' })).not.toBeInTheDocument();
+
+    const kittenRow = (await screen.findByText('路地裏の子猫ラン')).closest('li');
+    if (kittenRow === null) throw new Error('kitten の行が見つからない');
+    expect(within(kittenRow).getByRole('button', { name: '連れる' })).toBeInTheDocument();
+  });
+
+  it('別のペットの「連れる」を押すと POST /api/pet が呼ばれ、連れ替わる', async () => {
+    installFetchMock({
+      'GET /api/me': [meResponseWithPets('puppy'), meResponseWithPets('kitten')],
+      'GET /api/tavern': tavernResponse(),
+      'POST /api/pet': jsonResponse(200, { ok: true, data: { activePetId: 'kitten' } }),
+    });
+    const user = userEvent.setup();
+
+    render(<PartyScreen token="t" onUnauthorized={vi.fn()} />);
+    const kittenRow = (await screen.findByText('路地裏の子猫ラン')).closest('li');
+    if (kittenRow === null) throw new Error('kitten の行が見つからない');
+    await user.click(within(kittenRow).getByRole('button', { name: '連れる' }));
+
+    const call = vi.mocked(fetch).mock.calls.find(([, init]) => init?.method === 'POST'
+      && typeof init.body === 'string' && init.body.includes('petId'));
+    expect(call?.[1]?.body).toBe(JSON.stringify({ petId: 'kitten' }));
+
+    // 読み直し後、連れているのが kitten に変わる。
+    const updatedKittenRow = (await screen.findByText('路地裏の子猫ラン')).closest('li');
+    if (updatedKittenRow === null) throw new Error('kitten の行が見つからない');
+    expect(within(updatedKittenRow).getByText(/連れている/)).toBeInTheDocument();
+  });
+
+  it('ペットを一度も持っていなければ、その旨を出す', async () => {
+    installFetchMock({
+      'GET /api/me': meResponse(500),
+      'GET /api/tavern': tavernResponse(),
+    });
+
+    render(<PartyScreen token="t" onUnauthorized={vi.fn()} />);
+    expect(await screen.findByText('まだペットに出会っていません。')).toBeInTheDocument();
+  });
+});

@@ -52,6 +52,31 @@ describe('createBattleState', () => {
   it('激昂はまだ起きていない', () => {
     expect(createBattleState([hero], dummy).enraged).toBe(false);
   });
+
+  // ペットの効果（段階6・設計書 §6）。個々のキャラの passives とは別枠で、
+  // パーティ全員に一律で足し込まれる。
+  it('initialEffects はパーティ全員に、各自の passives とは別枠で足し込まれる', () => {
+    const withPassive: PartyMember = {
+      ...hero,
+      passives: [{ kind: 'statMod', stat: 'atk', rate: 0.2, turns: Infinity }],
+    };
+    const petEffect = { kind: 'statMod' as const, stat: 'spd' as const, rate: 0.1, turns: Infinity };
+    const state = createBattleState([withPassive], dummy, [petEffect]);
+    const effects = findCombatant(state, 'hero').effects;
+    expect(effects).toHaveLength(2);
+    expect(effects.map((active) => active.effect)).toEqual([
+      { kind: 'statMod', stat: 'atk', rate: 0.2, turns: Infinity },
+      petEffect,
+    ]);
+    expect(effects.every((active) => active.remaining === Infinity)).toBe(true);
+  });
+
+  it('initialEffects を渡さなければ今までと完全に同じ（既定は空・後方互換）', () => {
+    const withDefault = createBattleState([hero], dummy);
+    const withEmptyArray = createBattleState([hero], dummy, []);
+    expect(withDefault).toEqual(withEmptyArray);
+    expect(findCombatant(withDefault, 'hero').effects).toEqual([]);
+  });
 });
 
 describe('updateCombatant', () => {

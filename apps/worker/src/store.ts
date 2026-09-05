@@ -99,18 +99,26 @@ export async function listClosedDays(
 }
 
 /**
- * 1日分の締めと、それが生む4つの帰結（金貨の配布、翌日の行の追加、世界の進行度更新）を
- * 1トランザクションで行う。締めが実際に効いたかを返す。
+ * 1日分の締めと、それが生む帰結（金貨の配布、ペットの配布、翌日の行の追加、
+ * 世界の進行度更新）を1トランザクションで行う。締めが実際に効いたかを返す。
  *
  * `db.batch` はD1では単一トランザクションとして実行されるため、途中で
  * 落ちても「締めたのに翌日が無い」「翌日はあるのに進行度が古い」といった
  * 半端な状態は残らない。
  *
  * 各文はそれぞれ自分の力で競合に強い：
- * - 金貨の配布: `EXISTS (... WHERE ... AND chosen_id IS NULL)` を締めの文より前に置き、
- *   締める前の状態（未締め）を条件にする。締めの文が chosen_id を埋めた後では
- *   このEXISTSは常にfalseになるので、二重に締めても二重に配れない。
- *   締めが冪等ならこの配布も自動的に冪等になる、という設計をそのままSQLに落としている。
+ * - 金貨の配布・ペットの配布: どちらも `EXISTS (... WHERE ... AND chosen_id IS NULL)`
+ *   を締めの文より前に置き、締める前の状態（未締め）を条件にする。締めの文が
+ *   chosen_id を埋めた後ではこのEXISTSは常にfalseになるので、二重に締めても
+ *   二重に配れない。締めが冪等ならこの配布も自動的に冪等になる、という設計を
+ *   そのままSQLに落としている（設計書 §8 テスト1）。
+ *   別のバッチに分けないのは、金貨だけ入ってペットが入らない日が起こりうる
+ *   ため（設計書 §5「締めのバッチで配る。金貨の配布と同じ文の並びに入れる」）。
+ * - ペットの配布はさらに `NOT EXISTS (... player_pets ...)` を重ねて持つ。
+ *   すでに持っているペットは重ねて配らない（設計書 §8 テスト2）。
+ * - 「最初の1匹を自動で連れる」更新は `active_pet_id IS NULL` をガードにする。
+ *   同じバッチの直前でペットの配布文が実行済みなので、ここで見る
+ *   `player_pets` の存在チェックは配布後の状態を見る（設計書 §8 テスト3）。
  * - 締め: `WHERE ... AND chosen_id IS NULL` で二重締めを防ぐ。changes をそのまま返り値にする。
  * - 翌日の挿入: `ON CONFLICT (world_id, day_no) DO NOTHING` で、負けた側が
  *   勝者の挿入済み行にぶつかってバッチ全体を失敗させない。
@@ -126,18 +134,50 @@ export async function advanceDay(
   nextDay: WorldDay,
   progress: { fromDay: number; currentDay: number; chapter: number; tags: readonly string[] },
   goldAward = 0,
+  petAward: string | null = null,
 ): Promise<boolean> {
-  const [, closeResult] = await db.batch([
+  // 締める前の状態（未締め）を表す条件。gold・pet の配布文が締めの文より前に
+  // 読む前提を1箇所にまとめておく（bind の値を毎回並べ直すと個数を数え間違える）。
+  const NOT_CLOSED_YET =
+    'EXISTS (SELECT 1 FROM world_days WHERE world_id = ? AND day_no = ? AND chosen_id IS NULL)';
+  const notClosedBind = (): [string, number] => [worldId, closedDay.dayNo];
+
+  const statements: D1PreparedStatement[] = [
     db
-      .prepare(
-        `UPDATE players SET gold = gold + ?
-          WHERE world_id = ?
-            AND EXISTS (
-              SELECT 1 FROM world_days
-               WHERE world_id = ? AND day_no = ? AND chosen_id IS NULL
-            )`,
-      )
-      .bind(goldAward, worldId, worldId, closedDay.dayNo),
+      .prepare(`UPDATE players SET gold = gold + ? WHERE world_id = ? AND ${NOT_CLOSED_YET}`)
+      .bind(goldAward, worldId, ...notClosedBind()),
+  ];
+
+  if (petAward !== null) {
+    statements.push(
+      // まだそのペットを持っていない、この世界の全員に配る（金貨と同じ扱い。設計書 §4）。
+      db
+        .prepare(
+          `INSERT INTO player_pets (player_id, pet_id, obtained_at)
+           SELECT id, ?, ?
+             FROM players
+            WHERE world_id = ?
+              AND ${NOT_CLOSED_YET}
+              AND NOT EXISTS (SELECT 1 FROM player_pets pp WHERE pp.player_id = players.id AND pp.pet_id = ?)`,
+        )
+        .bind(petAward, closedAt, worldId, ...notClosedBind(), petAward),
+      // 一度もペットを連れていない人だけ、いま配ったペットを自動で連れさせる
+      // （設計書 §5「最初に手に入れた1匹は自動で連れている状態にする」）。
+      // 2匹目以降は active_pet_id が既に埋まっているので、この文は0行のまま素通りする。
+      db
+        .prepare(
+          `UPDATE players SET active_pet_id = ?
+            WHERE world_id = ?
+              AND active_pet_id IS NULL
+              AND ${NOT_CLOSED_YET}
+              AND EXISTS (SELECT 1 FROM player_pets WHERE player_id = players.id AND pet_id = ?)`,
+        )
+        .bind(petAward, worldId, ...notClosedBind(), petAward),
+    );
+  }
+
+  const closeIndex = statements.length;
+  statements.push(
     db
       .prepare(
         `UPDATE world_days
@@ -161,7 +201,10 @@ export async function advanceDay(
           WHERE id = ? AND current_day = ?`,
       )
       .bind(progress.currentDay, progress.chapter, JSON.stringify(progress.tags), worldId, progress.fromDay),
-  ]);
+  );
+
+  const results = await db.batch(statements);
+  const closeResult = results[closeIndex];
   return (closeResult.meta.changes ?? 0) === 1;
 }
 
@@ -759,6 +802,40 @@ export async function recordBattleWin(
 export async function getPlayerGold(db: D1Database, playerId: string): Promise<number | null> {
   const raw = await db.prepare('SELECT gold FROM players WHERE id = ?').bind(playerId).first<{ gold: number }>();
   return raw === null ? null : raw.gold;
+}
+
+/** 持っているペットのID一覧（設計書 §5 / §7）。名前・説明・効果は @mq/core の PETS が持つので、IDだけ返せば足りる。 */
+export async function getPlayerPetIds(db: D1Database, playerId: string): Promise<readonly string[]> {
+  const rows = await db
+    .prepare('SELECT pet_id FROM player_pets WHERE player_id = ? ORDER BY obtained_at ASC')
+    .bind(playerId)
+    .all<{ pet_id: string }>();
+  return rows.results.map((row) => row.pet_id);
+}
+
+/** いま連れているペットのID。まだ誰も連れていなければ null（設計書 §5）。 */
+export async function getActivePetId(db: D1Database, playerId: string): Promise<string | null> {
+  const raw = await db
+    .prepare('SELECT active_pet_id FROM players WHERE id = ?')
+    .bind(playerId)
+    .first<{ active_pet_id: string | null }>();
+  return raw?.active_pet_id ?? null;
+}
+
+/**
+ * 連れるペットを替える。持っていないペットには断る（設計書 §5・§8 テスト4）。
+ * 「持っているか」と「書き込み」を同じ1文で確認するので、未所持のペットIDを
+ * 渡されても players テーブルは一切変わらない（setEquipment と同じ考え方）。
+ */
+export async function setActivePet(db: D1Database, playerId: string, petId: string): Promise<boolean> {
+  const result = await db
+    .prepare(
+      `UPDATE players SET active_pet_id = ?
+        WHERE id = ? AND EXISTS (SELECT 1 FROM player_pets WHERE player_id = ? AND pet_id = ?)`,
+    )
+    .bind(petId, playerId, playerId, petId)
+    .run();
+  return (result.meta.changes ?? 0) === 1;
 }
 
 export async function getPartySize(db: D1Database, playerId: string): Promise<number> {

@@ -8,6 +8,7 @@ import { handleJob } from './routes/job.js';
 import { handleJoin } from './routes/join.js';
 import { handleMe } from './routes/me.js';
 import { handleParty } from './routes/party.js';
+import { handlePet } from './routes/pet.js';
 import { handleTavern } from './routes/tavern.js';
 import { handleToday } from './routes/today.js';
 import { handleVote } from './routes/vote.js';
@@ -83,6 +84,10 @@ export default {
 
     if (url.pathname === '/api/arena/ranking' && request.method === 'GET') {
       return handleArenaRanking(request, env);
+    }
+
+    if (url.pathname === '/api/pet' && request.method === 'POST') {
+      return handlePet(request, env);
     }
 
     // `/api/` 配下で上のどれにも一致しなかったものは、画面のアセットに

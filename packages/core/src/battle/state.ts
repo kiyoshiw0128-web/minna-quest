@@ -38,7 +38,17 @@ export type BattleState = {
   enragedTurn: number | null;
 };
 
-export function createBattleState(party: PartyMember[], enemy: Enemy): BattleState {
+/**
+ * initialEffects はパーティ全員に一律でかかる効果（ペットの効果。設計書 §6）。
+ * `toPartyMember` はキャラ1人ぶんを組み立てる関数でペットのことを知らないため、
+ * ここで member.passives とは別枠として全員に足し込む。渡さなければ今までと
+ * 完全に同じ（既定は空配列）なので、ペットを持たない既存の戦闘結果は変わらない。
+ */
+export function createBattleState(
+  party: PartyMember[],
+  enemy: Enemy,
+  initialEffects: readonly Effect[] = [],
+): BattleState {
   const allies: Combatant[] = party.map((member) => ({
     id: member.id,
     name: member.name,
@@ -47,7 +57,9 @@ export function createBattleState(party: PartyMember[], enemy: Enemy): BattleSta
     hp: member.stats.maxHp,
     mp: member.stats.maxMp,
     skills: member.skills,
-    effects: (member.passives ?? []).map((effect) => ({ effect, remaining: Infinity, appliedTurn: 0 })),
+    effects: [...(member.passives ?? []), ...initialEffects].map((effect) => ({
+      effect, remaining: Infinity, appliedTurn: 0,
+    })),
     cooldowns: {},
   }));
 

@@ -189,3 +189,28 @@ describe('simulate - 決定論', () => {
     expect(firstAct).toEqual({ t: 'act', actorId: 'foe', skillId: 'bite' });
   });
 });
+
+// ペットの効果を simulate に通す口（段階6・設計書 §6）。createBattleState 側の
+// 単体テストは state.test.ts にあるので、ここでは simulate から実際に
+// ダメージ計算まで届いているかを見る。
+describe('simulate - initialEffects（ペットの効果）', () => {
+  it('パーティ全員に最初からかかり、ダメージ計算にも反映される', () => {
+    const plan: BattlePlan = { hero: ['slash'] };
+    // atk 120 -> +15% で 138。138*100/(100+60(def)) = 86.25 -> floor 86。
+    // initialEffects を足さないケースは 120*100/160 = 75（このファイルの他のテストと同じ値）。
+    const log = simulate([hero], makeFoe(99999, 99), plan, {
+      initialEffects: [{ kind: 'statMod', stat: 'atk', rate: 0.15, turns: Infinity }],
+    });
+    const damageToFoe = log.events.find((e) => e.t === 'damage' && e.targetId === 'foe');
+    expect(damageToFoe).toMatchObject({ amount: 86 });
+  });
+
+  it('渡さなければ今までと完全に同じ（後方互換。設計書 §8 テスト6）', () => {
+    const plan: BattlePlan = { hero: ['slash'] };
+    const withEmptyArray = simulate([hero], makeFoe(99999, 99), plan, { initialEffects: [] });
+    const withoutOption = simulate([hero], makeFoe(99999, 99), plan);
+    expect(withEmptyArray).toEqual(withoutOption);
+    const damageToFoe = withoutOption.events.find((e) => e.t === 'damage' && e.targetId === 'foe');
+    expect(damageToFoe).toMatchObject({ amount: 75 });
+  });
+});
