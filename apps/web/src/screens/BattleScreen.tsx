@@ -250,16 +250,22 @@ function BattleBody({
         </p>
       )}
 
-      <h2>{battle.enemy.name} の行動表</h2>
-      <EnemyTable enemy={battle.enemy} turns={turns} />
+      {/*
+        敵の行動表と自分のプランは、同じ横スクロールの中に上下で並べる。
+        別々の枠に置くと、列幅も揃わず、片方をスクロールしても片方は動かないので、
+        「5ターン目に何が来るか」と「5ターン目に何をするか」を同時に見られない。
+        それを見比べることがこの画面の目的なので、離すと画面の意味が無くなる。
+      */}
+      <h2>{battle.enemy.name} との戦い</h2>
+      <div className="turn-grid">
+        <EnemyTable enemy={battle.enemy} turns={turns} />
+        <PlanTable party={battle.party} plan={plan} turns={turns} onChangeTurn={onChangeTurn} disabled={submitting} />
+      </div>
 
       <h2>パーティ</h2>
       {battle.party.map((member) => (
         <MemberDetail key={member.id} member={member} />
       ))}
-
-      <h2>プラン（8ターン）</h2>
-      <PlanTable party={battle.party} plan={plan} turns={turns} onChangeTurn={onChangeTurn} disabled={submitting} />
 
       <button type="button" onClick={onSubmit} disabled={submitting}>
         {submitting ? '送信中…' : 'このプランで挑む'}
@@ -286,7 +292,7 @@ function EnemyTable({
   const skillNames = new Map(enemy.skills.map((skill): [string, string] => [skill.id, skill.name]));
 
   return (
-    <div style={{ overflowX: 'auto' }}>
+    <>
       <table>
         {/* 激昂の説明は、激昂する敵のときだけ出す。無い敵にも出すと
             「下の表」が存在せず、読み手が探すことになる。 */}
@@ -295,6 +301,16 @@ function EnemyTable({
             ? '行動表はターン数で循環する。'
             : '行動表はターン数で循環する。HPが一定割合以下になると激昂し、下の表に切り替わる。'}
         </caption>
+        <thead>
+          <tr>
+            <th scope="col">敵</th>
+            {turns.map((turn) => (
+              <th key={turn} scope="col">
+                {turn + 1}
+              </th>
+            ))}
+          </tr>
+        </thead>
         <tbody>
           <PatternRow label="通常" pattern={enemy.pattern} turns={turns} skillNames={skillNames} />
           {enemy.enrage !== undefined && (
@@ -307,7 +323,7 @@ function EnemyTable({
           )}
         </tbody>
       </table>
-    </div>
+    </>
   );
 }
 
@@ -395,8 +411,9 @@ function PlanTable({
   disabled: boolean;
 }) {
   return (
-    <div style={{ overflowX: 'auto' }}>
+    <>
       <table>
+        <caption>プラン（8ターン）</caption>
         <thead>
           <tr>
             <th scope="col">名前</th>
@@ -432,7 +449,7 @@ function PlanTable({
           ))}
         </tbody>
       </table>
-    </div>
+    </>
   );
 }
 

@@ -1,94 +1,414 @@
 /*
- * 見た目は作り込まない。読める・押せる・状態が分かる、まで（設計書 §8）。
+ * みんなdeクエストの見た目。
  *
- * ただし色は明示する。何も書かないと、ブラウザがダークモードのときに
- * 背景だけ暗くなり文字色は既定の黒のままになって、黒地に黒で何も読めなくなる。
- * 実際にそうなっていた。明暗どちらでも読めることは「作り込み」ではなく前提。
+ * 狙いは「冒険の書」の手触り。羊皮紙と濃い藍のインク、金の縁取り。
+ * ドラクエの「コマンドウィンドウ」の記憶に寄せて、面はきっちり枠で囲む。
+ *
+ * **クラス名をほとんど使っていない。** 画面側のマークアップは role と見出しで
+ * 組んであり、テストもそれで要素を探している。装飾のためにクラスを足すと、
+ * 見た目を変えるたびにテストが壊れる。要素セレクタで届く範囲に留めている。
+ *
+ * 色は必ず明示する。何も書かないと、ダークモードで背景だけ暗くなり文字色は
+ * 既定の黒のままになって、黒地に黒で何も読めなくなる（実際にそうなっていた）。
  */
+
 :root {
   color-scheme: light dark;
-  --bg: #ffffff;
-  --fg: #1a1a1a;
-  --muted: #5a5a5a;
-  --line: #d0d0d0;
-  --accent: #1b4f9c;
-  --alert: #b00020;
+
+  /* 羊皮紙と藍。 */
+  --bg: #f4ecd8;
+  --bg-panel: #fbf6e9;
+  --bg-sunken: #eadfc4;
+  --fg: #2b2118;
+  --muted: #6b5b47;
+  --line: #c9b48c;
+  --line-strong: #8a6f47;
+  --accent: #8a5a1c;
+  --accent-soft: #f0dcb4;
+  --alert: #9b2226;
+  --good: #2f6d4f;
+  --shadow: rgba(80, 60, 30, 0.18);
 }
 
 @media (prefers-color-scheme: dark) {
   :root {
-    --bg: #16181c;
-    --fg: #e8e8e8;
-    --muted: #a0a4ab;
-    --line: #3a3f46;
-    --accent: #7fb0ff;
+    --bg: #14161f;
+    --bg-panel: #1c1f2b;
+    --bg-sunken: #10121a;
+    --fg: #ece5d6;
+    --muted: #a49b88;
+    --line: #3c4256;
+    --line-strong: #66708c;
+    --accent: #e0b464;
+    --accent-soft: #2a2f40;
     --alert: #ff8a95;
+    --good: #7fd6a8;
+    --shadow: rgba(0, 0, 0, 0.5);
   }
 }
 
+* {
+  box-sizing: border-box;
+}
+
 body {
-  font-family: system-ui, sans-serif;
-  line-height: 1.6;
-  max-width: 640px;
-  margin: 0 auto;
-  padding: 1rem;
+  margin: 0;
+  padding: 0.75rem 0.75rem 3rem;
+  font-family: 'Hiragino Mincho ProN', 'Yu Mincho', 'Noto Serif JP', serif;
+  line-height: 1.7;
   background: var(--bg);
   color: var(--fg);
+  /* 端末の幅いっぱいに広がると読み疲れる。毎日ひらく画面なので幅を抑える。 */
+  max-width: 46rem;
+  margin: 0 auto;
+  -webkit-text-size-adjust: 100%;
 }
+
+/* ---- 見出し ---- */
+
+h1 {
+  font-size: 1.5rem;
+  letter-spacing: 0.08em;
+  margin: 0.25rem 0 1rem;
+  padding-bottom: 0.5rem;
+  border-bottom: 2px solid var(--line-strong);
+}
+
+h2 {
+  font-size: 1.15rem;
+  letter-spacing: 0.05em;
+  margin: 1.5rem 0 0.5rem;
+  color: var(--accent);
+}
+
+h3 {
+  font-size: 1.02rem;
+  letter-spacing: 0.04em;
+  margin: 1rem 0 0.4rem;
+}
+
+h4 {
+  font-size: 0.95rem;
+  margin: 0.8rem 0 0.3rem;
+  color: var(--muted);
+}
+
+/* ---- タブ（コマンドウィンドウ風） ---- */
 
 nav {
   display: flex;
-  gap: 0.5rem;
-  border-bottom: 1px solid var(--line);
-  padding-bottom: 0.5rem;
-  margin-bottom: 1rem;
+  gap: 0.4rem;
+  margin: 0 0 1rem;
+  padding: 0.3rem;
+  background: var(--bg-sunken);
+  border: 2px solid var(--line-strong);
+  border-radius: 6px;
+  box-shadow: inset 0 1px 0 var(--shadow);
+}
+
+nav button {
+  flex: 1;
+  min-height: 2.6rem;
+  padding: 0.4rem 0.2rem;
+  font-size: 0.95rem;
+  letter-spacing: 0.06em;
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: 4px;
+  color: var(--muted);
 }
 
 nav button[aria-current='true'] {
-  font-weight: bold;
+  background: var(--bg-panel);
+  border-color: var(--line-strong);
   color: var(--accent);
+  font-weight: bold;
+  box-shadow: 0 1px 2px var(--shadow);
 }
 
-form label {
-  display: block;
-  margin-bottom: 0.5rem;
-}
+/* ---- 面 ---- */
 
-input {
-  background: var(--bg);
-  color: var(--fg);
+section {
+  margin: 1rem 0;
+  padding: 0.9rem 1rem;
+  background: var(--bg-panel);
   border: 1px solid var(--line);
+  border-left: 3px solid var(--line-strong);
   border-radius: 4px;
-  padding: 0.4rem 0.5rem;
-  font: inherit;
 }
+
+section section {
+  background: transparent;
+  border: none;
+  border-top: 1px dashed var(--line);
+  border-radius: 0;
+  padding: 0.6rem 0 0;
+  margin: 0.8rem 0 0;
+}
+
+/* ---- 文字 ---- */
+
+p {
+  margin: 0.5rem 0;
+}
+
+code {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 0.85em;
+  padding: 0.15em 0.4em;
+  background: var(--bg-sunken);
+  border: 1px solid var(--line);
+  border-radius: 3px;
+  word-break: break-all;
+}
+
+[role='alert'] {
+  color: var(--alert);
+  font-weight: bold;
+}
+
+[role='status'] {
+  color: var(--good);
+}
+
+/* ---- 選択肢・ボタン ---- */
 
 button {
+  font-family: inherit;
+  font-size: 0.95rem;
+  line-height: 1.5;
   cursor: pointer;
-  background: var(--bg);
+  min-height: 2.5rem;
+  padding: 0.45rem 0.9rem;
   color: var(--fg);
-  border: 1px solid var(--line);
+  background: var(--bg-panel);
+  border: 1px solid var(--line-strong);
   border-radius: 4px;
-  padding: 0.4rem 0.75rem;
-  font: inherit;
+  box-shadow: 0 1px 2px var(--shadow);
 }
 
-/* 自分が投票した選択肢。太字だけだと一覧の中で埋もれるので枠でも示す。 */
-button[aria-pressed='true'] {
-  font-weight: bold;
-  border-color: var(--accent);
-  color: var(--accent);
+button:hover:not(:disabled) {
+  background: var(--accent-soft);
 }
+
+button:active:not(:disabled) {
+  transform: translateY(1px);
+  box-shadow: none;
+}
+
+button:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+  box-shadow: none;
+}
+
+/* 自分が選んでいるもの。太字だけだと一覧の中で埋もれる。 */
+button[aria-pressed='true'] {
+  border-color: var(--accent);
+  background: var(--accent-soft);
+  color: var(--accent);
+  font-weight: bold;
+}
+
+/* ---- 一覧（今日の3択など） ---- */
 
 ul {
   list-style: none;
   padding: 0;
+  margin: 0.5rem 0;
 }
 
 li {
   margin-bottom: 0.5rem;
 }
 
-[role='alert'] {
-  color: var(--alert);
+/* 3択は指で押す対象なので、行いっぱいに広げる。 */
+li > button {
+  display: block;
+  width: 100%;
+  text-align: left;
+}
+
+/* ---- 入力 ---- */
+
+form label {
+  display: block;
+  margin-bottom: 0.8rem;
+  color: var(--muted);
+  font-size: 0.9rem;
+}
+
+input {
+  display: block;
+  width: 100%;
+  margin-top: 0.25rem;
+  padding: 0.5rem 0.6rem;
+  font: inherit;
+  color: var(--fg);
+  background: var(--bg-sunken);
+  border: 1px solid var(--line-strong);
+  border-radius: 4px;
+}
+
+input[type='checkbox'] {
+  display: inline-block;
+  width: auto;
+  min-width: 1.15rem;
+  min-height: 1.15rem;
+  margin: 0;
+  accent-color: var(--accent);
+}
+
+select {
+  font: inherit;
+  font-size: 0.85rem;
+  padding: 0.3rem 0.35rem;
+  color: var(--fg);
+  background: var(--bg-panel);
+  border: 1px solid var(--line);
+  border-radius: 3px;
+  max-width: 100%;
+}
+
+/* ---- 表 ---- */
+
+table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.85rem;
+  margin: 0.5rem 0;
+}
+
+caption {
+  caption-side: top;
+  text-align: left;
+  font-size: 0.8rem;
+  color: var(--muted);
+  padding-bottom: 0.4rem;
+}
+
+th,
+td {
+  padding: 0.35rem 0.5rem;
+  border: 1px solid var(--line);
+  text-align: left;
+  white-space: nowrap;
+}
+
+thead th {
+  background: var(--bg-sunken);
+  color: var(--accent);
+  font-weight: bold;
+}
+
+tbody th[scope='row'] {
+  background: var(--bg-sunken);
+  color: var(--muted);
+  font-weight: normal;
+}
+
+/* 行動表とプランは横に長い。画面ごと横スクロールさせず、表だけ流す。 */
+div:has(> table) {
+  overflow-x: auto;
+}
+
+/*
+ * 敵の行動表と自分のプランを、同じ枠の中で列を揃えて重ねる。
+ *
+ * 別々に置くと列幅が揃わず、片方をスクロールしても片方は動かないので、
+ * 「5ターン目に何が来るか」と「5ターン目に何をするか」を同時に見られない。
+ * それを見比べることがこの画面の目的なので、ここだけは列幅を固定する。
+ */
+.turn-grid {
+  overflow-x: auto;
+  padding-bottom: 0.25rem;
+}
+
+.turn-grid table {
+  table-layout: fixed;
+  /* 1列目6rem + 8ターン × 7rem。狭い画面では枠内で横スクロールする。 */
+  min-width: 62rem;
+  margin: 0;
+}
+
+.turn-grid table + table {
+  margin-top: 0.5rem;
+}
+
+.turn-grid th:first-child,
+.turn-grid td:first-child {
+  width: 6rem;
+}
+
+.turn-grid th:not(:first-child),
+.turn-grid td:not(:first-child) {
+  width: 7rem;
+  text-align: center;
+}
+
+.turn-grid td {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.turn-grid select {
+  width: 100%;
+}
+
+/* 技名は列に収まらないことがある。切るより小さくして読ませる。 */
+.turn-grid td,
+.turn-grid select {
+  font-size: 0.78rem;
+}
+
+/* 敵の行を一目で敵と分かるようにする。自分の行と混ざると読み違える。 */
+.turn-grid table:first-child tbody th[scope='row'],
+.turn-grid table:first-child tbody td {
+  background: var(--accent-soft);
+}
+
+/* ---- 折りたたみ ---- */
+
+details {
+  margin: 0.6rem 0;
+  padding: 0.5rem 0.7rem;
+  background: var(--bg-sunken);
+  border: 1px solid var(--line);
+  border-radius: 4px;
+}
+
+summary {
+  cursor: pointer;
+  font-weight: bold;
+  color: var(--accent);
+  letter-spacing: 0.04em;
+}
+
+/* ---- 戦闘のログ ---- */
+
+/* ログはターンごとの塊で読む。塊の頭が見えないと追えない。 */
+section h4 {
+  margin-top: 1rem;
+  padding-bottom: 0.2rem;
+  border-bottom: 1px solid var(--line);
+  color: var(--accent);
+}
+
+@media (max-width: 30rem) {
+  body {
+    padding: 0.5rem 0.5rem 3rem;
+  }
+
+  h1 {
+    font-size: 1.3rem;
+  }
+
+  nav button {
+    font-size: 0.85rem;
+    letter-spacing: 0.02em;
+  }
+
+  section {
+    padding: 0.7rem 0.75rem;
+  }
 }
