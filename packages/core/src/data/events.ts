@@ -18,6 +18,13 @@ import type { DailyEvent } from '../daily/event.js';
  * 雑魚敵を足したので、banditAmbush と scoutTheRidge が指す敵を炎竜バルゴスから
  * 適切な雑魚に差し替えてある。まだ戦闘が確定した日を持つ世界が存在しないため、
  * enemyId の差し替え（並びの変更ではない）はこの時点が最も安全。
+ *
+ * **戦闘イベントの章の条件は、その敵に勝てるレベルから逆算している。**
+ * 経験値は戦闘に勝ってしか入らず、1日1戦なので、レベルはおおよそ日数に比例する。
+ * 章は7日で1つ進むので、第N章の頭でだいたい 7×(N-1) 戦ぶんのレベルになる。
+ * 敵の必要レベル（mobs.test.ts が実測している）をこの目安に当てはめて章を決めた。
+ * 目安より強い敵を早い章に置くと、勝てない戦いが並ぶだけになる。
+ * 実際、追加した直後は人喰い鬼（必要Lv8）が第1章に出るようになっていた。
  */
 export const EVENTS = {
   crossroads: {
@@ -68,7 +75,7 @@ export const EVENTS = {
   scoutTheRidge: {
     id: 'scoutTheRidge', name: '尾根を偵察する', kind: 'battle',
     enemyId: 'armoredKnight',
-    condition: { minChapter: 2 },
+    condition: { minChapter: 3 },
   },
 
   // ここから追記分。既存10エントリは並び・内容とも変えていない。
@@ -86,21 +93,21 @@ export const EVENTS = {
   ogreEncounter: {
     id: 'ogreEncounter', name: '人喰い鬼との遭遇', kind: 'battle',
     enemyId: 'ogreBrute',
-    condition: {},
+    condition: { minChapter: 2 },
   },
   dragonlingClash: {
     id: 'dragonlingClash', name: '悪竜の眷属との激突', kind: 'battle',
     enemyId: 'direWyvern',
-    condition: { minChapter: 2 },
+    condition: { minChapter: 4 },
   },
   stoneGolemBlockade: {
     id: 'stoneGolemBlockade', name: '石の巨人が道を塞ぐ', kind: 'battle',
     enemyId: 'stoneGolem',
-    condition: { minChapter: 2 },
+    condition: { minChapter: 4 },
   },
   voidWraithAmbush: {
     id: 'voidWraithAmbush', name: '影の亡霊に囚われる', kind: 'battle',
     enemyId: 'voidWraith',
-    condition: { minChapter: 2 },
+    condition: { minChapter: 5 },
   },
 } as const satisfies Record<string, DailyEvent>;

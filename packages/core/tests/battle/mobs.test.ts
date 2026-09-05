@@ -7,6 +7,8 @@ import { JOBS } from '../../src/data/jobs.js';
 import { SKILLS } from '../../src/data/skills.js';
 import { PASSIVES } from '../../src/data/passives.js';
 import { ENEMIES, BANDIT_SCOUT } from '../../src/data/enemies.js';
+import { EVENTS } from '../../src/data/events.js';
+import { BOSS_INTERVAL } from '../../src/daily/day.js';
 import type { Character } from '../../src/progression/types.js';
 import type { Enemy } from '../../src/battle/enemy.js';
 import type { Skill } from '../../src/battle/skill.js';
@@ -123,5 +125,56 @@ describe('雑魚敵のバランス', () => {
     const log = simulate([member], BANDIT_SCOUT, plan, { maxTurns: 1 });
 
     expect(log.result).not.toBe('win');
+  });
+});
+
+/**
+ * 敵の必要レベルと、その敵が出る章が噛み合っているかの検査。
+ *
+ * 経験値は戦闘に勝ってしか入らず1日1戦なので、レベルはおおよそ日数に比例する。
+ * 章は7日で1つ進むので、第N章の頭で 7×(N-1) 戦ぶんが上限になる。
+ * 1戦につき冒険レベルが1上がるとは限らないが、**上限として** この本数を超える
+ * レベルを要求する敵は、その章では絶対に勝てない。
+ *
+ * これを検査するのは、実際に噛み合っていない状態を作ってしまったため。
+ * 雑魚敵を足した直後、必要Lv8の人喰い鬼が第1章（最大7戦）に出る条件になっていて、
+ * 必要Lv23の敵が第2章に出る条件になっていた。個々の敵の強さの検査は通るので、
+ * イベント側の条件と突き合わせないと見つからない。
+ */
+describe('敵の強さと出現する章の噛み合い', () => {
+  /**
+   * 第N章が終わるまでに戦える最大本数。1日1戦、7日で1章。
+   *
+   * 章の頭ではなく終わりで測るのは、その敵が「その章のあいだに一度でも
+   * 勝てるか」を見たいため。章の頭で測ると、第1章にはLv1の敵しか置けなくなり、
+   * 章の中で少しずつ強い相手が出てくる形を作れない。
+   * 負けても失うものは無く、過去の日は後から挑み直せるので、
+   * 章の途中で一度負けること自体は問題にならない。
+   */
+  function maxFightsWithin(chapter: number): number {
+    return chapter * BOSS_INTERVAL - 1;
+  }
+
+  it('どの戦闘イベントも、その章までに届きうるレベルの敵を指している', () => {
+    const requiredLevel = new Map(TIERS.map((tier) => [tier.enemyId as string, tier.level]));
+    const tooStrong: string[] = [];
+
+    for (const event of Object.values(EVENTS)) {
+      if (event.kind !== 'battle' || event.enemyId === undefined) continue;
+      // 章ボスは別枠。1体だけ用意されており、章の条件ではなく日数で出る。
+      if (event.enemyId === 'balgos') continue;
+
+      const level = requiredLevel.get(event.enemyId);
+      expect(level, `${event.enemyId} の必要レベルが TIERS に無い`).toBeDefined();
+
+      const chapter = event.condition.minChapter ?? 1;
+      // レベル1から始まるので、N戦で届く上限は Lv(N+1)。
+      const reachable = maxFightsWithin(chapter) + 1;
+      if ((level as number) > reachable) {
+        tooStrong.push(`${event.id}: 必要Lv${level} > 第${chapter}章までに届くLv${reachable}`);
+      }
+    }
+
+    expect(tooStrong).toEqual([]);
   });
 });
