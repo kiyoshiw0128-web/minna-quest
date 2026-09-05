@@ -31,6 +31,8 @@ export type { BattleResult, SkipReason, BattleEvent, BattleLog } from './battle/
 export { SKILLS } from './data/skills.js';
 export { ENEMIES, BALGOS } from './data/enemies.js';
 export { CHAPTER_BOSSES, bossForChapter } from './data/bosses.js';
+export { ARENA_FLOORS, ARENA_FINAL_FLOOR, arenaFloor } from './data/arena.js';
+export type { ArenaFloor } from './data/arena.js';
 
 export { aptitudeMultiplier } from './progression/aptitude.js';
 export {
