@@ -311,10 +311,23 @@ const gouzaCurseNova = {
   effects: [{ to: 'self', effect: { kind: 'statMod', stat: 'mdf', rate: -0.4, turns: 2 } }],
 } as const satisfies Skill;
 
-export const GOUZA = {
+export /*
+ * 2026-09-06にHPを500から800へ上げた。
+ *
+ * 500は3人パーティを基準にした値だったが、14日目には金貨が貯まっていて
+ * 4人揃っている。4人で挑むと2〜3ターンで終わり、4ターン目の「呪詛の波動」が
+ * 撃たれる前に決着していた。公開している行動表が飾りになる。
+ *
+ * 800では、冒険Lv6の4人で「呪詠」の後に guardChant を張れば5ターンで勝ち、
+ * 張らなければ5ターンで負ける。備えが勝敗を分ける水準として実測で決めた。
+ *
+ * **僧侶を連れず火力で押す並びは3ターンで勝つ。** これは想定内とする。
+ * 削り切れるだけの火力を用意したなら、それはそれで一つの答えである。
+ */
+const GOUZA = {
   id: 'gouza',
   name: '鬼呪術師ゴウザ',
-  stats: { maxHp: 500, maxMp: 999, atk: 45, def: 15, mat: 40, mdf: 20, spd: 15 },
+  stats: { maxHp: 800, maxMp: 999, atk: 45, def: 15, mat: 40, mdf: 20, spd: 15 },
   skills: [gouzaClaw, gouzaChant, gouzaCurseNova],
   pattern: [
     { skillId: 'gouzaClaw' },
@@ -374,7 +387,19 @@ const vornilTailSweep = {
   damage: { kind: 'magical', power: 280 },
 } as const satisfies Skill;
 
-export const VORNIL = {
+export /*
+ * **軽減のパズルではなく、火力と手数の勝負として置いてある。**
+ *
+ * 咆哮で行動を止めてから尾で薙ぐ、という形は読める。しかし guardChant の
+ * MDF+50% が減らせる魔法ダメージは1割前後でしかなく（100/(100+mdf) と
+ * 100/(100+1.5*mdf) の差）、生死の閾値を跨がせるには小さすぎる。
+ * HPを振って実測しても、4人で挑む限り備えの有無で結果が変わる帯域は無かった。
+ *
+ * これはダメージ式と guardChant の強さから来る限界なので、ここで
+ * 誤魔化さずに「読みが効くボス」を名乗らせない。読みが効くのは第2章の
+ * ゴウザ（呪詠→波動）と、闘技場20階の深淵の覇王である。
+ */
+const VORNIL = {
   id: 'vornil',
   name: '深淵竜ヴォルニル',
   stats: { maxHp: 750, maxMp: 999, atk: 70, def: 25, mat: 55, mdf: 30, spd: 12 },

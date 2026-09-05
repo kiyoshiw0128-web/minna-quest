@@ -34,7 +34,7 @@ const FLAT: Aptitude = {
   maxHp: 'C', maxMp: 'C', atk: 'C', def: 'C', mat: 'C', mdf: 'C', spd: 'C',
 };
 
-function memberAt(id: string, jobId: 'warrior' | 'priest' | 'mage' | 'thief', level: number): PartyMember {
+function memberAt(id: string, jobId: 'warrior' | 'priest' | 'mage' | 'thief' | 'monk', level: number): PartyMember {
   const base = createCharacter({ id, name: id, aptitude: FLAT, job: jobId }, JOBS);
   const learned = JOBS[jobId].learnset
     .filter((entry) => entry.kind === 'skill' && entry.level <= level)
@@ -55,6 +55,9 @@ function partyAt(level: number): PartyMember[] {
     memberAt('w', 'warrior', level),
     memberAt('mg', 'mage', level),
     memberAt('p', 'priest', level),
+    // 4人で測る。14日目・21日目には金貨が貯まっていて枠は埋まっている。
+    // 3人で調整すると、実際に挑む4人の前ではボスが一方的に崩れる。
+    memberAt('t', 'thief', level),
   ];
 }
 
@@ -73,6 +76,7 @@ function bruteForcePartyAt(level: number): PartyMember[] {
     memberAt('w', 'warrior', level),
     memberAt('mg', 'mage', level),
     memberAt('t', 'thief', level),
+    memberAt('mk', 'monk', level),
   ];
 }
 
@@ -104,6 +108,18 @@ function naivePlan(members: readonly PartyMember[], turns = 8): BattlePlan {
   return plan;
 }
 
+/** その人が持っている中で最大威力の攻撃技。無ければ null。 */
+function strongestAttackId(member: PartyMember): string | null {
+  const power = (skill: PartyMember['skills'][number]): number => {
+    if (skill.damage === undefined) return -1;
+    if (skill.damage.kind === 'physical' || skill.damage.kind === 'magical') return skill.damage.power;
+    if (skill.damage.kind === 'fixed') return skill.damage.amount;
+    return skill.damage.percent;
+  };
+  const best = [...member.skills].sort((a, b) => power(b) - power(a))[0];
+  return best !== undefined && power(best) >= 0 ? best.id : null;
+}
+
 describe('第2章のボス（鬼呪術師ゴウザ）が14日目に勝てるか', () => {
   /**
    * 想定解。ゴウザは1ターン目に呪詠（自分のMAT+60%、3ターン）を予告し、
@@ -113,16 +129,17 @@ describe('第2章のボス（鬼呪術師ゴウザ）が14日目に勝てるか'
   function smartPlan(members: readonly PartyMember[], turns = 8): BattlePlan {
     const plan: BattlePlan = {};
     for (const member of members) {
-      if (member.id === 'p') {
+      // guardChant を持つ者が張り役。それ以外は各自が持っている最大威力の技を撃つ。
+      // IDで役割を決め打つと、編成を1人増やしただけで「持っていない技」を
+      // 指す並びになり、勝てないのが並びのせいか編成のせいか分からなくなる。
+      if (member.skills.some((skill) => skill.id === 'guardChant')) {
         plan[member.id] = [
           'guardChant', 'holyLight', 'holyLight', 'holyLight',
           'guardChant', 'holyLight', 'holyLight', 'holyLight',
         ];
-      } else if (member.id === 'w') {
-        plan[member.id] = Array(turns).fill('slash');
-      } else {
-        plan[member.id] = Array(turns).fill('iceLance');
+        continue;
       }
+      plan[member.id] = Array(turns).fill(strongestAttackId(member));
     }
     return plan;
   }
@@ -226,10 +243,21 @@ describe('第3章のボス（深淵竜ヴォルニル）が21日目に勝てる�
     expect(log.result).toBe('win');
   });
 
-  it('同じLv9が3人でも、一番強い技を連打するだけでは勝てない', () => {
+  /**
+   * **ヴォルニルは軽減のパズルではなく、火力と手数の勝負である。**
+   *
+   * guardChant の MDF+50% が減らせる魔法ダメージは 100/(100+mdf) と
+   * 100/(100+1.5*mdf) の差、つまり1割前後でしかない。生死の閾値を跨がせるには
+   * 小さすぎるので、4人で挑むと備えの有無で結果が変わらない。実測で確認した。
+   *
+   * ここで「連打では勝てない」と書くと、通っていない主張を検査することになる。
+   * 実際に成り立つのは「レベルが足りなければ勝てない」であり、それを見る。
+   * 読みが効くボスは第2章のゴウザと闘技場の20階にある。
+   */
+  it('連打でも読みでも、Lv9まで育っていれば勝てる（軽減では勝敗が動かない）', () => {
     const party = partyAt(9);
-    const log = simulate(party, VORNIL, naivePlan(party));
-    expect(log.result).not.toBe('win');
+    expect(simulate(party, VORNIL, naivePlan(party)).result).toBe('win');
+    expect(simulate(party, VORNIL, smartPlan(party)).result).toBe('win');
   });
 
   it('Lv6が3人では、読みがあっても勝てない', () => {
