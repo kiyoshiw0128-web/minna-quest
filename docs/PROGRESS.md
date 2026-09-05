@@ -2,7 +2,7 @@
 
 **再開するときはこの表だけ読めばよい。** 詳細は各段階の仕様書と計画書にある。
 
-最終更新: 2026-09-05
+最終更新: 2026-09-06
 
 ## 段階
 
@@ -11,32 +11,35 @@
 | 1 | 戦闘エンジン `packages/core/src/battle/` | **完了・main にマージ済み** |
 | 2 | 育成 `packages/core/src/progression/` | **完了・main にマージ済み** |
 | 3a | 日次ロジック `packages/core/src/daily/` | **完了・main にマージ済み** |
-| 3b | サーバ基盤 `apps/worker/` | **完了。`feat/worker-d1` でレビュー済み、マージ待ち** |
+| 3b | サーバ基盤 `apps/worker/` | **完了・main にマージ済み** |
 | 4a | 画面・毎日の投票ループ `apps/web/` | **完了・main にマージ済み** |
-| 3c | 戦闘API・報酬 | 未着手（計画も無い） |
-| 4b | 戦闘・編成の画面 | 未着手。3c の後 |
+| 3c | 戦闘API・報酬・酒場 | **完了・本番稼働中** |
+| 4b | 戦闘の画面 | **完了・本番稼働中** |
+| 3d | 転職・装備枠・パーティ操作 | **完了・本番稼働中** |
+| 4c | 第2章以降のボス | 未着手 |
 
 ## いまの状態
 
-- テスト **430件**（core 358 / worker 62 / web 10）、typecheck クリーン、CI 緑
+- テスト **559件**（core 382 / worker 126 / web 31）、typecheck クリーン、CI 緑
+- **本番稼働中: https://minna-quest.giocoso.workers.dev**（Cloudflare、D1は東京圏）
 - `packages/core` は実行時依存ゼロ、乱数は `daily/` のシード付き純関数のみ
-- `apps/worker` は Cloudflare Worker + D1 + Cron。API 4本、招待コード認証、JST 05:00 の締めと取り戻し
-- `apps/web` は React。参加・今日の3択と投票・世界の履歴の3画面。同じ Worker が配信する
-- **毎日の周回は成立する。** 参加して投票し、翌朝に決まっているのを見るところまで
-- **戦闘はまだできない。** 戦闘APIが無い。エンジンにはあるが繋がっていない
+- `apps/worker` は Cloudflare Worker + D1 + Cron。API 12本、招待コード認証、JST 05:00 の締めと取り戻し
+- `apps/web` は React。参加・今日・戦闘・仲間・履歴。同じ Worker が配信する
+- **一通り遊べる。** 参加・投票・戦闘・報酬・仲間の雇用・転職・装備の変更
+- イベント45個、タグ14種類。4本の相互排他の分岐（山賊/衛兵・森の精霊・遺跡・呪い）
+- **無いもの: ペット、装備品、第2章以降のボス**
 - **デプロイは未実施。** `README.md` の手順を人が実行する必要がある
 - リポジトリ: https://github.com/kiyoshiw0128-web/minna-quest （public）
 
 ## 次の一手
 
-段階3c（戦闘API・報酬）。エンジンの `simulate` をサーバから呼び、8ターンのプランを
-受けて結果を返す。「誰かが倒せば世界としては撃破」の集約もここ。
-そのあとで段階4b（戦闘・編成の画面）。
+**第2章以降のボス。** 第1章のボスは7日目に勝てる強さまで下げた結果、
+殴り合いになっている。「溜めの窓に大技を集中させる」パズルは、技が揃う
+第2章以降でないと成立しない。設計の核なので、どこかで成立させる必要がある。
 
-まだ**人がデプロイを実行していない**。`README.md` の手順を人が走らせる必要がある。
+そのあとはペットと装備品。どちらも初回の相談で挙がっていたが未着手。
 
-段階4a 仕様: `docs/superpowers/specs/2026-09-05-web-daily-loop-design.md`
-段階3b 仕様: `docs/superpowers/specs/2026-09-04-worker-d1-design.md`
+仕様は `docs/superpowers/specs/` に段階ごとに置いてある。
 
 ## 書類の置き場所
 
@@ -51,9 +54,11 @@
 ## よく使うコマンド
 
 ```bash
+corepack pnpm --filter @mq/web build    # worker のテストが dist を要求する
 corepack pnpm -r test
 corepack pnpm -r typecheck
 corepack pnpm --filter @mq/worker dev   # ローカルで workerd を起動
+corepack pnpm run release               # ビルド→移行→デプロイ をまとめて
 ```
 
 ## 踏みやすい地雷
