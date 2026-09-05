@@ -18,7 +18,12 @@ export type BattlePlan = Record<string, (string | null)[]>;
  * initialEffects はパーティ全員にかかる初期効果（ペットの効果。設計書 §6）。
  * 省略すれば今までと同じ（空）で、既存の戦闘結果には影響しない。
  */
-export type SimulateOptions = { maxTurns?: number; initialEffects?: readonly Effect[] };
+export type SimulateOptions = {
+  maxTurns?: number;
+  initialEffects?: readonly Effect[];
+  /** ペットを連れているか。魔物使いの技はこれが false だと使えない。 */
+  hasPet?: boolean;
+};
 
 /**
  * 戦闘をまるごと解決する。乱数を使わないので、同じ入力からは必ず同じログが出る。
@@ -60,7 +65,7 @@ export function simulate(
         continue;
       }
 
-      const usable = canUse(actor, skill);
+      const usable = canUse(actor, skill, options.hasPet ?? false);
       if (usable !== 'ok') {
         events.push({ t: 'skip', actorId: actor.id, reason: usable });
         continue;

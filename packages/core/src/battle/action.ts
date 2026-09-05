@@ -9,9 +9,20 @@ import type { BattleEvent } from './log.js';
 
 export type ActionResult = { state: BattleState; events: BattleEvent[] };
 
-export function canUse(actor: Combatant, skill: Skill): 'ok' | 'noMp' | 'cooldown' {
+/**
+ * その技をいま使えるか。
+ *
+ * hasPet を省略するとペットを連れていない扱いになる。既定を「連れていない」に
+ * するのは、渡し忘れたときに技が通ってしまうより、通らないほうが気づけるため。
+ */
+export function canUse(
+  actor: Combatant,
+  skill: Skill,
+  hasPet = false,
+): 'ok' | 'noMp' | 'cooldown' | 'noPet' {
   if ((actor.cooldowns[skill.id] ?? 0) > 0) return 'cooldown';
   if (actor.mp < skill.mpCost) return 'noMp';
+  if (skill.requiresPet === true && !hasPet) return 'noPet';
   return 'ok';
 }
 

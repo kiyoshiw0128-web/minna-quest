@@ -27,4 +27,12 @@ export type Skill = {
   healScale?: StatKey;
   /** マスタデータを凍結できるよう readonly。実行中に技を書き換えることはない */
   effects?: readonly { to: 'target' | 'self'; effect: Effect }[];
+  /**
+   * ペットを連れていないと使えない技。魔物使いの技がこれにあたる。
+   *
+   * 弾くのではなく「使えなかった」として記録する。プランは戦闘前に全部
+   * 組むので、連れ忘れたまま挑めてしまう。黙って何もしないと、何が
+   * 起きなかったのかが分からない。
+   */
+  requiresPet?: boolean;
 };
