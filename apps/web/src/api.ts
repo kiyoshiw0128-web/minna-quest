@@ -1,4 +1,5 @@
 import { clearToken } from './token.js';
+import type { BattleLog, BattlePlan, Enemy, PartyMember, Recruit, StatBlock } from '@mq/core';
 
 // worker/src/respond.ts の封筒に合わせる。ここを変えるとAPI変更なしの前提が崩れる。
 type Envelope<T> = { ok: true; data: T } | { ok: false; error: string };
@@ -101,4 +102,67 @@ export function vote(token: string, optionId: string): Promise<VoteResult> {
 
 export function fetchWorld(token: string): Promise<WorldResult> {
   return request('/api/world', withAuth(token));
+}
+
+export type MePartyMember = {
+  id: string;
+  name: string;
+  jobId: string;
+  adventureLevel: number;
+  jobLevel: number;
+  stats: StatBlock;
+  learnedSkillIds: string[];
+  equippedSkillIds: string[];
+};
+
+export type MeResult = { name: string; gold: number; party: MePartyMember[] };
+
+export function fetchMe(token: string): Promise<MeResult> {
+  return request('/api/me', withAuth(token));
+}
+
+// worker/src/routes/battle.ts の応答をそのまま写す。hasBattle が false のときは
+// enemy・party を持たない（サーバがそもそも組み立てないため）。この判別で
+// 分岐しないと、戦闘の無い日に敵の行動表を描こうとして落ちる。
+export type BattleInfo =
+  | { dayNo: number; hasBattle: false }
+  | {
+      dayNo: number;
+      hasBattle: true;
+      enemy: Enemy;
+      party: PartyMember[];
+      won: boolean;
+      worldDefeated: boolean;
+    };
+
+export type BattleSubmitResult = { log: BattleLog; rewarded: boolean; worldDefeated: boolean };
+
+/** dayNo を省くと、サーバは直近の締まった日を返す（設計書 §4.2）。 */
+export function fetchBattle(token: string, dayNo?: number): Promise<BattleInfo> {
+  const query = dayNo === undefined ? '' : `?dayNo=${dayNo}`;
+  return request(`/api/battle${query}`, withAuth(token));
+}
+
+export function submitBattle(token: string, plan: BattlePlan, dayNo: number): Promise<BattleSubmitResult> {
+  return request('/api/battle', {
+    method: 'POST',
+    body: JSON.stringify({ plan, dayNo }),
+    ...withAuth(token),
+  });
+}
+
+export type TavernResult = { dayNo: number; recruits: Recruit[] };
+
+export function fetchTavern(token: string): Promise<TavernResult> {
+  return request('/api/tavern', withAuth(token));
+}
+
+export type HireResult = { characterId: string; name: string; jobId: string; cost: number };
+
+export function hireRecruit(token: string, recruitId: string): Promise<HireResult> {
+  return request('/api/hire', {
+    method: 'POST',
+    body: JSON.stringify({ recruitId }),
+    ...withAuth(token),
+  });
 }

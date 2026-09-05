@@ -2,9 +2,13 @@ import { useState } from 'react';
 import { getToken, saveToken } from './token.js';
 import { JoinScreen } from './screens/JoinScreen.js';
 import { TodayScreen } from './screens/TodayScreen.js';
+import { BattleScreen } from './screens/BattleScreen.js';
+import { PartyScreen } from './screens/PartyScreen.js';
 import { HistoryScreen } from './screens/HistoryScreen.js';
 
-type Tab = 'today' | 'history';
+// タブは「今日」「戦闘」「仲間」「履歴」の4つ（設計書 §3）。酒場とパーティを
+// 別タブにすると雇うたびに行き来することになるので「仲間」に統合してある。
+type Tab = 'today' | 'battle' | 'party' | 'history';
 
 /** localStorage が読めたかどうか。読めないブラウザ設定があるため状態として持つ。 */
 type StorageState = { kind: 'ok'; token: string | null } | { kind: 'unavailable' };
@@ -78,15 +82,20 @@ export function App() {
         <button type="button" onClick={() => setTab('today')} aria-current={tab === 'today'}>
           今日
         </button>
+        <button type="button" onClick={() => setTab('battle')} aria-current={tab === 'battle'}>
+          戦闘
+        </button>
+        <button type="button" onClick={() => setTab('party')} aria-current={tab === 'party'}>
+          仲間
+        </button>
         <button type="button" onClick={() => setTab('history')} aria-current={tab === 'history'}>
-          世界の履歴
+          履歴
         </button>
       </nav>
-      {tab === 'today' ? (
-        <TodayScreen token={token} onUnauthorized={handleUnauthorized} />
-      ) : (
-        <HistoryScreen token={token} onUnauthorized={handleUnauthorized} />
-      )}
+      {tab === 'today' && <TodayScreen token={token} onUnauthorized={handleUnauthorized} />}
+      {tab === 'battle' && <BattleScreen token={token} onUnauthorized={handleUnauthorized} />}
+      {tab === 'party' && <PartyScreen token={token} onUnauthorized={handleUnauthorized} />}
+      {tab === 'history' && <HistoryScreen token={token} onUnauthorized={handleUnauthorized} />}
     </div>
   );
 }
