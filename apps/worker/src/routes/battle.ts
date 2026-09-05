@@ -188,7 +188,12 @@ export async function handlePostBattle(request: Request, env: Env): Promise<Resp
 
   // クライアントは計算しない。core は決定論なので、同じプランからは
   // 必ず同じログが出る（設計書 §6.2）。
-  const log = simulate(partyMembers, enemy, plan, { initialEffects: activePetEffects(activePetId) });
+  const log = simulate(partyMembers, enemy, plan, {
+    initialEffects: activePetEffects(activePetId),
+    // 魔物使いの技はペットを連れていないと使えない。渡し忘れると、
+    // ペットを連れているのに技が空振りする戦闘になる。
+    hasPet: activePetId !== null,
+  });
 
   if (log.result !== 'win') {
     // 負けても罰は無く、挑戦の回数も記録しない（何度でも挑み直せる）。DBには何も残さない。

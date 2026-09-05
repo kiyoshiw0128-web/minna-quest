@@ -459,7 +459,11 @@ function EquipPanel({
                     onChange={() => toggle(activeIds, setActiveIds, skillId, 6)}
                   />
                 </td>
-                <td>{skill.name}</td>
+                <td>
+                  {skill.name}
+                  {/* 装備を選ぶ画面でも、ペットが要ることは見えていないと選べない。 */}
+                  {skill.requiresPet === true && '（要ペット）'}
+                </td>
                 <td>{skill.mpCost}</td>
                 <td>{skill.cooldown === 0 ? '無し' : `${skill.cooldown}ターン`}</td>
                 <td>{damageLabel(skill.damage)}</td>

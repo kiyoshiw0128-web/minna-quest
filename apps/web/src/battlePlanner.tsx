@@ -138,7 +138,11 @@ export function MemberDetail({ member }: { member: PartyMember }) {
         <tbody>
           {member.skills.map((skill: Skill) => (
             <tr key={skill.id}>
-              <td>{skill.name}</td>
+              <td>
+                {skill.name}
+                {/* ペットが要る技は、戦闘前に分からないと連れ忘れたまま挑むことになる。 */}
+                {skill.requiresPet === true && '（要ペット）'}
+              </td>
               <td>{skill.mpCost}</td>
               <td>{skill.cooldown === 0 ? '無し' : `${skill.cooldown}ターン`}</td>
               <td>{damageLabel(skill.damage)}</td>

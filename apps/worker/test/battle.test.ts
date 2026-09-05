@@ -521,3 +521,59 @@ describe('ボスの日', () => {
     expect(response.data.enemy?.id).not.toBe('balgos');
   });
 });
+
+/**
+ * ペットを連れているかどうかが、実際の戦闘まで届いているかの検査。
+ *
+ * サーバが hasPet を渡し忘れても、型は通るし他のテストも通る。
+ * 起きるのは「ペットを連れているのに魔物使いの技だけ空振りする」という、
+ * 遊んでいる側からは原因の分からない壊れ方なので、ここで見る。
+ */
+describe('ペットの有無が戦闘に届いているか', () => {
+  /** 魔物使いの技（ペットが要る）だけを持つキャラ。 */
+  async function seedTamer(playerId: string, characterId: string): Promise<void> {
+    const aptitude = JSON.stringify({ maxHp: 'A', maxMp: 'A', atk: 'A', def: 'A', mat: 'A', mdf: 'A', spd: 'A' });
+    await env.DB.prepare(
+      `INSERT INTO characters
+         (id, player_id, name, adventure_level, adventure_exp, aptitude, current_job, equipped_active, equipped_passive, is_hero)
+       VALUES (?, ?, ?, 50, 0, ?, 'beastTamer', ?, '[]', 1)`,
+    ).bind(characterId, playerId, characterId, aptitude, JSON.stringify(['petFang'])).run();
+    await env.DB.prepare(
+      `INSERT INTO job_levels (character_id, job_id, level, exp) VALUES (?, 'beastTamer', 30, 0)`,
+    ).bind(characterId).run();
+    await env.DB.prepare(
+      `INSERT INTO learned (character_id, kind, id) VALUES (?, 'skill', 'petFang')`,
+    ).bind(characterId).run();
+    await env.DB.prepare(`INSERT INTO party (player_id, character_id, slot) VALUES (?, ?, 0)`)
+      .bind(playerId, characterId).run();
+  }
+
+  async function fightWithFang(): Promise<{ t: string; reason?: string }[]> {
+    const response = await battleRequest(TOKEN_A, 'POST', { [HERO_A]: ['petFang'] });
+    const body = await response.json() as { data: { log: { events: { t: string; reason?: string }[] } } };
+    return body.data.log.events;
+  }
+
+  it('ペットを連れていなければ、魔物使いの技は noPet として記録される', async () => {
+    await seedWorld(1, 'banditAmbush');
+    await addPlayer(PLAYER_A, TOKEN_A);
+    await seedTamer(PLAYER_A, HERO_A);
+
+    const events = await fightWithFang();
+    expect(events.some((e) => e.t === 'skip' && e.reason === 'noPet')).toBe(true);
+    expect(events.some((e) => e.t === 'act')).toBe(true); // 敵は動いている
+  });
+
+  it('ペットを連れていれば、魔物使いの技が実際に使われる', async () => {
+    await seedWorld(1, 'banditAmbush');
+    await addPlayer(PLAYER_A, TOKEN_A);
+    await seedTamer(PLAYER_A, HERO_A);
+    await env.DB.prepare(`INSERT INTO player_pets (player_id, pet_id, obtained_at) VALUES (?, 'puppy', ?)`)
+      .bind(PLAYER_A, '2026-09-06T00:00:00.000Z').run();
+    await env.DB.prepare(`UPDATE players SET active_pet_id = 'puppy' WHERE id = ?`).bind(PLAYER_A).run();
+
+    const events = await fightWithFang();
+    expect(events.some((e) => e.t === 'skip' && e.reason === 'noPet')).toBe(false);
+    expect(events.some((e) => e.t === 'act' && (e as { skillId?: string }).skillId === 'petFang')).toBe(true);
+  });
+});

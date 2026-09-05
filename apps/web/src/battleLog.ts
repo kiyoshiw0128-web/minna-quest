@@ -9,6 +9,7 @@ const SKIP_REASON_LABEL: Record<SkipReason, string> = {
   stunned: 'スタン中',
   noAction: '何もしない',
   unknownSkill: '持っていない技',
+  noPet: 'ペットを連れていない',
 };
 
 const RESULT_LABEL: Record<BattleResult, string> = {

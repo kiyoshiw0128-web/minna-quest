@@ -421,3 +421,32 @@ describe('ペット欄（設計書 §7）', () => {
     expect(await screen.findByText('まだペットに出会っていません。')).toBeInTheDocument();
   });
 });
+
+/**
+ * ペットが要る技は、戦闘前にそれと分からないと、連れ忘れたまま挑むことになる。
+ * 戦闘中に「ペットを連れていない」と出るのは、気づく場所として遅すぎる。
+ */
+describe('ペットが要る技の表示', () => {
+  it('装備の一覧で「要ペット」と分かる', async () => {
+    installFetchMock({
+      'GET /api/me': jsonResponse(200, {
+        ok: true,
+        data: {
+          name: 'きよし', gold: 0, pets: [], activePetId: null,
+          party: [{
+            id: 'c1', name: 'きよし', jobId: 'beastTamer', adventureLevel: 20, jobLevel: 20,
+            stats: { maxHp: 300, maxMp: 60, atk: 60, def: 30, mat: 20, mdf: 25, spd: 20 },
+            learnedSkillIds: ['petFang'], equippedSkillIds: ['petFang'],
+            learnedPassiveIds: [], equippedPassiveIds: [], isHero: true,
+            jobLevels: { beastTamer: 20 }, unlockedJobIds: ['beastTamer'],
+          }],
+        },
+      }),
+      'GET /api/tavern': jsonResponse(200, { ok: true, data: { dayNo: 1, recruits: [] } }),
+    });
+
+    render(<PartyScreen token="t" onUnauthorized={vi.fn()} />);
+    await screen.findByText(/所持金/);
+    expect(screen.getByText(/要ペット/)).toBeInTheDocument();
+  });
+});

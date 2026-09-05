@@ -168,7 +168,12 @@ export async function handlePostArena(request: Request, env: Env): Promise<Respo
   // 本編の戦闘（battle.ts）と同じく、連れているペットの効果をパーティ全員に
   // かける（段階6・設計書 §6「本編の戦闘と闘技場の両方に同じように効かせる」）。
   const activePetId = await getActivePetId(env.DB, player.id);
-  const log = simulate(partyMembers, floorDef.enemy, plan, { initialEffects: activePetEffects(activePetId) });
+  const log = simulate(partyMembers, floorDef.enemy, plan, {
+    initialEffects: activePetEffects(activePetId),
+    // 魔物使いの技はペットを連れていないと使えない。渡し忘れると、
+    // ペットを連れているのに技が空振りする戦闘になる。
+    hasPet: activePetId !== null,
+  });
 
   if (log.result !== 'win') {
     return ok({ log, rewarded: false, firstClear: false });
