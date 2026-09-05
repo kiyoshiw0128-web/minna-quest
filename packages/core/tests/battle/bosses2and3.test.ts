@@ -12,6 +12,7 @@ import { createCharacter } from '../../src/progression/unlock.js';
 import { toPartyMember } from '../../src/progression/bridge.js';
 import type { Aptitude, Character } from '../../src/progression/types.js';
 import type { PartyMember } from '../../src/battle/state.js';
+import type { BattleResult } from '../../src/battle/log.js';
 
 /**
  * 第2・3章のボス（ゴウザ・ヴォルニル）の実測。
@@ -33,7 +34,7 @@ const FLAT: Aptitude = {
   maxHp: 'C', maxMp: 'C', atk: 'C', def: 'C', mat: 'C', mdf: 'C', spd: 'C',
 };
 
-function memberAt(id: string, jobId: 'warrior' | 'priest' | 'mage', level: number): PartyMember {
+function memberAt(id: string, jobId: 'warrior' | 'priest' | 'mage' | 'thief', level: number): PartyMember {
   const base = createCharacter({ id, name: id, aptitude: FLAT, job: jobId }, JOBS);
   const learned = JOBS[jobId].learnset
     .filter((entry) => entry.kind === 'skill' && entry.level <= level)
@@ -55,6 +56,34 @@ function partyAt(level: number): PartyMember[] {
     memberAt('mg', 'mage', level),
     memberAt('p', 'priest', level),
   ];
+}
+
+/**
+ * 僧侶を盗賊に差し替えただけの「脳筋編成」。守りの手段（guardChant）を
+ * 持たない代わりに、僧侶が本来ダメージを出さない分（僧侶はLv13の聖なる炎まで
+ * 攻撃技を覚えない）、盗賊は毎ターン殴れる。
+ *
+ * これを比較対象に置くのは、「読んで備えた編成が、読まずに殴るだけの
+ * 編成に負けていないか」を確かめるため。片方のプランだけ変えて同じ編成を
+ * 比べる（既存のsmartPlan/naivePlanの対比）では、編成そのものを取り替えたら
+ * どうなるかは分からない。
+ */
+function bruteForcePartyAt(level: number): PartyMember[] {
+  return [
+    memberAt('w', 'warrior', level),
+    memberAt('mg', 'mage', level),
+    memberAt('t', 'thief', level),
+  ];
+}
+
+/**
+ * 戦闘結果の優劣。win > timeout > lose とする（打ち切りは、全滅よりは
+ * まだ被害が少ないという意味で、負けより上に置く）。
+ * ターン数の速さは比較しない——速いほうが偉いなら、全体を回復に割く
+ * 編成は原理的に不利になり、僧侶を連れる意味そのものが測れなくなる。
+ */
+function outcomeRank(result: BattleResult): number {
+  return { win: 2, timeout: 1, lose: 0 }[result];
 }
 
 /**
@@ -127,6 +156,43 @@ describe('第2章のボス（鬼呪術師ゴウザ）が14日目に勝てるか'
     // 動くので「入っている」ことだけを見る。
     expect(novaHits.length).toBeGreaterThan(0);
   });
+
+  /**
+   * 「行動表に出ている技が、実際に戦闘中に撃たれるか」の番人。
+   * HPを削りすぎて、呪詛の波動が来る前に決着してしまうと、行動表はプレイヤーに
+   * 見せているだけの飾りになる。想定解の勝ちログに実際に呪詛の波動のactイベントが
+   * 無ければ、この検査で落ちる。
+   */
+  it('想定解で勝ったログに、実際に呪詛の波動が撃たれた記録が残っている', () => {
+    const party = partyAt(6);
+    const log = simulate(party, GOUZA, smartPlan(party));
+    expect(log.result).toBe('win');
+    expect(
+      log.events.some((e) => e.t === 'act' && e.skillId === 'gouzaCurseNova'),
+    ).toBe(true);
+  });
+
+  /**
+   * 「読んで備えた編成が、読まずに殴るだけの編成に負けていないか」の検査。
+   *
+   * 僧侶をguardChantで使う想定解の編成（partyAt）と、僧侶を盗賊に差し替えて
+   * 守りを捨て火力を足しただけの編成（bruteForcePartyAt）を、それぞれの
+   * 編成が出せる最善のプランで戦わせて比べる。片方だけプランを変えて同じ
+   * 編成を比べる（上のnaivePlanとの対比）では、「編成を丸ごと取り替えたら
+   * 勝敗が引っくり返らないか」は分からない——実際、この検査を足す前は
+   * ここが壊れていた（想定解が負け、脳筋編成が勝つ組み合わせがあった）。
+   *
+   * ターン数の速さでは比べない。守りに回った分だけ想定解が遅くなるのは
+   * 織り込み済みで、問われているのは「読んで備えたら、読まずに殴るのに
+   * 結果で負ける」ことがないかだけ。
+   */
+  it('想定解（戦士・魔法使い・僧侶）は、脳筋編成（戦士・魔法使い・盗賊）に結果で負けない', () => {
+    const prepared = partyAt(6);
+    const preparedLog = simulate(prepared, GOUZA, smartPlan(prepared));
+    const brute = bruteForcePartyAt(6);
+    const bruteLog = simulate(brute, GOUZA, naivePlan(brute));
+    expect(outcomeRank(preparedLog.result)).toBeGreaterThanOrEqual(outcomeRank(bruteLog.result));
+  });
 });
 
 describe('第3章のボス（深淵竜ヴォルニル）が21日目に勝てるか', () => {
@@ -183,6 +249,32 @@ describe('第3章のボス（深淵竜ヴォルニル）が21日目に勝てる�
     // 次のターン頭（気絶が実際に読まれる場面）まで広めに見る。
     const after = log.events.slice(roarAt + 1, roarAt + 10);
     expect(after.filter((e) => e.t === 'skip' && e.reason === 'stunned').length).toBeGreaterThan(0);
+  });
+
+  /**
+   * ゴウザ側と同じ番人。尾の薙ぎ払いが行動表どおり実際に撃たれずに
+   * 決着してしまうと、咆哮→気絶→薙ぎ払いという行動表の仕掛けが
+   * プレイヤーに見せているだけの飾りになる。
+   */
+  it('想定解で勝ったログに、実際に尾の薙ぎ払いが撃たれた記録が残っている', () => {
+    const party = partyAt(9);
+    const log = simulate(party, VORNIL, smartPlan(party));
+    expect(log.result).toBe('win');
+    expect(
+      log.events.some((e) => e.t === 'act' && e.skillId === 'vornilTailSweep'),
+    ).toBe(true);
+  });
+
+  /**
+   * ゴウザ側と同じ検査。読んで備えた編成（戦士・魔法使い・僧侶）が、
+   * 守りを持たない脳筋編成（戦士・魔法使い・盗賊）に結果で負けていないか。
+   */
+  it('想定解（戦士・魔法使い・僧侶）は、脳筋編成（戦士・魔法使い・盗賊）に結果で負けない', () => {
+    const prepared = partyAt(9);
+    const preparedLog = simulate(prepared, VORNIL, smartPlan(prepared));
+    const brute = bruteForcePartyAt(9);
+    const bruteLog = simulate(brute, VORNIL, naivePlan(brute));
+    expect(outcomeRank(preparedLog.result)).toBeGreaterThanOrEqual(outcomeRank(bruteLog.result));
   });
 });
 
