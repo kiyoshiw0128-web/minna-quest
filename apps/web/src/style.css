@@ -841,3 +841,19 @@ section > h4 {
     grid-column: 1 / -1;
   }
 }
+
+/* ---- 結果の文章 ---- */
+
+/*
+ * その日に何が起きたかの読み物。締まった日にこれが出ないと、名前と票数だけが
+ * 残り、選んだ意味がその場で消える。数字の並びと区別が付くよう、字を大きめに、
+ * 行間を広く、左に罫を引いて「読むもの」として置く。
+ */
+.narrative {
+  margin: 0.6rem 0 1rem;
+  padding: 0.6rem 0 0.6rem 0.9rem;
+  border-left: 3px solid var(--accent);
+  font-size: 1rem;
+  line-height: 1.9;
+  color: var(--fg);
+}

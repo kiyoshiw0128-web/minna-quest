@@ -36,6 +36,17 @@ export type DailyEvent = {
   readonly enemyId?: string;
   /** kind が 'story' のとき、選んだ結果 */
   readonly outcome?: EventOutcome;
+  /**
+   * その日が締まったあとに読ませる、結果の文章。
+   *
+   * 締まった日に名前と票数しか出ないと、「分かれ道に決まりました」で終わって
+   * しまい、何が起きたのか分からない。毎日の選択で冒険が変わるという遊びなので、
+   * 変わった中身が読めないと、選んだ意味がその場で消える。
+   *
+   * **抽選にも結果にも影響しない、読み物だけの欄。** 途中で書き換えても
+   * 過去の日の3択やタグは変わらない（`pickEvents` も `applyOutcome` も見ていない）。
+   */
+  readonly resultText?: string;
   readonly condition: EventCondition;
 };
 

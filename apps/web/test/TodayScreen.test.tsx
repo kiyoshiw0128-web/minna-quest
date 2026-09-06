@@ -120,3 +120,32 @@ describe('投票の締切競合', () => {
     expect(screen.queryByText('this day is already closed')).not.toBeInTheDocument();
   });
 });
+
+/**
+ * 締まった日に何が起きたかを読ませる。
+ * 名前と票数だけだと「分かれ道に決まりました」で終わり、毎日の選択で冒険が
+ * 変わるという遊びなのに、変わった中身が読めない。
+ */
+describe('締まった日の結果の文章', () => {
+  it('決まった選択肢の結果が本文として出る', async () => {
+    installFetchMock({
+      'GET /api/today': jsonResponse(200, {
+        ok: true,
+        data: {
+          dayNo: 1, chapter: 1,
+          optionIds: ['crossroads', 'restAtSpring', 'meetElder'],
+          myVote: 'crossroads', chosenId: 'crossroads',
+          counts: { crossroads: 2, restAtSpring: 1, meetElder: 0 },
+          tiebroken: false,
+        },
+      }),
+    });
+
+    render(<TodayScreen token="t" onUnauthorized={vi.fn()} />);
+    await screen.findByText(/今日決まったこと/);
+
+    const narrative = document.querySelector('.narrative');
+    expect(narrative).not.toBeNull();
+    expect((narrative?.textContent ?? '').length).toBeGreaterThan(10);
+  });
+});

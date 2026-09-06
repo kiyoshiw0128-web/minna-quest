@@ -87,8 +87,10 @@ export function HistoryScreen({ token, onUnauthorized }: Props) {
               const chosen = day.chosenId !== null ? resolveEvent(day.chosenId) : null;
               return (
                 <li key={day.dayNo}>
-                  {day.dayNo}日目: {chosen?.label ?? '(未決定)'}
+                  <strong>{day.dayNo}日目: {chosen?.label ?? '(未決定)'}</strong>
                   {day.tiebroken === true && '（同数・シード決定）'}
+                  {/* 通ってきた道を読み返せるようにする。ここが冒険の記録になる。 */}
+                  {chosen?.resultText != null && <p className="narrative">{chosen.resultText}</p>}
                   <ul>
                     {day.optionIds.map((optionId) => {
                       const event = resolveEvent(optionId);

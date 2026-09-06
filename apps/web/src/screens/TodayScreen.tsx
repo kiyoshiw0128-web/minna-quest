@@ -156,6 +156,13 @@ function ClosedDay({ data }: { data: TodayResult }) {
   return (
     <section>
       <h2>今日決まったこと: {chosen.label}</h2>
+      {/*
+        名前と票数だけだと「分かれ道に決まりました」で終わり、何が起きたのか
+        分からない。毎日の選択で冒険が変わる遊びなので、変わった中身が読めないと
+        選んだ意味がその場で消える。
+      */}
+      {chosen.resultText !== null && <p className="narrative">{chosen.resultText}</p>}
+      <h3>票の割れ方</h3>
       <ul>
         {data.optionIds.map((optionId) => {
           const event = resolveEvent(optionId);

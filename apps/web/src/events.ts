@@ -6,6 +6,8 @@ export type ResolvedEvent = {
   readonly label: string;
   /** マスタに無いIDのときは null。戦闘/出来事のバッジを出しようがないため。 */
   readonly kind: EventKind | null;
+  /** 締まったあとに読ませる結果の文章。マスタに無ければ null。 */
+  readonly resultText: string | null;
 };
 
 // @mq/core の EVENTS はキー名でアクセスする表なので、IDから引けるように作り直す。
@@ -22,7 +24,7 @@ const EVENTS_BY_ID = new Map<string, DailyEvent>(Object.values(EVENTS).map((even
 export function resolveEvent(id: string): ResolvedEvent {
   const event = EVENTS_BY_ID.get(id);
   if (event === undefined) {
-    return { id, label: id, kind: null };
+    return { id, label: id, kind: null, resultText: null };
   }
-  return { id, label: event.name, kind: event.kind };
+  return { id, label: event.name, kind: event.kind, resultText: event.resultText ?? null };
 }
