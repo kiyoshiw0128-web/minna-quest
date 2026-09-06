@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest';
-import { equipActive, equipPassive, ACTIVE_SLOTS, PASSIVE_SLOTS } from '../../src/progression/equip.js';
+import { equipActive, equipPassive, equipItem, ACTIVE_SLOTS, PASSIVE_SLOTS } from '../../src/progression/equip.js';
+import { EQUIPMENT } from '../../src/data/equipment.js';
 import type { Character, Aptitude } from '../../src/progression/types.js';
 
 const flat: Aptitude = {
@@ -95,5 +96,46 @@ describe('equipPassive', () => {
 
   it('アクティブの習得一覧とは混ざらない', () => {
     expect(equipPassive(character(), ['a'])).toEqual({ ok: false, reason: 'notLearned' });
+  });
+});
+
+describe('equipItem（設計書 §6）', () => {
+  it('存在する武器・防具をそれぞれの枠に装備できる', () => {
+    const result = equipItem(character(), 'rustedSword', 'clothVest', EQUIPMENT);
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.character.equippedWeapon).toBe('rustedSword');
+    expect(result.character.equippedArmor).toBe('clothVest');
+  });
+
+  it('片方だけ外す（nullにする）ことができる', () => {
+    const before = character({ equippedWeapon: 'rustedSword', equippedArmor: 'clothVest' });
+    const result = equipItem(before, null, 'clothVest', EQUIPMENT);
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.character.equippedWeapon).toBeNull();
+    expect(result.character.equippedArmor).toBe('clothVest');
+  });
+
+  it('存在しない武器IDは断る', () => {
+    expect(equipItem(character(), 'no-such-item', null, EQUIPMENT)).toEqual({ ok: false, reason: 'unknownItem' });
+  });
+
+  it('存在しない防具IDは断る', () => {
+    expect(equipItem(character(), null, 'no-such-item', EQUIPMENT)).toEqual({ ok: false, reason: 'unknownItem' });
+  });
+
+  it('防具を武器枠に付けようとすると断る（スロット違い）', () => {
+    expect(equipItem(character(), 'clothVest', null, EQUIPMENT)).toEqual({ ok: false, reason: 'wrongSlot' });
+  });
+
+  it('武器を防具枠に付けようとすると断る（スロット違い）', () => {
+    expect(equipItem(character(), null, 'rustedSword', EQUIPMENT)).toEqual({ ok: false, reason: 'wrongSlot' });
+  });
+
+  it('元のキャラを書き換えない', () => {
+    const before = character();
+    equipItem(before, 'rustedSword', 'clothVest', EQUIPMENT);
+    expect(before.equippedWeapon).toBeUndefined();
   });
 });

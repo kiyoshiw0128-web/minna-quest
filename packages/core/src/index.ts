@@ -51,7 +51,7 @@ export {
   changeJob,
   createCharacter,
 } from './progression/unlock.js';
-export { equipActive, equipPassive, ACTIVE_SLOTS, PASSIVE_SLOTS } from './progression/equip.js';
+export { equipActive, equipPassive, equipItem, ACTIVE_SLOTS, PASSIVE_SLOTS } from './progression/equip.js';
 export { toPartyMember } from './progression/bridge.js';
 
 export type {
@@ -66,13 +66,15 @@ export type {
 export type { Job, JobRequirement, JobStatBonus, LearnEntry } from './progression/job.js';
 export type { ExpGain, JobTable } from './progression/exp.js';
 export type { JobChangeError } from './progression/unlock.js';
-export type { EquipError } from './progression/equip.js';
+export type { EquipError, EquipItemError } from './progression/equip.js';
 export type { SkillTable, PassiveTable } from './progression/bridge.js';
 
 export { JOBS } from './data/jobs.js';
 export { PASSIVES } from './data/passives.js';
 export { PETS } from './data/pets.js';
 export type { Pet } from './data/pets.js';
+export { WEAPONS, ARMORS, EQUIPMENT, applyEquipment } from './data/equipment.js';
+export type { Equipment, EquipmentSlot } from './data/equipment.js';
 
 export { hashString, randomAt, intAt, drawWithout } from './daily/rng.js';
 export { daySeed, tavernSeed, voteSeed } from './daily/seed.js';

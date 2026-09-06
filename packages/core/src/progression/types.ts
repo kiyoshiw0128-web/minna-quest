@@ -36,6 +36,14 @@ export type Character = {
   /** 戦闘に持ち込むもの。習得済みの中から選ぶ */
   equippedActive: readonly string[];
   equippedPassive: readonly string[];
+  /**
+   * 武器1・防具1（設計書 §3）。省略可能にしてあるのは、装備という概念自体を
+   * 知らない既存のテストフィクスチャや createCharacter 以前のコードを
+   * 一切書き換えずに済ませるため（未設定は「装備なし」と同じ扱いになる。
+   * bridge.ts の resolveEquipment を参照）。
+   */
+  equippedWeapon?: string | null;
+  equippedArmor?: string | null;
 };
 
 /** 装備できるパッシブ。戦闘開始時から永続でかかる。 */

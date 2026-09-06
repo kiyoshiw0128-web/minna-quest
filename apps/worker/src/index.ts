@@ -1,14 +1,17 @@
 import { catchUp } from './close.js';
 import { handleArenaRanking, handleGetArena, handlePostArena } from './routes/arena.js';
 import { handleGetBattle, handlePostBattle } from './routes/battle.js';
+import { handleBuy } from './routes/buy.js';
 import { handleDismiss } from './routes/dismiss.js';
 import { handleEquip } from './routes/equip.js';
+import { handleEquipItem } from './routes/equipItem.js';
 import { handleHire } from './routes/hire.js';
 import { handleJob } from './routes/job.js';
 import { handleJoin } from './routes/join.js';
 import { handleMe } from './routes/me.js';
 import { handleParty } from './routes/party.js';
 import { handlePet } from './routes/pet.js';
+import { handleShop } from './routes/shop.js';
 import { handleTavern } from './routes/tavern.js';
 import { handleToday } from './routes/today.js';
 import { handleVote } from './routes/vote.js';
@@ -88,6 +91,18 @@ export default {
 
     if (url.pathname === '/api/pet' && request.method === 'POST') {
       return handlePet(request, env);
+    }
+
+    if (url.pathname === '/api/shop' && request.method === 'GET') {
+      return handleShop(request, env);
+    }
+
+    if (url.pathname === '/api/buy' && request.method === 'POST') {
+      return handleBuy(request, env);
+    }
+
+    if (url.pathname === '/api/equip-item' && request.method === 'POST') {
+      return handleEquipItem(request, env);
     }
 
     // `/api/` 配下で上のどれにも一致しなかったものは、画面のアセットに

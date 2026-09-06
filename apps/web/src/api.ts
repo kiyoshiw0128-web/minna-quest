@@ -1,5 +1,5 @@
 import { clearToken } from './token.js';
-import type { BattleLog, BattlePlan, Enemy, PartyMember, Recruit, StatBlock } from '@mq/core';
+import type { BattleLog, BattlePlan, Enemy, Equipment, PartyMember, Recruit, StatBlock } from '@mq/core';
 
 // worker/src/respond.ts の封筒に合わせる。ここを変えるとAPI変更なしの前提が崩れる。
 type Envelope<T> = { ok: true; data: T } | { ok: false; error: string };
@@ -111,6 +111,10 @@ export type MePartyMember = {
   adventureLevel: number;
   jobLevel: number;
   stats: StatBlock;
+  // worker/src/routes/me.ts が段階8で足したもの（設計書 §7）。装備が乗る前の
+  // 実効ステータス。装備候補を選んだときの上がり幅を、画面側でこの値を
+  // 基準に計算する（stats は現在装備している分が既に乗った値）。
+  baseStats?: StatBlock;
   learnedSkillIds: string[];
   equippedSkillIds: string[];
   learnedPassiveIds: string[];
@@ -120,6 +124,9 @@ export type MePartyMember = {
   // 就いたことのある職業とそのジョブレベル、いま就ける職業のID一覧。
   jobLevels: Record<string, number>;
   unlockedJobIds: string[];
+  // 段階8・設計書 §7。いま装備している武器・防具のID（無ければnull）。
+  equippedWeaponId?: string | null;
+  equippedArmorId?: string | null;
 };
 
 export type MeResult = {
@@ -130,6 +137,8 @@ export type MeResult = {
   // モック応答には無いことがあるため、画面側は undefined も想定して読む。
   pets?: string[];
   activePetId?: string | null;
+  // 段階8・設計書 §7。買った装備の一覧（同じIDが複数入りうる）。
+  items?: string[];
 };
 
 export function fetchMe(token: string): Promise<MeResult> {
@@ -180,6 +189,43 @@ export function updateEquipment(
   return request('/api/equip', {
     method: 'POST',
     body: JSON.stringify({ characterId, activeIds, passiveIds }),
+    ...withAuth(token),
+  });
+}
+
+export type ShopResult = { items: Equipment[] };
+
+/** 店の品揃え。全員に同じものを見せる（設計書 §6）。 */
+export function fetchShop(token: string): Promise<ShopResult> {
+  return request('/api/shop', withAuth(token));
+}
+
+export type BuyResult = { itemId: string; cost: number };
+
+/** 装備を買う。金貨不足はサーバの文言をそのまま出す（設計書 §6）。 */
+export function buyItem(token: string, itemId: string): Promise<BuyResult> {
+  return request('/api/buy', {
+    method: 'POST',
+    body: JSON.stringify({ itemId }),
+    ...withAuth(token),
+  });
+}
+
+export type EquipItemResult = { characterId: string; weaponId: string | null; armorId: string | null };
+
+/**
+ * 武器・防具を装備する。片方だけ外す・両方外す場合もnullを渡す
+ * （worker/src/routes/equipItem.ts が両方必須で受けるため、undefinedにしない）。
+ */
+export function updateCharacterEquipmentItems(
+  token: string,
+  characterId: string,
+  weaponId: string | null,
+  armorId: string | null,
+): Promise<EquipItemResult> {
+  return request('/api/equip-item', {
+    method: 'POST',
+    body: JSON.stringify({ characterId, weaponId, armorId }),
     ...withAuth(token),
   });
 }

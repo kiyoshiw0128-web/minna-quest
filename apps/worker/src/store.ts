@@ -301,13 +301,15 @@ function characterInsertStatements(
     db
       .prepare(
         `INSERT INTO characters
-           (id, player_id, name, adventure_level, adventure_exp, aptitude, current_job, equipped_active, equipped_passive, is_hero)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+           (id, player_id, name, adventure_level, adventure_exp, aptitude, current_job,
+            equipped_active, equipped_passive, equipped_weapon, equipped_armor, is_hero)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       )
       .bind(
         character.id, playerId, character.name, character.adventureLevel, character.adventureExp,
         JSON.stringify(character.aptitude), character.currentJob,
         JSON.stringify(character.equippedActive), JSON.stringify(character.equippedPassive),
+        character.equippedWeapon ?? null, character.equippedArmor ?? null,
         isHero ? 1 : 0,
       ),
     ...Object.entries(character.jobs).map(([jobId, progress]) =>
@@ -372,6 +374,7 @@ export async function claimInviteAndInsertPlayer(
 type RawPartyCharacter = {
   id: string; name: string; adventure_level: number; adventure_exp: number;
   aptitude: string; current_job: string; equipped_active: string; equipped_passive: string;
+  equipped_weapon: string | null; equipped_armor: string | null;
 };
 
 /**
@@ -396,7 +399,8 @@ export async function getPartyCharacters(
   const rows = await db
     .prepare(
       `SELECT c.id, c.name, c.adventure_level, c.adventure_exp, c.aptitude,
-              c.current_job, c.equipped_active, c.equipped_passive
+              c.current_job, c.equipped_active, c.equipped_passive,
+              c.equipped_weapon, c.equipped_armor
          FROM party p JOIN characters c ON c.id = p.character_id
         WHERE p.player_id = ?
         ORDER BY p.slot ASC`,
@@ -442,6 +446,8 @@ export async function getPartyCharacters(
       learnedPassives,
       equippedActive: JSON.parse(row.equipped_active) as string[],
       equippedPassive: JSON.parse(row.equipped_passive) as string[],
+      equippedWeapon: row.equipped_weapon,
+      equippedArmor: row.equipped_armor,
     };
   });
 }
@@ -463,7 +469,8 @@ export async function getCharacterForPlayer(
   const row = await db
     .prepare(
       `SELECT id, name, adventure_level, adventure_exp, aptitude,
-              current_job, equipped_active, equipped_passive, is_hero
+              current_job, equipped_active, equipped_passive,
+              equipped_weapon, equipped_armor, is_hero
          FROM characters WHERE id = ? AND player_id = ?`,
     )
     .bind(characterId, playerId)
@@ -503,6 +510,8 @@ export async function getCharacterForPlayer(
     learnedPassives,
     equippedActive: JSON.parse(row.equipped_active) as string[],
     equippedPassive: JSON.parse(row.equipped_passive) as string[],
+    equippedWeapon: row.equipped_weapon,
+    equippedArmor: row.equipped_armor,
   };
   return { character, isHero: row.is_hero === 1 };
 }
@@ -594,6 +603,98 @@ export async function setEquipment(
     .bind(JSON.stringify(activeIds), JSON.stringify(passiveIds), characterId, playerId)
     .run();
   return (result.meta.changes ?? 0) === 1;
+}
+
+/**
+ * 武器・防具の枠を1文でまとめて書き換える（設計書 §6 `POST /api/equip-item`）。
+ *
+ * 「そのプレイヤーが本当にこのキャラを持っているか」に加え、「所持数を
+ * 超えて複数のキャラに同じ装備を付けていないか」（設計書 §8 テスト5）を
+ * このUPDATE文自身のWHERE句だけで守る。ルート側の事前チェック（equip.tsの
+ * equipItem）は存在確認とスロット確認までしか見ないので、ここが最後の砦になる。
+ *
+ * weaponId/armorIdがnull（外す）のときはその枠の所持数チェックを丸ごとスキップ
+ * する（`? IS NULL OR ...`）。外す操作は所持数を圧迫しないので、チェックする
+ * 理由が無い。
+ *
+ * 所持数チェックは「(そのitem_idの所持数) > (このキャラを除く、他キャラの
+ * 装備数)」で行う。このキャラ自身をid != ?で除いているので、同じ装備を
+ * 装備し直す（据え置く）操作は所持数ぶんの余裕が無くても常に通る。
+ */
+export async function setCharacterEquipmentItems(
+  db: D1Database,
+  playerId: string,
+  characterId: string,
+  weaponId: string | null,
+  armorId: string | null,
+): Promise<boolean> {
+  const result = await db
+    .prepare(
+      `UPDATE characters
+          SET equipped_weapon = ?, equipped_armor = ?
+        WHERE id = ? AND player_id = ?
+          AND (
+            ? IS NULL OR (
+              (SELECT COUNT(*) FROM player_items WHERE player_id = ? AND item_id = ?)
+              >
+              (SELECT COUNT(*) FROM characters WHERE player_id = ? AND id != ? AND equipped_weapon = ?)
+            )
+          )
+          AND (
+            ? IS NULL OR (
+              (SELECT COUNT(*) FROM player_items WHERE player_id = ? AND item_id = ?)
+              >
+              (SELECT COUNT(*) FROM characters WHERE player_id = ? AND id != ? AND equipped_armor = ?)
+            )
+          )`,
+    )
+    .bind(
+      weaponId, armorId, characterId, playerId,
+      weaponId, playerId, weaponId, playerId, characterId, weaponId,
+      armorId, playerId, armorId, playerId, characterId, armorId,
+    )
+    .run();
+  return (result.meta.changes ?? 0) === 1;
+}
+
+/** そのプレイヤーが買った装備のID。同じIDが複数回入りうる（設計書 §6）。 */
+export async function getPlayerItemIds(db: D1Database, playerId: string): Promise<readonly string[]> {
+  const rows = await db
+    .prepare('SELECT item_id FROM player_items WHERE player_id = ? ORDER BY obtained_at ASC')
+    .bind(playerId)
+    .all<{ item_id: string }>();
+  return rows.results.map((row) => row.item_id);
+}
+
+/**
+ * 装備を買う。金貨を払うのと所持品に加えるのを1トランザクションで行う
+ * （設計書 §2 —「買うこと」「金貨を払う」が片方だけ起きてはいけない）。
+ *
+ * hireRecruitと同じ形。所持品への挿入と金貨の控除の両方に、同じ
+ * 「(SELECT gold FROM players WHERE id=?) >= cost」の条件を独立に持たせる
+ * （guardのコピー）。トランザクション内でどちらの文が先に実行されても
+ * gold列はまだ変わっていないので、同じ条件が同じ真偽値を返す。
+ * 両方0行のまま何も起きないか、両方1行ずつ効くかのどちらかにしかならない。
+ */
+export async function buyItem(
+  db: D1Database,
+  params: { playerId: string; itemId: string; cost: number; obtainedAt: string },
+): Promise<boolean> {
+  const { playerId, itemId, cost, obtainedAt } = params;
+  const GOLD_ENOUGH = '(SELECT gold FROM players WHERE id = ?) >= ?';
+
+  const [insertResult] = await db.batch([
+    db
+      .prepare(
+        `INSERT INTO player_items (player_id, item_id, obtained_at)
+         SELECT ?, ?, ? WHERE ${GOLD_ENOUGH}`,
+      )
+      .bind(playerId, itemId, obtainedAt, playerId, cost),
+    db
+      .prepare(`UPDATE players SET gold = gold - ? WHERE id = ? AND ${GOLD_ENOUGH}`)
+      .bind(cost, playerId, playerId, cost),
+  ]);
+  return (insertResult.meta.changes ?? 0) === 1;
 }
 
 /**

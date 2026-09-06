@@ -85,6 +85,8 @@ export function createCharacter(
     learnedPassives: [],
     equippedActive: [],
     equippedPassive: [],
+    equippedWeapon: null,
+    equippedArmor: null,
   };
 
   const learned = applyLearns(blank, learnsAt(job, 1)).character;

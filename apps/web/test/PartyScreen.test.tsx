@@ -112,11 +112,21 @@ function tavernResponse() {
   });
 }
 
+/**
+ * 段階8・設計書 §6。品揃えは全員共通なので、装備を検証しないテストでは
+ * 中身が空でも成立する。GET /api/shop も PartyScreen が読み込み時に必ず
+ * 呼ぶため、全ての installFetchMock に含めておく必要がある。
+ */
+function shopResponse() {
+  return jsonResponse(200, { ok: true, data: { items: [] } });
+}
+
 describe('仲間画面（設計書 §5）', () => {
   it('所持金・パーティ・酒場の3人が出る', async () => {
     installFetchMock({
       'GET /api/me': meResponse(500),
       'GET /api/tavern': tavernResponse(),
+      'GET /api/shop': shopResponse(),
     });
 
     render(<PartyScreen token="t" onUnauthorized={vi.fn()} />);
@@ -132,6 +142,7 @@ describe('仲間画面（設計書 §5）', () => {
     installFetchMock({
       'GET /api/me': meResponse(0),
       'GET /api/tavern': tavernResponse(),
+      'GET /api/shop': shopResponse(),
       'POST /api/hire': jsonResponse(400, { ok: false, error: 'insufficient gold' }),
     });
     const user = userEvent.setup();
@@ -157,6 +168,7 @@ describe('仲間画面（設計書 §5）', () => {
         const method = init?.method ?? 'GET';
         if (method === 'GET' && url === '/api/me') return meResponse(999999);
         if (method === 'GET' && url === '/api/tavern') return tavernResponse();
+        if (method === 'GET' && url === '/api/shop') return shopResponse();
         if (method === 'POST' && url === '/api/hire') return hirePromise;
         throw new Error(`このテストで想定していないリクエスト: ${method} ${url}`);
       }),
@@ -179,6 +191,7 @@ describe('仲間画面（設計書 §5）', () => {
     installFetchMock({
       'GET /api/me': [meResponse(500), meResponseAsMonk(500)],
       'GET /api/tavern': tavernResponse(),
+      'GET /api/shop': shopResponse(),
       'POST /api/job': jsonResponse(200, {
         ok: true,
         data: { characterId: 'hero1', jobId: 'monk', jobLevel: 1, newSkillIds: [], newPassiveIds: [] },
@@ -205,6 +218,7 @@ describe('仲間画面（設計書 §5）', () => {
     installFetchMock({
       'GET /api/me': meResponse(500),
       'GET /api/tavern': tavernResponse(),
+      'GET /api/shop': shopResponse(),
     });
     const user = userEvent.setup();
 
@@ -223,6 +237,7 @@ describe('仲間画面（設計書 §5）', () => {
     installFetchMock({
       'GET /api/me': meResponse(500),
       'GET /api/tavern': tavernResponse(),
+      'GET /api/shop': shopResponse(),
     });
 
     render(<PartyScreen token="t" onUnauthorized={vi.fn()} />);
@@ -237,6 +252,7 @@ describe('仲間画面（設計書 §5）', () => {
     installFetchMock({
       'GET /api/me': meResponseWithProvoke(500),
       'GET /api/tavern': tavernResponse(),
+      'GET /api/shop': shopResponse(),
       'POST /api/equip': jsonResponse(200, {
         ok: true, data: { characterId: 'hero1', activeIds: ['slash', 'provoke'], passiveIds: [] },
       }),
@@ -247,7 +263,9 @@ describe('仲間画面（設計書 §5）', () => {
     await user.click(await screen.findByText(/ゆうしゃ/));
 
     await user.click(screen.getByLabelText('挑発をアクティブに装備'));
-    await user.click(screen.getByRole('button', { name: '装備を更新する' }));
+    // 段階8で武器・防具の装備パネルにも同名のボタンが増えたため、
+    // 先に描画されるアクティブ技/パッシブの装備パネル側（1つ目）を狙う。
+    await user.click(screen.getAllByRole('button', { name: '装備を更新する' })[0]);
 
     await waitFor(() => {
       const call = vi.mocked(fetch).mock.calls.find(([, init]) => init?.method === 'POST'
@@ -262,6 +280,7 @@ describe('仲間画面（設計書 §5）', () => {
     installFetchMock({
       'GET /api/me': meResponse(500),
       'GET /api/tavern': tavernResponse(),
+      'GET /api/shop': shopResponse(),
       'POST /api/dismiss': jsonResponse(400, { ok: false, error: 'cannot dismiss hero' }),
     });
     const user = userEvent.setup();
@@ -278,6 +297,7 @@ describe('仲間画面（設計書 §5）', () => {
     installFetchMock({
       'GET /api/me': meResponseTwoMembers(500),
       'GET /api/tavern': tavernResponse(),
+      'GET /api/shop': shopResponse(),
       'POST /api/party': jsonResponse(200, { ok: true, data: { order: ['hire1', 'hero1'] } }),
     });
     const user = userEvent.setup();
@@ -322,6 +342,7 @@ describe('装備の更新でパッシブが消えない', () => {
         },
       }),
       'GET /api/tavern': jsonResponse(200, { ok: true, data: { dayNo: 1, recruits: [] } }),
+      'GET /api/shop': shopResponse(),
       'POST /api/equip': jsonResponse(200, { ok: true, data: {} }),
     });
 
@@ -330,10 +351,12 @@ describe('装備の更新でパッシブが消えない', () => {
 
     // アクティブ技をもう1つ足すだけ。パッシブには触らない。
     await userEvent.click(screen.getByLabelText(/挑発をアクティブに装備/));
-    await userEvent.click(screen.getByRole('button', { name: '装備を更新する' }));
+    // 段階8の武器・防具パネルにも同名ボタンが増えたため、1つ目（アクティブ/
+    // パッシブの装備パネル）を狙う。
+    await userEvent.click(screen.getAllByRole('button', { name: '装備を更新する' })[0]);
 
     const call = (fetch as unknown as { mock: { calls: unknown[][] } }).mock.calls
-      .find((c) => String(c[0]).includes('/api/equip'));
+      .find((c) => String(c[0]).includes('/api/equip') && !String(c[0]).includes('/api/equip-item'));
     const body = JSON.parse(String((call?.[1] as RequestInit).body));
     expect(body.passiveIds).toEqual(['ironSkin']);
   });
@@ -369,6 +392,7 @@ describe('ペット欄（設計書 §7）', () => {
     installFetchMock({
       'GET /api/me': meResponseWithPets('puppy'),
       'GET /api/tavern': tavernResponse(),
+      'GET /api/shop': shopResponse(),
     });
 
     render(<PartyScreen token="t" onUnauthorized={vi.fn()} />);
@@ -392,6 +416,7 @@ describe('ペット欄（設計書 §7）', () => {
     installFetchMock({
       'GET /api/me': [meResponseWithPets('puppy'), meResponseWithPets('kitten')],
       'GET /api/tavern': tavernResponse(),
+      'GET /api/shop': shopResponse(),
       'POST /api/pet': jsonResponse(200, { ok: true, data: { activePetId: 'kitten' } }),
     });
     const user = userEvent.setup();
@@ -415,6 +440,7 @@ describe('ペット欄（設計書 §7）', () => {
     installFetchMock({
       'GET /api/me': meResponse(500),
       'GET /api/tavern': tavernResponse(),
+      'GET /api/shop': shopResponse(),
     });
 
     render(<PartyScreen token="t" onUnauthorized={vi.fn()} />);
@@ -443,10 +469,125 @@ describe('ペットが要る技の表示', () => {
         },
       }),
       'GET /api/tavern': jsonResponse(200, { ok: true, data: { dayNo: 1, recruits: [] } }),
+      'GET /api/shop': shopResponse(),
     });
 
     render(<PartyScreen token="t" onUnauthorized={vi.fn()} />);
     await screen.findByText(/所持金/);
     expect(screen.getByText(/要ペット/)).toBeInTheDocument();
+  });
+});
+
+/** 段階8・設計書 §6・§7。店の一覧と、値段・効果・買えない理由の表示。 */
+describe('店（設計書 §6・§7）', () => {
+  function shopWithRustedSword() {
+    return jsonResponse(200, {
+      ok: true,
+      data: {
+        items: [{ id: 'rustedSword', name: '錆びた剣', slot: 'weapon', cost: 100, mods: { atk: 3 } }],
+      },
+    });
+  }
+
+  it('値段と効果が出て、金貨が足りなければ買えない理由が出る', async () => {
+    installFetchMock({
+      'GET /api/me': meResponse(50),
+      'GET /api/tavern': tavernResponse(),
+      'GET /api/shop': shopWithRustedSword(),
+    });
+
+    render(<PartyScreen token="t" onUnauthorized={vi.fn()} />);
+    expect(await screen.findByText(/錆びた剣/)).toBeInTheDocument();
+    expect(screen.getByText(/ATK \+3/)).toBeInTheDocument();
+    expect(screen.getByText(/100ゴールド/)).toBeInTheDocument();
+    expect(screen.getByText('金貨が足りません')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: '買う' })).toBeDisabled();
+  });
+
+  it('金貨が足りれば買える。押すとPOST /api/buyが飛ぶ', async () => {
+    installFetchMock({
+      'GET /api/me': meResponse(500),
+      'GET /api/tavern': tavernResponse(),
+      'GET /api/shop': shopWithRustedSword(),
+      'POST /api/buy': jsonResponse(200, { ok: true, data: { itemId: 'rustedSword', cost: 100 } }),
+    });
+    const user = userEvent.setup();
+
+    render(<PartyScreen token="t" onUnauthorized={vi.fn()} />);
+    const buyButton = await screen.findByRole('button', { name: '買う' });
+    expect(buyButton).toBeEnabled();
+    await user.click(buyButton);
+
+    await waitFor(() => {
+      const call = vi.mocked(fetch).mock.calls.find(([, init]) => init?.method === 'POST'
+        && typeof init.body === 'string' && init.body.includes('rustedSword'));
+      expect(call).toBeDefined();
+    });
+  });
+});
+
+/** 段階8・設計書 §7。武器・防具の装備パネル。 */
+describe('装備パネル（設計書 §7）', () => {
+  function meWithOwnedSword(equippedWeaponId: string | null) {
+    return jsonResponse(200, {
+      ok: true,
+      data: {
+        name: 'いちろう',
+        gold: 500,
+        items: ['rustedSword'],
+        party: [
+          {
+            id: 'hero1', name: 'ゆうしゃ', jobId: 'warrior', adventureLevel: 3, jobLevel: 3,
+            stats: { maxHp: 100, maxMp: 20, atk: 15, def: 10, mat: 10, mdf: 10, spd: 12 },
+            baseStats: { maxHp: 100, maxMp: 20, atk: 15, def: 10, mat: 10, mdf: 10, spd: 12 },
+            learnedSkillIds: ['slash'], equippedSkillIds: ['slash'],
+            learnedPassiveIds: [], equippedPassiveIds: [], isHero: false,
+            jobLevels: { warrior: 3 }, unlockedJobIds: ['warrior', 'monk', 'mage', 'priest', 'thief', 'ranger'],
+            equippedWeaponId, equippedArmorId: null,
+          },
+        ],
+      },
+    });
+  }
+
+  it('持っている武器が一覧に出て、選んで更新するとPOST /api/equip-itemが飛ぶ', async () => {
+    installFetchMock({
+      'GET /api/me': meWithOwnedSword(null),
+      'GET /api/tavern': tavernResponse(),
+      'GET /api/shop': shopResponse(),
+      'POST /api/equip-item': jsonResponse(200, {
+        ok: true, data: { characterId: 'hero1', weaponId: 'rustedSword', armorId: null },
+      }),
+    });
+    const user = userEvent.setup();
+
+    render(<PartyScreen token="t" onUnauthorized={vi.fn()} />);
+    await user.click(await screen.findByText(/ゆうしゃ/));
+
+    await user.click(screen.getByLabelText(/錆びた剣/));
+    // 装備パネル側の「装備を更新する」（アクティブ/パッシブのパネルより後に描画される2つ目）。
+    await user.click(screen.getAllByRole('button', { name: '装備を更新する' })[1]);
+
+    await waitFor(() => {
+      const call = vi.mocked(fetch).mock.calls.find(([url, init]) => init?.method === 'POST'
+        && String(url).includes('/api/equip-item')
+        && typeof init.body === 'string' && init.body.includes('rustedSword'));
+      expect(call).toBeDefined();
+    });
+  });
+
+  it('既に装備している武器は、他キャラの装備状況に関わらず選び直せる', async () => {
+    installFetchMock({
+      'GET /api/me': meWithOwnedSword('rustedSword'),
+      'GET /api/tavern': tavernResponse(),
+      'GET /api/shop': shopResponse(),
+    });
+
+    render(<PartyScreen token="t" onUnauthorized={vi.fn()} />);
+    await userEvent.click(await screen.findByText(/ゆうしゃ/));
+
+    const swordOption = screen.getByLabelText(/錆びた剣/) as HTMLInputElement;
+    expect(swordOption.checked).toBe(true);
+    expect(swordOption).not.toBeDisabled();
   });
 });

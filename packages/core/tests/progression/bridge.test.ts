@@ -3,6 +3,7 @@ import { toPartyMember } from '../../src/progression/bridge.js';
 import { JOBS } from '../../src/data/jobs.js';
 import { SKILLS } from '../../src/data/skills.js';
 import { PASSIVES } from '../../src/data/passives.js';
+import { WEAPONS, ARMORS } from '../../src/data/equipment.js';
 import { computeStats } from '../../src/progression/stats.js';
 import type { Character, Aptitude } from '../../src/progression/types.js';
 
@@ -68,5 +69,47 @@ describe('toPartyMember', () => {
   it('マスタに無いパッシブを装備していたら落とす', () => {
     const broken = character({ learnedPassives: ['ghost'], equippedPassive: ['ghost'] });
     expect(() => toPartyMember(broken, JOBS.warrior, SKILLS, PASSIVES)).toThrow('unknown passive: ghost');
+  });
+
+  // 設計書 §8 テスト1（最重要）。装備という概念が無かった頃のCharacterを
+  // そのまま渡しても、結果が computeStats と完全に一致すること。
+  describe('装備（設計書 §4・§8 テスト1・テスト2）', () => {
+    it('equippedWeapon/equippedArmorが無ければ、装備という概念が無かった頃と完全に一致する', () => {
+      const c = character();
+      const member = toPartyMember(c, JOBS.warrior, SKILLS, PASSIVES);
+      expect(member.stats).toEqual(computeStats(c, JOBS.warrior));
+    });
+
+    it('equippedWeapon/equippedArmorがnullでも同様に一致する', () => {
+      const c = character({ equippedWeapon: null, equippedArmor: null });
+      const member = toPartyMember(c, JOBS.warrior, SKILLS, PASSIVES);
+      expect(member.stats).toEqual(computeStats(c, JOBS.warrior));
+    });
+
+    it('武器を装備すると、その分だけステータスが上がる', () => {
+      const c = character({ equippedWeapon: 'steelBlade', equippedArmor: null });
+      const member = toPartyMember(c, JOBS.warrior, SKILLS, PASSIVES);
+      const base = computeStats(c, JOBS.warrior);
+      expect(member.stats.atk).toBe(base.atk + WEAPONS.steelBlade.mods.atk!);
+      expect(member.stats.spd).toBe(base.spd + WEAPONS.steelBlade.mods.spd!);
+    });
+
+    it('防具を装備すると、その分だけステータスが上がる', () => {
+      const c = character({ equippedWeapon: null, equippedArmor: 'ironMail' });
+      const member = toPartyMember(c, JOBS.warrior, SKILLS, PASSIVES);
+      const base = computeStats(c, JOBS.warrior);
+      expect(member.stats.def).toBe(base.def + ARMORS.ironMail.mods.def!);
+      expect(member.stats.maxHp).toBe(base.maxHp + ARMORS.ironMail.mods.maxHp!);
+    });
+
+    it('マスタに無い武器IDを装備していたら落とす', () => {
+      const broken = character({ equippedWeapon: 'ghostSword' });
+      expect(() => toPartyMember(broken, JOBS.warrior, SKILLS, PASSIVES)).toThrow('unknown weapon: ghostSword');
+    });
+
+    it('マスタに無い防具IDを装備していたら落とす', () => {
+      const broken = character({ equippedArmor: 'ghostArmor' });
+      expect(() => toPartyMember(broken, JOBS.warrior, SKILLS, PASSIVES)).toThrow('unknown armor: ghostArmor');
+    });
   });
 });
