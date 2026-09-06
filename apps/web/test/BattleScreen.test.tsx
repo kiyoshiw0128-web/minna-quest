@@ -269,3 +269,19 @@ describe('行動表の読みやすさ', () => {
     }
   });
 });
+
+/**
+ * 絵があるのはボス4体だけで、雑魚と闘技場の敵には無い。
+ * 無い敵に壊れた画像の記号が出ると、毎日の戦闘のたびに目に入る。
+ */
+describe('敵の絵', () => {
+  it('絵の無い敵では画像を出さない', async () => {
+    installFetchMock({
+      'GET /api/world': worldResponse(),
+      'GET /api/battle': battleResponse(),
+    });
+    render(<BattleScreen token="t" onUnauthorized={vi.fn()} />);
+    await screen.findByText('プラン（8ターン）');
+    expect(document.querySelector('.portrait')).toBeNull();
+  });
+});

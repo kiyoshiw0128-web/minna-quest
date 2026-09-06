@@ -1,3 +1,4 @@
+import { enemyArtPath } from './enemyArt.js';
 import { DEFAULT_MAX_TURNS } from '@mq/core';
 import type { BattleLog, DamageSpec, Element, Enemy, PartyMember, Skill } from '@mq/core';
 import { groupBattleLog, summarizeResult } from './battleLog.js';
@@ -152,6 +153,23 @@ export function MemberDetail({ member }: { member: PartyMember }) {
         </tbody>
       </table>
     </details>
+  );
+}
+
+/**
+ * 敵の絵。用意されていない敵のほうが多いので、無ければ何も出さない。
+ * 枠だけ残すと、絵の準備中なのか、そういう敵なのかが読み取れない。
+ */
+export function EnemyPortrait({ enemyId, name }: { enemyId: string; name: string }) {
+  const src = enemyArtPath(enemyId);
+  if (src === null) return null;
+  return (
+    <div className="portrait">
+      {/* 名前は見出しに出ているので、絵の alt は装飾として空にする。
+          読み上げで名前が二度続くのを避ける。 */}
+      <img src={src} alt="" width={220} height={220} loading="lazy" />
+      <span className="portrait-name">{name}</span>
+    </div>
   );
 }
 

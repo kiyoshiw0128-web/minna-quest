@@ -5,7 +5,7 @@ import {
 } from '../api.js';
 import type { BattleInfo, BattleSubmitResult, WorldResult } from '../api.js';
 import { resolveEvent } from '../events.js';
-import { BattleResultView, MemberDetail, TurnGrid, freshPlan } from '../battlePlanner.js';
+import { BattleResultView, MemberDetail, TurnGrid, freshPlan, EnemyPortrait } from '../battlePlanner.js';
 import type { PlanState } from '../battlePlanner.js';
 
 type Props = {
@@ -219,6 +219,7 @@ function BattleBody({
       )}
 
       <h2>{battle.enemy.name} との戦い</h2>
+      <EnemyPortrait enemyId={battle.enemy.id} name={battle.enemy.name} />
       <TurnGrid
         enemy={battle.enemy}
         party={battle.party}

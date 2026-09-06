@@ -6,8 +6,7 @@ import {
 } from '../api.js';
 import type { ArenaRankingResult, ArenaResult, ArenaSubmitResult } from '../api.js';
 import {
-  BattleResultView, MemberDetail, TurnGrid, freshPlan,
-} from '../battlePlanner.js';
+  BattleResultView, MemberDetail, TurnGrid, freshPlan, EnemyPortrait } from '../battlePlanner.js';
 import type { PlanState } from '../battlePlanner.js';
 
 type Props = {
