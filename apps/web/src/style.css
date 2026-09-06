@@ -1,194 +1,98 @@
-/*
- * みんなdeクエストの見た目。
- *
- * 狙いは「冒険の書」の手触り。羊皮紙と濃い藍のインク、金の縁取り。
- * ドラクエの「コマンドウィンドウ」の記憶に寄せて、面はきっちり枠で囲む。
- *
- * **クラス名をほとんど使っていない。** 画面側のマークアップは role と見出しで
- * 組んであり、テストもそれで要素を探している。装飾のためにクラスを足すと、
- * 見た目を変えるたびにテストが壊れる。要素セレクタで届く範囲に留めている。
- *
- * 色は必ず明示する。何も書かないと、ダークモードで背景だけ暗くなり文字色は
- * 既定の黒のままになって、黒地に黒で何も読めなくなる（実際にそうなっていた）。
- */
-
+/* 日々譚 — 明るい紙色とセージグリーンの冒険の書。 */
 :root {
-  color-scheme: light dark;
-
-  /* 羊皮紙と藍。 */
-  --bg: #f4ecd8;
-  --bg-panel: #fbf6e9;
-  --bg-sunken: #eadfc4;
-  --fg: #2b2118;
-  --muted: #6b5b47;
-  --line: #c9b48c;
-  --line-strong: #8a6f47;
-  --accent: #8a5a1c;
-  --accent-soft: #f0dcb4;
-  --alert: #9b2226;
-  --good: #2f6d4f;
-  --shadow: rgba(80, 60, 30, 0.18);
-  --bg-glow: rgba(255, 246, 224, 0.75);
-  --grain: rgba(138, 111, 71, 0.035);
+  color-scheme: light;
+  --bg: #f7f6ef;
+  --bg-panel: #fffef9;
+  --bg-sunken: #eeeee5;
+  --fg: #2c3e35;
+  --muted: #69766a;
+  --line: #dce0d3;
+  --line-strong: #a5b29f;
+  --accent: #365e4d;
+  --accent-soft: #e9eee2;
+  --alert: #a04036;
+  --good: #34674c;
+  --shadow: rgba(42, 62, 45, .055);
+  font-family: -apple-system, BlinkMacSystemFont, 'Hiragino Kaku Gothic ProN', 'Yu Gothic', sans-serif;
+  font-size: 15px;
+  font-synthesis: none;
 }
-
-@media (prefers-color-scheme: dark) {
-  :root {
-    --bg: #14161f;
-    --bg-panel: #1c1f2b;
-    --bg-sunken: #10121a;
-    --fg: #ece5d6;
-    --muted: #a49b88;
-    --line: #3c4256;
-    --line-strong: #66708c;
-    --accent: #e0b464;
-    --accent-soft: #2a2f40;
-    --alert: #ff8a95;
-    --good: #7fd6a8;
-    --shadow: rgba(0, 0, 0, 0.5);
-    --bg-glow: rgba(90, 110, 160, 0.16);
-    --grain: rgba(255, 255, 255, 0.018);
-  }
-}
-
-* {
-  box-sizing: border-box;
-}
-
+* { box-sizing: border-box; }
 body {
-  padding: 1rem 0.9rem 4rem;
-  font-family: 'Hiragino Mincho ProN', 'Yu Mincho', 'Noto Serif JP', serif;
-  line-height: 1.75;
+  margin: 0;
+  padding: 0;
   color: var(--fg);
-  /* 端末の幅いっぱいに広がると読み疲れる。毎日ひらく画面なので幅を抑える。 */
-  max-width: 46rem;
-  margin: 0 auto;
+  background: var(--bg);
+  line-height: 1.8;
   -webkit-text-size-adjust: 100%;
-
-  /*
-   * 単色の面だと「ブラウザに文書が出ている」感じから抜けない。
-   * ごく薄い斜めの縞と周縁の陰りを重ねて、紙の上に見えるようにする。
-   * 画像は使わない。1枚読み込むだけで、毎日ひらく画面が一段遅くなる。
-   */
-  background-color: var(--bg);
-  background-image:
-    radial-gradient(120% 80% at 50% -10%, var(--bg-glow), transparent 60%),
-    repeating-linear-gradient(
-      45deg,
-      var(--grain) 0 2px,
-      transparent 2px 6px
-    );
-  background-attachment: fixed;
 }
-
-/* ---- 見出し ---- */
-
-h1 {
-  font-size: 1.55rem;
-  letter-spacing: 0.12em;
-  margin: 0.25rem 0 1.1rem;
-  padding-bottom: 0.6rem;
-  border-bottom: 1px solid var(--line-strong);
-  position: relative;
+h1, h2, h3, .brand, .cover-title, .chapter-title {
+  font-family: 'Hiragino Mincho ProN', 'Yu Mincho', serif;
+  font-weight: 500;
 }
-
-/* 見出しの下に二重罫。単線より「書物の章題」に見える。 */
-h1::after {
-  content: '';
-  position: absolute;
-  left: 0;
-  right: 0;
-  bottom: -4px;
-  height: 1px;
-  background: var(--line);
-}
-
-h2 {
-  font-size: 1.12rem;
-  letter-spacing: 0.06em;
-  margin: 1.6rem 0 0.6rem;
-  color: var(--accent);
-  display: flex;
-  align-items: center;
-  gap: 0.6rem;
-}
-
-/* 見出しの右に細い罫を伸ばす。区切りが見えると、面の切れ目が読み取れる。 */
-h2::after {
-  content: '';
-  flex: 1;
-  height: 1px;
-  background: linear-gradient(to right, var(--line), transparent);
-}
-
-h3 {
-  font-size: 1.02rem;
-  letter-spacing: 0.04em;
-  margin: 1rem 0 0.4rem;
-}
-
-h4 {
-  font-size: 0.95rem;
-  margin: 0.8rem 0 0.3rem;
-  color: var(--muted);
-}
-
-/*
- * 題字。タブに入ると遊びの名前がどこにも出なくなっていた。
- * 毎日ひらく画面なので、開いた瞬間に何かが分かる手がかりを1つ置く。
- */
-.brand {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 0.45rem;
-  font-size: 0.95rem;
-  /* 漢字3文字なので、かな向けの広い字間だと間延びする。少しだけ開ける。 */
-  letter-spacing: 0.22em;
-  text-indent: 0.22em;
-  color: var(--accent);
-  margin: 0 0 0.7rem;
-}
-
-.brand img {
-  width: 1.15rem;
-  height: 1.15rem;
-  /* 字と並べるので、字の高さに合わせて少し持ち上げる。 */
-  margin-top: -0.1rem;
-}
-
-/* ---- タブ（コマンドウィンドウ風） ---- */
-
-nav {
-  display: flex;
-  gap: 0.4rem;
-  margin: 0 0 1rem;
-  padding: 0.3rem;
-  background: var(--bg-sunken);
-  border: 2px solid var(--line-strong);
-  border-radius: 6px;
-  box-shadow: inset 0 1px 0 var(--shadow);
-}
-
-nav button {
-  flex: 1;
-  min-height: 2.6rem;
-  padding: 0.4rem 0.2rem;
-  font-size: 0.95rem;
-  letter-spacing: 0.06em;
-  background: transparent;
-  border: 1px solid transparent;
-  border-radius: 4px;
-  color: var(--muted);
-}
-
-nav button[aria-current='true'] {
-  background: var(--bg-panel);
-  border-color: var(--line-strong);
-  color: var(--accent);
-  font-weight: bold;
-  box-shadow: 0 1px 2px var(--shadow);
-}
+h1 { margin: 0 0 24px; font-size: 2rem; letter-spacing: .12em; }
+h2 { margin: 24px 0 16px; font-size: 1.25rem; letter-spacing: .06em; color: var(--accent); }
+h3 { margin: 20px 0 10px; font-size: 1.12rem; }
+h4 { font-size: .92rem; color: var(--muted); }
+button, input, select { -webkit-tap-highlight-color: transparent; }
+:focus-visible { outline: 3px solid #9c7431; outline-offset: 4px; }
+a { color: var(--accent); }
+main { min-width: 0; }
+#root > main:not(.join-layout) { max-width: 960px; margin: 60px auto; padding: 24px; }
+.eyebrow { font-size: .68rem; font-weight: 600; letter-spacing: .22em; color: var(--muted); }
+nav { display: flex; gap: 6px; }
+nav button { flex: 1; }
+nav button[aria-current='true'] { background: var(--accent-soft); color: var(--accent); font-weight: 600; }
+.app-shell { max-width: 1080px; margin: 0 auto; padding: 0 40px; }
+.app-header { display: flex; justify-content: space-between; align-items: center; padding: 28px 0; }
+.brand { display: flex; align-items: center; gap: 12px; font-size: 1.7rem; letter-spacing: .18em; }
+.brand img { width: 36px; height: 36px; }
+.brand small { display: block; font: 9px sans-serif; letter-spacing: .25em; margin-top: 2px; }
+.header-note { font-size: .78rem; letter-spacing: .12em; color: var(--muted); }
+.main-nav { border-top: 1px solid var(--line); border-bottom: 1px solid var(--line); margin-bottom: 32px; padding: 8px 0; }
+.main-nav button { border: none; background: transparent; box-shadow: none; border-radius: 4px; min-height: 48px; letter-spacing: .12em; }
+.app-footer { border-top: 1px solid var(--line); margin-top: 48px; padding: 24px 0 32px; font-family: serif; letter-spacing: .12em; }
+.app-footer span { float: right; font-family: sans-serif; font-size: .7rem; color: var(--muted); letter-spacing: .05em; }
+.join-layout { display: grid; grid-template-columns: 1.1fr 1fr; min-height: 100svh; }
+.book-cover { position: relative; display: flex; flex-direction: column; align-items: center; min-height: 780px; padding: 68px 36px 28px; text-align: center; background: #dee5d6 url('/journey.svg') center bottom / cover no-repeat; }
+.book-cover::before { content: ''; position: absolute; inset: 20px; border: 1px solid #f8f7e5a0; pointer-events: none; }
+.book-cover > * { position: relative; }
+.book-cover .eyebrow { color: #506959; font-size: .63rem; }
+.book-cover h1 { font-size: clamp(3.5rem, 6vw, 5.5rem); letter-spacing: .25em; margin: 12px 0 0 .25em; line-height: 1.5; }
+.book-reading { font-size: .72rem; letter-spacing: .5em; margin: 0; }
+.cover-story { margin-top: 38px; }
+.cover-title { font-size: clamp(1.5rem, 2.4vw, 2.2rem); line-height: 1.8; letter-spacing: .1em; }
+.cover-story > p:last-child { font-size: .8rem; line-height: 2; margin-top: 18px; }
+.cover-footnote { margin-top: auto; padding: 5px 12px; background: #294f44; border-radius: 3px; font-size: .65rem; color: #f1f1dc; letter-spacing: .12em; }
+.join-panel { align-self: center; width: 100%; max-width: 470px; margin: 0 auto; padding: 64px 46px; }
+.join-title { font-size: 1.8rem; margin: 12px 0; letter-spacing: .08em; }
+.join-intro { color: var(--muted); font-size: .85rem; }
+.join-panel nav { margin: 36px 0 28px; padding: 4px; background: var(--bg-sunken); border-radius: 6px; }
+.join-panel nav button { border: none; background: transparent; box-shadow: none; font-size: .78rem; padding: 12px 6px; }
+.join-panel nav button[aria-current='true'] { background: var(--bg-panel); box-shadow: 0 2px 6px var(--shadow); }
+.join-panel form label { font-size: .8rem; color: var(--fg); margin-bottom: 20px; }
+.join-panel input { margin-top: 8px; padding: 13px 14px; background: var(--bg-panel); border: 1px solid var(--line); border-radius: 5px; }
+.join-panel form > button[type='submit'] { width: 100%; margin-top: 8px; padding: 14px; border-color: var(--accent); background: var(--accent); color: #fffef6; letter-spacing: .12em; }
+.join-panel form > button[type='submit']:hover:not(:disabled) { background: #274b3b; }
+.join-panel form > button:disabled { opacity: 1; background: #dce2d7; color: #65715f; border-color: #dce2d7; }
+.join-note { margin-top: 32px; text-align: center; font-size: .72rem; color: var(--muted); }
+.chapter-hero { position: relative; padding: 42px; min-height: 285px; background: linear-gradient(90deg, #ecefdf 20%, #ecefdfb8 52%, #ecefdf00 80%), url('/journey.svg') 70% 64% / cover; border: 1px solid #d6decd; border-radius: 8px; overflow: hidden; }
+.chapter-hero h1 { font-family: inherit; font-size: .9rem; letter-spacing: .12em; margin: 22px 0 8px; }
+.chapter-title { font-size: clamp(1.3rem, 2.8vw, 1.9rem); letter-spacing: .05em; }
+.chapter-hero > p:last-child { font-size: .78rem; max-width: 75%; }
+section.daily-choices { background: transparent; box-shadow: none; border: none; padding: 32px 0 0; }
+.section-heading { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.section-heading h2 { margin: 6px 0; font-size: 1.5rem; }
+.daily-badge { background: var(--accent-soft); color: var(--accent); padding: 5px 12px; border-radius: 20px; font-size: .73rem; white-space: nowrap; }
+.section-description { color: var(--muted); font-size: .78rem; }
+.choice-list { display: grid; gap: 12px; margin: 24px 0; }
+.choice-list li { margin: 0; }
+.choice-list .choice { min-height: 94px; padding: 20px 24px; border: 1px solid var(--line); border-radius: 6px; gap: 24px; background: var(--bg-panel); box-shadow: 0 4px 12px var(--shadow); }
+.choice-list .choice-mark { width: 38px; height: auto; background: none; border: none; border-radius: 0; font: italic 1.7rem Georgia, serif; color: #82947d; }
+.choice-list .choice-body { font-size: .96rem; }
+.choice-arrow { color: var(--accent); font-size: 1.2rem; }
+.choice-list .choice[aria-pressed='true'] { background: #edf2e7; border-color: #75976d; box-shadow: inset 3px 0 0 #75976d; }
+.vote-note { font-size: .73rem; color: var(--muted); text-align: center; }
 
 /* ---- 面 ---- */
 
@@ -867,4 +771,56 @@ section > h4 {
   font-size: 1rem;
   line-height: 1.9;
   color: var(--fg);
+}
+
+/* Layout refinements shared by the existing battle, party and history screens. */
+section { border-radius: 8px; padding: 24px; margin: 20px 0; box-shadow: 0 4px 20px var(--shadow); }
+button { transition: background .15s ease, border-color .15s ease; }
+input, select { min-height: 44px; }
+section > h2:first-child { margin-top: 0; }
+.turn-grid { scrollbar-color: var(--line-strong) var(--bg-sunken); }
+.turn-grid select { min-height: 36px; }
+.stat-grid { border-radius: 6px; }
+.stat-cell { padding: 10px 4px; }
+.stat-grid dd { font-family: Georgia, serif; font-size: 1.2rem; font-weight: 400; }
+.tower { gap: 8px; }
+.tower-floor { padding: 14px 18px; }
+.narrative { font-family: 'Hiragino Mincho ProN', 'Yu Mincho', serif; line-height: 2.2; }
+@media (min-width: 900px) {
+  .tower { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+@media (max-width: 760px) {
+  .join-layout { grid-template-columns: 1fr; }
+  .book-cover { min-height: 410px; padding: 28px 24px 24px; background-image: linear-gradient(#f0efdf88, #f0efdf88 75%, transparent), url('/journey.svg'); background-position: center 57%; }
+  .book-cover::before { inset: 12px; }
+  .book-cover h1 { font-size: 3.6rem; margin-top: 4px; }
+  .book-cover .eyebrow { font-size: .55rem; }
+  .cover-story { margin-top: 12px; }
+  .cover-title { font-size: 1.45rem; }
+  .cover-story > p:last-child { margin-top: 10px; font-size: .75rem; }
+  .cover-footnote { display: none; }
+  .join-panel { padding: 36px 28px 44px; max-width: 500px; }
+  .join-title { font-size: 1.6rem; }
+  .join-panel nav { margin-top: 24px; }
+  .app-shell { padding: 0 20px; }
+  .app-header { padding: 20px 0; }
+  .header-note { font-size: .63rem; letter-spacing: 0; }
+  .brand { font-size: 1.35rem; }
+  .brand img { width: 30px; height: 30px; }
+  .main-nav { gap: 2px; margin-bottom: 20px; }
+  .main-nav button { font-size: .8rem; padding: 8px 2px; }
+  .chapter-hero { min-height: 260px; padding: 26px 22px; background-position: 65% 65%; }
+  .chapter-hero > p:last-child { max-width: 85%; }
+  .choice-list .choice { padding: 18px 16px; gap: 12px; }
+  .choice-list .choice-body { font-size: .86rem; }
+  .app-footer span { float: none; display: block; margin-top: 8px; }
+}
+@media (max-width: 30rem) {
+  body { padding: 0; }
+  h1 { font-size: 1.6rem; }
+  section { padding: 18px 16px; }
+  .app-shell { padding: 0 16px; }
+}
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { transition: none !important; animation: none !important; }
 }
