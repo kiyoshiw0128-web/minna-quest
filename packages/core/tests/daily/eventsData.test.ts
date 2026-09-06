@@ -93,6 +93,16 @@ describe('イベントマスタの健全性', () => {
     }
   });
 
+  // resultText は抽選にも結果にも影響しない読み物欄だが、無いと締まった日の
+  // 画面に何が起きたか出せない。新しいイベントを足したときに書き忘れると
+  // 静かに空欄のまま世界中に配信されてしまうので、ここで機械的に塞ぐ。
+  it('すべてのイベントに resultText がある', () => {
+    for (const event of events) {
+      expect(event.resultText).toBeDefined();
+      expect(event.resultText?.trim().length).toBeGreaterThan(0);
+    }
+  });
+
   it('8匹すべてに、少なくとも1つの入手経路がある', () => {
     const grantedPetIds = new Set(events.flatMap((event) => (event.outcome?.petId !== undefined ? [event.outcome.petId] : [])));
     for (const petId of Object.keys(PETS)) {
