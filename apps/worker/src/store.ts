@@ -1189,3 +1189,60 @@ export async function hireRecruit(
   ]);
   return (charResult.meta.changes ?? 0) === 1;
 }
+
+export type PlayerRecoveryRow = {
+  readonly id: string;
+  /** 「いまの合言葉」の控え。メール未登録・削除済みなら null（設計書 §2.1）。 */
+  readonly recoveryToken: string | null;
+  readonly recoverySentAt: string | null;
+};
+
+/**
+ * メールアドレス（とその瞬間の合言葉）を登録・変更・削除する（設計書 §4）。
+ * email が null のときは削除で、recoveryToken も一緒に null にする。
+ * 平文の合言葉を持ち続ける理由（登録の間だけ）が無くなるため。
+ *
+ * WHERE に必ず playerId（＝Bearer認証で確定した本人のID）を使うこと。
+ * ここをbodyから渡された値に差し替えると、他人のメールアドレスを
+ * 書き換えられてしまう（設計書 §8 テスト2）。
+ */
+export async function setPlayerEmail(
+  db: D1Database, playerId: string, email: string | null, recoveryToken: string | null,
+): Promise<void> {
+  await db
+    .prepare('UPDATE players SET email = ?, recovery_token = ? WHERE id = ?')
+    .bind(email, recoveryToken, playerId)
+    .run();
+}
+
+/** `GET /api/me` 用。アドレスそのものは返さない前提なので、真偽値だけ渡す（設計書 §4）。 */
+export async function isEmailRegistered(db: D1Database, playerId: string): Promise<boolean> {
+  const raw = await db
+    .prepare('SELECT email FROM players WHERE id = ?')
+    .bind(playerId)
+    .first<{ email: string | null }>();
+  return raw !== null && raw.email !== null;
+}
+
+/** `POST /api/recover` 用。認証なしでメールアドレスから引くので、他のfindPlayer系とは別に置く。 */
+export async function findPlayerByEmail(
+  db: D1Database, email: string,
+): Promise<PlayerRecoveryRow | null> {
+  const raw = await db
+    .prepare('SELECT id, recovery_token, recovery_sent_at FROM players WHERE email = ?')
+    .bind(email)
+    .first<{ id: string; recovery_token: string | null; recovery_sent_at: string | null }>();
+  return raw === null
+    ? null
+    : { id: raw.id, recoveryToken: raw.recovery_token, recoverySentAt: raw.recovery_sent_at };
+}
+
+/** 連投防止用の最終送信時刻を更新する（設計書 §2.4）。 */
+export async function touchRecoverySentAt(
+  db: D1Database, playerId: string, sentAt: string,
+): Promise<void> {
+  await db
+    .prepare('UPDATE players SET recovery_sent_at = ? WHERE id = ?')
+    .bind(sentAt, playerId)
+    .run();
+}

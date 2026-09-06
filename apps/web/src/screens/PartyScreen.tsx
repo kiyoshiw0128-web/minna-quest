@@ -1,11 +1,12 @@
 import { useCallback, useEffect, useState } from 'react';
+import type { FormEvent } from 'react';
 import { ARMORS, JOBS, PASSIVES, PETS, SKILLS, WEAPONS, applyEquipment } from '@mq/core';
 import type {
   Aptitude, DamageSpec, Effect, Element, Equipment, Job, LearnEntry, Passive, Pet, Recruit, Skill, StatBlock,
 } from '@mq/core';
 import {
   ApiError, UnauthorizedError, buyItem, changeCharacterJob, dismissCharacter, fetchMe, fetchShop, fetchTavern,
-  hireRecruit, reorderParty, setActivePet, updateCharacterEquipmentItems, updateEquipment,
+  hireRecruit, registerEmail, reorderParty, setActivePet, updateCharacterEquipmentItems, updateEquipment,
 } from '../api.js';
 import type { MeResult, MePartyMember, ShopResult, TavernResult } from '../api.js';
 
@@ -267,6 +268,11 @@ export function PartyScreen({ token, onUnauthorized }: Props) {
       <p>所持金: {me.gold} ゴールド</p>
 
       <RestoreKey token={token} />
+      <EmailRecoverySetting
+        token={token}
+        registered={me.emailRegistered ?? false}
+        onUpdated={() => void reload()}
+      />
 
       <section>
         <h2>パーティ（{me.party.length} / 4）</h2>
@@ -953,6 +959,83 @@ function RestoreKey({ token }: { token: string }) {
         あなたとして遊べてしまいます。
       </p>
       <p><code>{token}</code></p>
+    </details>
+  );
+}
+
+type EmailSettingState =
+  | { kind: 'idle' }
+  | { kind: 'saving' }
+  | { kind: 'error'; message: string };
+
+/**
+ * メールアドレスの登録欄（設計書 §4・§6）。合言葉を無くしたときの
+ * もう1つの戻り道。任意なので、登録しなくても遊びには一切影響しない
+ * （設計書 §2.2 — 参加の条件にしない）。
+ *
+ * サーバは登録の有無だけを返し、アドレスそのものは返さない（設計書 §4）ため、
+ * 「今のアドレス」を出す欄はここに存在しない。登録済みかどうかの表示と、
+ * 登録し直す・削除するための入力だけを持つ。
+ */
+function EmailRecoverySetting({
+  token, registered, onUpdated,
+}: {
+  token: string;
+  registered: boolean;
+  onUpdated: () => void;
+}) {
+  const [email, setEmail] = useState('');
+  const [state, setState] = useState<EmailSettingState>({ kind: 'idle' });
+
+  const saving = state.kind === 'saving';
+
+  async function submit(value: string): Promise<void> {
+    setState({ kind: 'saving' });
+    try {
+      await registerEmail(token, value);
+      setEmail('');
+      setState({ kind: 'idle' });
+      onUpdated();
+    } catch (error) {
+      const message = error instanceof ApiError ? error.message : '通信に失敗しました';
+      setState({ kind: 'error', message });
+    }
+  }
+
+  function handleSubmit(event: FormEvent): void {
+    event.preventDefault();
+    if (email.trim() === '' || saving) return;
+    void submit(email.trim());
+  }
+
+  return (
+    <details>
+      <summary>合言葉をメールで受け取る（任意）</summary>
+      <p>
+        合言葉を無くしても、登録したメールアドレス宛に今の合言葉を再送できます。
+        登録しなくても遊べます。
+      </p>
+      <p>{registered ? '登録済みです。' : 'まだ登録していません。'}</p>
+      <form onSubmit={handleSubmit}>
+        <label>
+          メールアドレス
+          <input
+            type="email"
+            value={email}
+            onChange={(event) => setEmail(event.target.value)}
+            disabled={saving}
+          />
+        </label>
+        <button type="submit" disabled={saving || email.trim() === ''}>
+          {registered ? '登録し直す' : '登録する'}
+        </button>
+      </form>
+      {registered && (
+        <button type="button" onClick={() => void submit('')} disabled={saving}>
+          登録を削除する
+        </button>
+      )}
+      {state.kind === 'error' && <p role="alert">{state.message}</p>}
     </details>
   );
 }

@@ -3,7 +3,7 @@ import type { Character, Job } from '@mq/core';
 import { requirePlayer } from '../auth.js';
 import {
   getActivePetId, getOwnedCharacterFlags, getPartyCharacters, getPlayerGold, getPlayerItemIds,
-  getPlayerPetIds,
+  getPlayerPetIds, isEmailRegistered,
 } from '../store.js';
 import { fail, ok } from '../respond.js';
 import type { Env } from '../env.js';
@@ -33,13 +33,14 @@ export async function handleMe(request: Request, env: Env): Promise<Response> {
   const player = await requirePlayer(env.DB, request);
   if (player === null) return fail('unauthorized', 401);
 
-  const [gold, characters, heroFlags, pets, activePetId, items] = await Promise.all([
+  const [gold, characters, heroFlags, pets, activePetId, items, emailRegistered] = await Promise.all([
     getPlayerGold(env.DB, player.id),
     getPartyCharacters(env.DB, player.id),
     getOwnedCharacterFlags(env.DB, player.id),
     getPlayerPetIds(env.DB, player.id),
     getActivePetId(env.DB, player.id),
     getPlayerItemIds(env.DB, player.id),
+    isEmailRegistered(env.DB, player.id),
   ]);
   if (gold === null) return fail('player not found', 404);
 
@@ -102,5 +103,8 @@ export async function handleMe(request: Request, env: Env): Promise<Response> {
     // equippedArmorIdから画面側で数える（在庫を持たないpet欄と違い、
     // ここは所持数そのものが意味を持つため、集計せず生のIDだけ返す）。
     items,
+    // 段階11・設計書 §4。登録の有無だけを返す。アドレスそのものは返さない
+    // （端末を乗っ取られたときに連絡先まで抜けるのを避けるため。設計書 §8 テスト6）。
+    emailRegistered,
   });
 }

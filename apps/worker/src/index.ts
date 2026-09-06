@@ -3,6 +3,7 @@ import { handleArenaRanking, handleGetArena, handlePostArena } from './routes/ar
 import { handleGetBattle, handlePostBattle } from './routes/battle.js';
 import { handleBuy } from './routes/buy.js';
 import { handleDismiss } from './routes/dismiss.js';
+import { handleEmail } from './routes/email.js';
 import { handleEquip } from './routes/equip.js';
 import { handleEquipItem } from './routes/equipItem.js';
 import { handleHire } from './routes/hire.js';
@@ -11,6 +12,7 @@ import { handleJoin } from './routes/join.js';
 import { handleMe } from './routes/me.js';
 import { handleParty } from './routes/party.js';
 import { handlePet } from './routes/pet.js';
+import { handleRecover } from './routes/recover.js';
 import { handleShop } from './routes/shop.js';
 import { handleTavern } from './routes/tavern.js';
 import { handleToday } from './routes/today.js';
@@ -103,6 +105,14 @@ export default {
 
     if (url.pathname === '/api/equip-item' && request.method === 'POST') {
       return handleEquipItem(request, env);
+    }
+
+    if (url.pathname === '/api/email' && request.method === 'POST') {
+      return handleEmail(request, env);
+    }
+
+    if (url.pathname === '/api/recover' && request.method === 'POST') {
+      return handleRecover(request, env);
     }
 
     // `/api/` 配下で上のどれにも一致しなかったものは、画面のアセットに

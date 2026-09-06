@@ -109,4 +109,27 @@ describe('GET /api/me（設計書 §2）', () => {
     expect(payload.data.pets).toEqual(['puppy']);
     expect(payload.data.activePetId).toBe('puppy');
   });
+
+  // 段階11・設計書 §4・§8 テスト6。
+  describe('emailRegistered', () => {
+    it('メール未登録ならfalse', async () => {
+      const response = await me(TOKEN);
+      const payload = await response.json<{ data: { emailRegistered: boolean } }>();
+      expect(payload.data.emailRegistered).toBe(false);
+    });
+
+    it('メール登録済みならtrue。アドレスそのものはどのキーにも現れない', async () => {
+      const address = 'himitsu@example.com';
+      await env.DB.prepare('UPDATE players SET email = ? WHERE id = ?').bind(address, PLAYER).run();
+
+      const response = await me(TOKEN);
+      const rawText = await response.clone().text();
+      const payload = await response.json<{ data: { emailRegistered: boolean } }>();
+
+      expect(payload.data.emailRegistered).toBe(true);
+      // キー名だけでなく、応答本文のどこにもアドレスの文字列が現れないことを確かめる
+      // （設計書 §8 テスト6 — フィールドを削り忘れても、値そのものが漏れていれば検出できるように）。
+      expect(rawText).not.toContain(address);
+    });
+  });
 });

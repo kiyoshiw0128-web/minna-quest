@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import type { FormEvent } from 'react';
-import { join, fetchMe, ApiError, UnauthorizedError } from '../api.js';
+import { join, fetchMe, requestRecovery, ApiError, UnauthorizedError } from '../api.js';
 
 type Props = {
   onJoined: (token: string) => void;
@@ -8,7 +8,10 @@ type Props = {
 
 type Status = { kind: 'idle' } | { kind: 'loading' } | { kind: 'error'; message: string };
 
-type Mode = 'join' | 'restore';
+type Mode = 'join' | 'restore' | 'recover';
+
+/** 復旧要求の結果。登録の有無に関わらず同じ状態にする（設計書 §2.3）。 */
+type RecoverStatus = { kind: 'idle' } | { kind: 'loading' } | { kind: 'sent' } | { kind: 'error'; message: string };
 
 /**
  * 参加、または合言葉で戻る画面。トークン未保有のときだけ表示される。
@@ -28,6 +31,8 @@ export function JoinScreen({ onJoined }: Props) {
   const [name, setName] = useState('');
   const [secret, setSecret] = useState('');
   const [status, setStatus] = useState<Status>({ kind: 'idle' });
+  const [recoverEmail, setRecoverEmail] = useState('');
+  const [recoverStatus, setRecoverStatus] = useState<RecoverStatus>({ kind: 'idle' });
 
   const loading = status.kind === 'loading';
   const trimmedName = name.trim();
@@ -42,6 +47,29 @@ export function JoinScreen({ onJoined }: Props) {
     setMode(next);
     // 片方の失敗の文言がもう片方に残ると、何に対する失敗か分からなくなる。
     setStatus({ kind: 'idle' });
+    setRecoverStatus({ kind: 'idle' });
+  }
+
+  /**
+   * 合言葉の再送を要求する。**登録されていても未登録でも同じ画面を出す。**
+   * 「送りました」と断言すると、それだけで登録の有無が外から分かってしまう
+   * ため、常に「登録されていれば送りました」という言い回しにする（設計書 §6）。
+   */
+  async function handleRecoverSubmit(event: FormEvent): Promise<void> {
+    event.preventDefault();
+    const trimmedEmail = recoverEmail.trim();
+    if (trimmedEmail === '' || recoverStatus.kind === 'loading') return;
+
+    setRecoverStatus({ kind: 'loading' });
+    try {
+      await requestRecovery(trimmedEmail);
+      setRecoverStatus({ kind: 'sent' });
+    } catch (error) {
+      // 通信そのものの失敗（オフライン等）は別扱いにしてよい。ここで隠すべきは
+      // 「そのアドレスが登録されているか」だけで、通信できたかどうかではない。
+      const message = error instanceof ApiError ? error.message : '通信に失敗しました';
+      setRecoverStatus({ kind: 'error', message });
+    }
   }
 
   async function handleSubmit(event: FormEvent): Promise<void> {
@@ -84,34 +112,80 @@ export function JoinScreen({ onJoined }: Props) {
         </button>
       </nav>
 
-      <form onSubmit={handleSubmit}>
-        {mode === 'join' ? (
-          <>
-            <label>
-              招待コード
-              <input value={code} onChange={(event) => setCode(event.target.value)} disabled={loading} />
-            </label>
-            <label>
-              名前
-              <input value={name} onChange={(event) => setName(event.target.value)} disabled={loading} />
-            </label>
-          </>
-        ) : (
-          <>
-            <p>
-              すでに参加している場合は、合言葉を貼ると同じ冒険に戻れます。
-              招待コードは減りません。合言葉は「仲間」の画面に出ています。
-            </p>
-            <label>
-              合言葉
-              <input value={secret} onChange={(event) => setSecret(event.target.value)} disabled={loading} />
-            </label>
-          </>
-        )}
-        <button type="submit" disabled={!canSubmit}>
-          {loading ? '確認中…' : mode === 'join' ? '参加する' : '戻る'}
-        </button>
-      </form>
+      {mode !== 'recover' && (
+        <form onSubmit={handleSubmit}>
+          {mode === 'join' ? (
+            <>
+              <label>
+                招待コード
+                <input value={code} onChange={(event) => setCode(event.target.value)} disabled={loading} />
+              </label>
+              <label>
+                名前
+                <input value={name} onChange={(event) => setName(event.target.value)} disabled={loading} />
+              </label>
+            </>
+          ) : (
+            <>
+              <p>
+                すでに参加している場合は、合言葉を貼ると同じ冒険に戻れます。
+                招待コードは減りません。合言葉は「仲間」の画面に出ています。
+              </p>
+              <label>
+                合言葉
+                <input value={secret} onChange={(event) => setSecret(event.target.value)} disabled={loading} />
+              </label>
+            </>
+          )}
+          <button type="submit" disabled={!canSubmit}>
+            {loading ? '確認中…' : mode === 'join' ? '参加する' : '戻る'}
+          </button>
+        </form>
+      )}
+
+      {mode === 'restore' && (
+        <p>
+          <button type="button" onClick={() => switchMode('recover')}>
+            合言葉が分からない
+          </button>
+        </p>
+      )}
+
+      {mode === 'recover' && (
+        <>
+          <p>
+            合言葉をメールアドレスに登録していれば、今の合言葉を再送できます。
+            登録していない場合は何も届きません。
+          </p>
+          {recoverStatus.kind === 'sent' ? (
+            <p role="status">登録されていれば送りました。届いたメールの合言葉を「合言葉で戻る」に貼ってください。</p>
+          ) : (
+            <form onSubmit={(event) => void handleRecoverSubmit(event)}>
+              <label>
+                メールアドレス
+                <input
+                  type="email"
+                  value={recoverEmail}
+                  onChange={(event) => setRecoverEmail(event.target.value)}
+                  disabled={recoverStatus.kind === 'loading'}
+                />
+              </label>
+              <button
+                type="submit"
+                disabled={recoverEmail.trim() === '' || recoverStatus.kind === 'loading'}
+              >
+                {recoverStatus.kind === 'loading' ? '送信中…' : '再送を要求する'}
+              </button>
+            </form>
+          )}
+          {recoverStatus.kind === 'error' && <p role="alert">{recoverStatus.message}</p>}
+          <p>
+            <button type="button" onClick={() => switchMode('restore')}>
+              戻る
+            </button>
+          </p>
+        </>
+      )}
 
       {status.kind === 'error' && <p role="alert">{status.message}</p>}
     </main>

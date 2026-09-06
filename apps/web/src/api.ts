@@ -139,10 +139,38 @@ export type MeResult = {
   activePetId?: string | null;
   // 段階8・設計書 §7。買った装備の一覧（同じIDが複数入りうる）。
   items?: string[];
+  // 段階11・設計書 §4。登録の有無だけ（アドレスそのものは含まれない）。
+  // 既存のテストのモック応答には無いことがあるため、画面側は undefined も想定して読む。
+  emailRegistered?: boolean;
 };
 
 export function fetchMe(token: string): Promise<MeResult> {
   return request('/api/me', withAuth(token));
+}
+
+export type RegisterEmailResult = { registered: boolean };
+
+/** メールアドレスの登録・変更・削除（設計書 §4）。空文字を渡すと削除になる。 */
+export function registerEmail(token: string, email: string): Promise<RegisterEmailResult> {
+  return request('/api/email', {
+    method: 'POST',
+    body: JSON.stringify({ email }),
+    ...withAuth(token),
+  });
+}
+
+export type RequestRecoveryResult = { requested: boolean };
+
+/**
+ * 合言葉の再送を要求する。認証不要（設計書 §4）。
+ * 登録の有無に関わらず応答は同じなので、この関数の返り値からは
+ * 「送られたかどうか」を判断できない（設計書 §2.3）。画面側もそれを前提にする。
+ */
+export function requestRecovery(email: string): Promise<RequestRecoveryResult> {
+  return request('/api/recover', {
+    method: 'POST',
+    body: JSON.stringify({ email }),
+  });
 }
 
 export type SetActivePetResult = { activePetId: string };
