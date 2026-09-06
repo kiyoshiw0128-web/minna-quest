@@ -12,7 +12,7 @@ import { handleJoin } from './routes/join.js';
 import { handleMe } from './routes/me.js';
 import { handleParty } from './routes/party.js';
 import { handlePet } from './routes/pet.js';
-import { handleRecover } from './routes/recover.js';
+import { handleRecover, handleRecoverConfirm } from './routes/recover.js';
 import { handleShop } from './routes/shop.js';
 import { handleTavern } from './routes/tavern.js';
 import { handleToday } from './routes/today.js';
@@ -113,6 +113,10 @@ export default {
 
     if (url.pathname === '/api/recover' && request.method === 'POST') {
       return handleRecover(request, env);
+    }
+
+    if (url.pathname === '/api/recover/confirm' && request.method === 'POST') {
+      return handleRecoverConfirm(request, env);
     }
 
     // `/api/` 配下で上のどれにも一致しなかったものは、画面のアセットに

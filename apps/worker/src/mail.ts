@@ -15,12 +15,15 @@ const FROM_ADDRESS = 'onboarding@resend.dev';
 
 export type RecoveryMailParams = {
   readonly to: string;
-  /** いまの合言葉そのもの（設計書 §2.1 — 作り直さず、いま使えているものを送る）。 */
-  readonly token: string;
+  /**
+   * 使い捨ての復旧コード（設計書 §2.1）。合言葉そのものは送らない。
+   * このコードを`/api/recover/confirm`に渡して初めて、新しい合言葉が発行される。
+   */
+  readonly code: string;
 };
 
 /**
- * 合言葉の再送メールを送る。
+ * 使い捨ての復旧コードのメールを送る。合言葉そのものは含まない（設計書 §2.1）。
  *
  * キーが未設定の場合は送らずに戻る。ただし黙って戻ると「本当に登録されて
  * いないのか、キーが無いだけなのか」が運用側から一切分からなくなるため、
@@ -47,13 +50,14 @@ export async function sendRecoveryMail(env: Env, params: RecoveryMailParams): Pr
       body: JSON.stringify({
         from: FROM_ADDRESS,
         to: params.to,
-        subject: '日々譚 — 合言葉の再送',
+        subject: '日々譚 — 合言葉の復旧コード',
         text: [
-          'この冒険の合言葉をお送りします。',
+          '合言葉を取り戻すための、使い捨ての復旧コードをお送りします。',
           '',
-          params.token,
+          params.code,
           '',
-          '「合言葉で戻る」の欄にこの文字列を貼ると、元の冒険に戻れます。',
+          '「合言葉が分からない」の画面でこのコードを入力すると、新しい合言葉が発行されます。',
+          'このコードは30分だけ有効で、一度使うと無効になります。',
           '心当たりが無い場合は、このメールを無視してください。',
         ].join('\n'),
       }),

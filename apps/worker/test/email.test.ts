@@ -33,10 +33,10 @@ function registerEmail(token: string, email: string): Promise<Response> {
   });
 }
 
-async function playerRow(id: string): Promise<{ email: string | null; recovery_token: string | null }> {
-  const row = await env.DB.prepare('SELECT email, recovery_token FROM players WHERE id = ?')
+async function playerRow(id: string): Promise<{ email: string | null; token_hash: string }> {
+  const row = await env.DB.prepare('SELECT email, token_hash FROM players WHERE id = ?')
     .bind(id)
-    .first<{ email: string | null; recovery_token: string | null }>();
+    .first<{ email: string | null; token_hash: string }>();
   if (row === null) throw new Error('player not found');
   return row;
 }
@@ -53,14 +53,13 @@ describe('POST /api/email（設計書 §4・§8 テスト1・2）', () => {
     expect(response.status).toBe(401);
   });
 
-  it('登録できる。控えられる合言葉はそのリクエストで使ったトークンそのもの', async () => {
+  it('登録できる', async () => {
     const response = await registerEmail(TOKEN_A, 'akira@example.com');
     expect(response.status).toBe(200);
     expect(await response.json()).toEqual({ ok: true, data: { registered: true } });
 
     const row = await playerRow(PLAYER_A);
     expect(row.email).toBe('akira@example.com');
-    expect(row.recovery_token).toBe(TOKEN_A);
   });
 
   it('変更できる（上書き）', async () => {
@@ -72,15 +71,19 @@ describe('POST /api/email（設計書 §4・§8 テスト1・2）', () => {
     expect(row.email).toBe('new@example.com');
   });
 
-  it('空文字で削除できる。控えていた合言葉も一緒に消える', async () => {
+  it('空文字で削除できる。合言葉（token_hash）は変わらない', async () => {
     await registerEmail(TOKEN_A, 'akira@example.com');
+    const before = await playerRow(PLAYER_A);
+
     const response = await registerEmail(TOKEN_A, '');
     expect(response.status).toBe(200);
     expect(await response.json()).toEqual({ ok: true, data: { registered: false } });
 
     const row = await playerRow(PLAYER_A);
     expect(row.email).toBeNull();
-    expect(row.recovery_token).toBeNull();
+    // メール登録の削除は合言葉の状態に一切触れない（設計書 §2.1、0009で撤回した
+    // 「メール登録に紐づけて合言葉の控えを持つ」設計とは無関係になった）。
+    expect(row.token_hash).toBe(before.token_hash);
   });
 
   it('形式が最低限でも通る（@を含み空白が無ければ足りる。設計書 §4）', async () => {

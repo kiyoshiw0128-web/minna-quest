@@ -1192,26 +1192,27 @@ export async function hireRecruit(
 
 export type PlayerRecoveryRow = {
   readonly id: string;
-  /** 「いまの合言葉」の控え。メール未登録・削除済みなら null（設計書 §2.1）。 */
-  readonly recoveryToken: string | null;
   readonly recoverySentAt: string | null;
 };
 
 /**
- * メールアドレス（とその瞬間の合言葉）を登録・変更・削除する（設計書 §4）。
- * email が null のときは削除で、recoveryToken も一緒に null にする。
- * 平文の合言葉を持ち続ける理由（登録の間だけ）が無くなるため。
+ * メールアドレスを登録・変更・削除する（設計書 §4）。email が null なら削除。
+ *
+ * 合言葉そのもの・復旧コードには一切触れない。0009_recovery_codes.sql
+ * より前は、ここで「いまの合言葉」の平文も一緒に書き込んでいたが、それが
+ * まさに撤回した設計（生きた認証情報の平文控え）だった。メール登録の変更と
+ * 合言葉の状態は、もう互いに何も書き換えない独立した操作にする。
  *
  * WHERE に必ず playerId（＝Bearer認証で確定した本人のID）を使うこと。
  * ここをbodyから渡された値に差し替えると、他人のメールアドレスを
  * 書き換えられてしまう（設計書 §8 テスト2）。
  */
 export async function setPlayerEmail(
-  db: D1Database, playerId: string, email: string | null, recoveryToken: string | null,
+  db: D1Database, playerId: string, email: string | null,
 ): Promise<void> {
   await db
-    .prepare('UPDATE players SET email = ?, recovery_token = ? WHERE id = ?')
-    .bind(email, recoveryToken, playerId)
+    .prepare('UPDATE players SET email = ? WHERE id = ?')
+    .bind(email, playerId)
     .run();
 }
 
@@ -1229,20 +1230,59 @@ export async function findPlayerByEmail(
   db: D1Database, email: string,
 ): Promise<PlayerRecoveryRow | null> {
   const raw = await db
-    .prepare('SELECT id, recovery_token, recovery_sent_at FROM players WHERE email = ?')
+    .prepare('SELECT id, recovery_sent_at FROM players WHERE email = ?')
     .bind(email)
-    .first<{ id: string; recovery_token: string | null; recovery_sent_at: string | null }>();
-  return raw === null
-    ? null
-    : { id: raw.id, recoveryToken: raw.recovery_token, recoverySentAt: raw.recovery_sent_at };
+    .first<{ id: string; recovery_sent_at: string | null }>();
+  return raw === null ? null : { id: raw.id, recoverySentAt: raw.recovery_sent_at };
 }
 
-/** 連投防止用の最終送信時刻を更新する（設計書 §2.4）。 */
-export async function touchRecoverySentAt(
-  db: D1Database, playerId: string, sentAt: string,
+/**
+ * 使い捨ての復旧コードを発行する（設計書 §2.1）。ハッシュ・有効期限・送信時刻を
+ * 1文でまとめて書く。3つに分けないのは、境界（recovery_sent_at だけ進んで
+ * コードは古いまま、といった半端な状態）を作らないため。
+ *
+ * 平文のコードはこの関数の外（recover.ts）で一度だけ生成され、メール送信にしか
+ * 使われない。ここに渡ってくるのは常にハッシュだけ（設計書 §2.1「保存するのは
+ * そのハッシュと有効期限だけ」）。
+ */
+export async function issueRecoveryCode(
+  db: D1Database, playerId: string, codeHash: string, expiresAt: string, sentAt: string,
 ): Promise<void> {
   await db
-    .prepare('UPDATE players SET recovery_sent_at = ? WHERE id = ?')
-    .bind(sentAt, playerId)
+    .prepare(
+      'UPDATE players SET recovery_code_hash = ?, recovery_expires_at = ?, recovery_sent_at = ? WHERE id = ?',
+    )
+    .bind(codeHash, expiresAt, sentAt, playerId)
     .run();
+}
+
+/**
+ * 復旧コードを検証し、有効なら新しい合言葉を発行してコードを即座に無効化する
+ * （設計書 §2.1・§4）。「一致するか」「期限内か」「新トークンの発行」
+ * 「コードの無効化」を1つのUPDATE文にまとめているのは、検証と書き込みが
+ * 分かれていると、その間に別のリクエストが同じコードを使い切る
+ * TOCTOU が起こりうるため（advanceDay の二重締め防止と同じ考え方）。
+ *
+ * WHERE に一致しない場合（コードが存在しない・期限切れ・既に使われて
+ * recovery_code_hash が NULL に戻っている）は、いずれも0行のまま終わる。
+ * 呼び出し側（recover.ts）はこの3つを区別する情報を一切持たない
+ * （設計書 §8 テスト9・10・「同じ応答で断る」）。
+ *
+ * `recovery_expires_at` はISO8601文字列なので、辞書順比較がそのまま
+ * 時系列比較として成り立つ（既存の他のコードと同じ前提）。
+ */
+export async function confirmRecovery(
+  db: D1Database, codeHash: string, newTokenHash: string, now: string,
+): Promise<boolean> {
+  const result = await db
+    .prepare(
+      `UPDATE players
+          SET token_hash = ?, recovery_code_hash = NULL, recovery_expires_at = NULL
+        WHERE recovery_code_hash = ?
+          AND recovery_expires_at IS NOT NULL
+          AND recovery_expires_at > ?`,
+    )
+    .bind(newTokenHash, codeHash, now)
+    .run();
+  return (result.meta.changes ?? 0) === 1;
 }

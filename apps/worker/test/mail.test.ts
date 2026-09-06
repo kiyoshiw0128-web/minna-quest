@@ -14,20 +14,20 @@ describe('sendRecoveryMail（設計書 §5・§8 テスト5・7）', () => {
     const fetchSpy = vi.spyOn(globalThis, 'fetch');
     const logSpy = vi.spyOn(console, 'log').mockImplementation(() => {});
 
-    await sendRecoveryMail(BASE_ENV, { to: 'a@example.com', token: 'secret-token' });
+    await sendRecoveryMail(BASE_ENV, { to: 'a@example.com', code: 'secret-code' });
 
     expect(fetchSpy).not.toHaveBeenCalled();
     expect(logSpy).toHaveBeenCalledWith(expect.stringContaining('RESEND_API_KEY'));
   });
 
-  it('APIキーがあればResendを叩き、本文にいまの合言葉を含める（設計書 §8 テスト7）', async () => {
+  it('APIキーがあればResendを叩き、本文に使い捨ての復旧コードを含める（設計書 §8 テスト7）', async () => {
     const fetchSpy = vi.spyOn(globalThis, 'fetch').mockResolvedValue(
       new Response('{}', { status: 200 }),
     );
 
     await sendRecoveryMail(
       { ...BASE_ENV, RESEND_API_KEY: 'test-key' },
-      { to: 'a@example.com', token: 'secret-token-xyz' },
+      { to: 'a@example.com', code: 'secret-code-xyz' },
     );
 
     expect(fetchSpy).toHaveBeenCalledTimes(1);
@@ -36,7 +36,7 @@ describe('sendRecoveryMail（設計書 §5・§8 テスト5・7）', () => {
     expect(init?.headers).toMatchObject({ Authorization: 'Bearer test-key' });
     const sentBody = JSON.parse(init?.body as string) as { to: string; text: string };
     expect(sentBody.to).toBe('a@example.com');
-    expect(sentBody.text).toContain('secret-token-xyz');
+    expect(sentBody.text).toContain('secret-code-xyz');
   });
 
   it('送信が失敗してもログに残すだけで、例外は投げない', async () => {
@@ -44,7 +44,7 @@ describe('sendRecoveryMail（設計書 §5・§8 テスト5・7）', () => {
     const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
 
     await expect(
-      sendRecoveryMail({ ...BASE_ENV, RESEND_API_KEY: 'test-key' }, { to: 'a@example.com', token: 't' }),
+      sendRecoveryMail({ ...BASE_ENV, RESEND_API_KEY: 'test-key' }, { to: 'a@example.com', code: 'c' }),
     ).resolves.toBeUndefined();
     expect(errorSpy).toHaveBeenCalled();
   });
@@ -54,7 +54,7 @@ describe('sendRecoveryMail（設計書 §5・§8 テスト5・7）', () => {
     const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
 
     await expect(
-      sendRecoveryMail({ ...BASE_ENV, RESEND_API_KEY: 'test-key' }, { to: 'a@example.com', token: 't' }),
+      sendRecoveryMail({ ...BASE_ENV, RESEND_API_KEY: 'test-key' }, { to: 'a@example.com', code: 'c' }),
     ).resolves.toBeUndefined();
     expect(errorSpy).toHaveBeenCalled();
   });
