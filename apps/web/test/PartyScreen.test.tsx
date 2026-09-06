@@ -135,7 +135,11 @@ describe('仲間画面（設計書 §5）', () => {
     expect(screen.getByText(/ゆうしゃ/)).toBeInTheDocument();
     expect(screen.getByText(/たろう/)).toBeInTheDocument();
     // 素質はA〜Eのまま出る（数字に直さない）。
-    expect(screen.getByText(/HPA/)).toBeInTheDocument();
+    // 素質は項目名と等級を別の要素に分けて格子で出す。1行に流すと7項目を目で追えない。
+    const aptitude = document.querySelector('.aptitude');
+    expect(aptitude).not.toBeNull();
+    expect(aptitude?.textContent).toContain('HP');
+    expect(aptitude?.querySelector('[data-grade="A"]')).not.toBeNull();
   });
 
   it('金貨不足で雇えないとき、サーバの文言がそのまま出る', async () => {
@@ -227,10 +231,13 @@ describe('仲間画面（設計書 §5）', () => {
 
     // パラディンは戦士Lv20・僧侶Lv15が必要（設計書 §4.3）。unlockedJobIds に
     // 含まれていないので、条件だけ出て「転職する」ボタンは無い。
-    const paladinText = await screen.findByText('パラディン — 戦士Lv20・僧侶Lv15が必要');
-    const paladinRow = paladinText.closest('li');
+    const paladinName = await screen.findByText('パラディン');
+    const paladinRow = paladinName.closest('li');
     if (paladinRow === null) throw new Error('パラディンの行が見つからない');
+    expect(paladinRow.textContent).toContain('戦士Lv20・僧侶Lv15が必要');
     expect(within(paladinRow).queryByRole('button')).not.toBeInTheDocument();
+    // 就ける職業とは別の一覧に置く。混ぜると押せる行と押せない行が交互に来る。
+    expect(paladinRow.closest('.joblist.locked')).not.toBeNull();
   });
 
   it('次のレベルで覚える技をあと何レベルかで出す', async () => {
@@ -499,8 +506,10 @@ describe('店（設計書 §6・§7）', () => {
     render(<PartyScreen token="t" onUnauthorized={vi.fn()} />);
     expect(await screen.findByText(/錆びた剣/)).toBeInTheDocument();
     expect(screen.getByText(/ATK \+3/)).toBeInTheDocument();
-    expect(screen.getByText(/100ゴールド/)).toBeInTheDocument();
-    expect(screen.getByText('金貨が足りません')).toBeInTheDocument();
+    // 値段は「100G」、足りない場合は不足額を添える。同じ文言を品数だけ
+    // 並べると1回も読まれないので、押せるかどうかで買えないことを示す。
+    expect(screen.getByText('100G', { exact: false })).toBeInTheDocument();
+    expect(screen.getByText(/あと50/)).toBeInTheDocument();
     expect(screen.getByRole('button', { name: '買う' })).toBeDisabled();
   });
 

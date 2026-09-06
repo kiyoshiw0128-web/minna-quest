@@ -656,3 +656,188 @@ section > h4 {
   letter-spacing: 0.12em;
   color: var(--muted);
 }
+
+/* ---- 能力値の格子 ---- */
+
+/*
+ * 「HP 128 / MP 20 / ATK 15 / ...」と1行に流していた。7項目が横に繋がると
+ * どれがどれだか目で追えない。項目名の下に数字を置き、縦の位置で探せるようにする。
+ */
+.stat-grid {
+  display: grid;
+  grid-template-columns: repeat(7, minmax(0, 1fr));
+  gap: 1px;
+  margin: 0.6rem 0;
+  padding: 0;
+  background: var(--line);
+  border: 1px solid var(--line);
+  border-radius: 4px;
+  overflow: hidden;
+}
+
+.stat-cell {
+  background: var(--bg-sunken);
+  padding: 0.35rem 0.2rem;
+  text-align: center;
+}
+
+.stat-grid dt {
+  font-size: 0.68rem;
+  letter-spacing: 0.04em;
+  color: var(--muted);
+}
+
+.stat-grid dd {
+  margin: 0;
+  font-size: 0.95rem;
+  font-weight: bold;
+}
+
+/* 装備を替えたときの増減。数字だけだと、上がったのか下がったのか読み取れない。 */
+.stat-up,
+.stat-down {
+  display: block;
+  font-size: 0.7rem;
+  font-weight: normal;
+}
+
+.stat-up {
+  color: var(--good);
+}
+
+.stat-down {
+  color: var(--alert);
+}
+
+/* 素質はA〜Eのまま出す。等級で色を変えるのは、7項目を見て良し悪しを判断する場面だから。 */
+.aptitude dd[data-grade='A'] { color: #d4a017; }
+.aptitude dd[data-grade='B'] { color: var(--good); }
+.aptitude dd[data-grade='C'] { color: var(--fg); }
+.aptitude dd[data-grade='D'] { color: var(--muted); }
+.aptitude dd[data-grade='E'] { color: var(--alert); }
+
+/* ---- 店の棚 ---- */
+
+/*
+ * 20品を1列に流し、買えない品ごとに「金貨が足りません」を出していた。
+ * 同じ文が20回並ぶのは、1回も読まれないのと同じ。買えるかどうかは
+ * ボタンが押せるかで示し、足りない額だけを添える。
+ */
+.shelf {
+  margin: 0.3rem 0 1rem;
+}
+
+.shelf-item {
+  display: grid;
+  grid-template-columns: minmax(6rem, 1fr) minmax(6rem, 1.2fr) auto auto;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.4rem 0.6rem;
+  margin-bottom: 0.3rem;
+  background: var(--bg-sunken);
+  border: 1px solid var(--line);
+  border-radius: 4px;
+}
+
+/* 買えない品は沈める。並びから消さないのは、次に何を狙うかの目安になるため。 */
+.shelf-item[data-affordable='false'] {
+  opacity: 0.55;
+}
+
+.shelf-name {
+  font-weight: bold;
+}
+
+.shelf-mods {
+  font-size: 0.8rem;
+  color: var(--muted);
+}
+
+.shelf-cost {
+  font-size: 0.85rem;
+  text-align: right;
+  white-space: nowrap;
+}
+
+.shelf-cost small {
+  display: block;
+  font-size: 0.7rem;
+  color: var(--alert);
+}
+
+.shelf-item button {
+  min-height: 2.1rem;
+  padding: 0.25rem 0.7rem;
+  font-size: 0.85rem;
+}
+
+@media (max-width: 30rem) {
+  .stat-grid {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+  }
+
+  .shelf-item {
+    grid-template-columns: 1fr auto;
+    row-gap: 0.2rem;
+  }
+
+  .shelf-mods {
+    grid-column: 1 / -1;
+  }
+}
+
+/* ---- 職業の一覧 ---- */
+
+/*
+ * 名前・状態・操作を同じ列に揃える。以前は1行に流していたため、
+ * ボタンの位置が行ごとにずれ、押せる行を目で探すことになっていた。
+ */
+.joblist li {
+  display: grid;
+  grid-template-columns: minmax(6rem, 1fr) minmax(5rem, auto) 6rem;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.35rem 0.6rem;
+  margin-bottom: 0.25rem;
+  background: var(--bg-sunken);
+  border: 1px solid var(--line);
+  border-radius: 4px;
+}
+
+.job-name {
+  font-weight: bold;
+}
+
+.job-note {
+  font-size: 0.8rem;
+  color: var(--muted);
+}
+
+.job-current {
+  font-size: 0.8rem;
+  color: var(--accent);
+  text-align: center;
+}
+
+.joblist button {
+  min-height: 2.1rem;
+  padding: 0.25rem 0.5rem;
+  font-size: 0.82rem;
+}
+
+/* まだ就けない職業。消さずに沈める。見えていないと目標にできない。 */
+.joblist.locked li {
+  grid-template-columns: minmax(6rem, 1fr) 1fr;
+  opacity: 0.6;
+}
+
+@media (max-width: 30rem) {
+  .joblist li,
+  .joblist.locked li {
+    grid-template-columns: 1fr auto;
+  }
+
+  .job-note {
+    grid-column: 1 / -1;
+  }
+}

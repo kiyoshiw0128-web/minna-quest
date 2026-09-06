@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import { ARMORS, JOBS, PASSIVES, PETS, SKILLS, WEAPONS, applyEquipment } from '@mq/core';
 import type {
-  DamageSpec, Effect, Element, Equipment, Job, LearnEntry, Passive, Pet, Recruit, Skill, StatBlock,
+  Aptitude, DamageSpec, Effect, Element, Equipment, Job, LearnEntry, Passive, Pet, Recruit, Skill, StatBlock,
 } from '@mq/core';
 import {
   ApiError, UnauthorizedError, buyItem, changeCharacterJob, dismissCharacter, fetchMe, fetchShop, fetchTavern,
@@ -367,10 +367,7 @@ function PartyMemberCard({
       <summary>
         {member.name}（{jobName(member.jobId)} / 冒険Lv{member.adventureLevel} / ジョブLv{member.jobLevel}）
       </summary>
-      <p>
-        HP {member.stats.maxHp} / MP {member.stats.maxMp} / ATK {member.stats.atk} / DEF {member.stats.def} /
-        {' '}MAT {member.stats.mat} / MDF {member.stats.mdf} / SPD {member.stats.spd}
-      </p>
+      <StatGrid stats={member.stats} />
 
       <div>
         <button type="button" disabled={busy || index === 0} onClick={() => onMove(-1)}>
@@ -432,13 +429,34 @@ function JobPanel({
           ? 'この職業で覚える技はもう残っていません。'
           : `あと${nextEntry.level - member.jobLevel}レベルで「${learnEntryName(nextEntry)}」を習得します。`}
       </p>
-      <ul>
-        {Object.values(JOBS).map((job) => (
-          <li key={job.id}>
-            <JobOption job={job} member={member} busy={busy} onChangeJob={onChangeJob} />
-          </li>
-        ))}
+      {/*
+        就ける職業と、まだ就けない上級職を分ける。混ぜて並べると、
+        押せる行と押せない行が交互に来て、どれを選べるのか一目で分からない。
+        就けないものを消さないのは、目標として見えている必要があるため。
+      */}
+      <ul className="joblist">
+        {Object.values(JOBS)
+          .filter((job) => member.unlockedJobIds.includes(job.id))
+          .map((job) => (
+            <li key={job.id}>
+              <JobOption job={job} member={member} busy={busy} onChangeJob={onChangeJob} />
+            </li>
+          ))}
       </ul>
+      {Object.values(JOBS).some((job) => !member.unlockedJobIds.includes(job.id)) && (
+        <>
+          <h4>まだ就けない職業</h4>
+          <ul className="joblist locked">
+            {Object.values(JOBS)
+              .filter((job) => !member.unlockedJobIds.includes(job.id))
+              .map((job) => (
+                <li key={job.id}>
+                  <JobOption job={job} member={member} busy={busy} onChangeJob={onChangeJob} />
+                </li>
+              ))}
+          </ul>
+        </>
+      )}
       {error !== null && <p role="alert">{error}</p>}
     </section>
   );
@@ -462,21 +480,28 @@ function JobOption({
   // 上級職の解禁条件は満たしていなくても常に表に出す。見えなければ、
   // 目標にできない（設計書 §6・§1）。
   if (!unlocked) {
-    return <span>{job.name} — {requirementText(job)}が必要</span>;
+    return (
+      <>
+        <span className="job-name">{job.name}</span>
+        <span className="job-note">{requirementText(job)}が必要</span>
+      </>
+    );
   }
 
   return (
-    <span>
-      {job.name}
-      {visitedLevel !== undefined ? `（ジョブLv${visitedLevel}）` : '（未経験）'}
+    <>
+      <span className="job-name">{job.name}</span>
+      <span className="job-note">
+        {visitedLevel !== undefined ? `ジョブLv${visitedLevel}` : '未経験'}
+      </span>
       {isCurrent ? (
-        '　← 現在の職業'
+        <span className="job-current">いまの職業</span>
       ) : (
         <button type="button" disabled={busy} onClick={() => onChangeJob(job.id)}>
           転職する
         </button>
       )}
-    </span>
+    </>
   );
 }
 
@@ -681,10 +706,9 @@ function EquipmentItemPanel({
   return (
     <section>
       <h3>装備</h3>
-      <p>
-        HP {preview.maxHp} / MP {preview.maxMp} / ATK {preview.atk} / DEF {preview.def} /
-        {' '}MAT {preview.mat} / MDF {preview.mdf} / SPD {preview.spd}
-      </p>
+      {/* 装備を選び直した結果を、いまの値との差付きで出す。差が見えないと
+          「この剣に替えると何がどれだけ上がるのか」を暗算することになる。 */}
+      <StatGrid stats={preview} diff={member.stats} />
 
       <h4>武器</h4>
       {ownedWeaponIds.length === 0 && <p>まだ武器を持っていません。店で買えます。</p>}
@@ -725,6 +749,61 @@ function EquipmentItemPanel({
  * （金貨不足）をそのまま出す。品揃えは全員共通・日替わりにしない
  * （worker/src/routes/shop.ts）。
  */
+/** 能力の並び順。表示は常にこの順にする。順が揺れると見比べられない。 */
+const STAT_ORDER: readonly (keyof StatBlock)[] = ['maxHp', 'maxMp', 'atk', 'def', 'mat', 'mdf', 'spd'];
+
+const STAT_SHORT: Readonly<Record<keyof StatBlock, string>> = {
+  maxHp: 'HP', maxMp: 'MP', atk: 'ATK', def: 'DEF', mat: 'MAT', mdf: 'MDF', spd: 'SPD',
+};
+
+/**
+ * 能力値の一覧。
+ *
+ * 「HP 128 / MP 20 / ATK 15 / ...」と1行に流していたが、7項目が横に繋がると
+ * どれがどれだか目で追えない。項目名の下に数字を置いた格子にして、
+ * 縦の位置で項目を探せるようにする。装備の前後を見比べるのもこの形なら効く。
+ */
+function StatGrid({ stats, diff }: { stats: StatBlock; diff?: StatBlock }) {
+  return (
+    <dl className="stat-grid">
+      {STAT_ORDER.map((key) => {
+        const delta = diff === undefined ? 0 : stats[key] - diff[key];
+        return (
+          <div key={key} className="stat-cell">
+            <dt>{STAT_SHORT[key]}</dt>
+            <dd>
+              {stats[key]}
+              {delta !== 0 && (
+                <span className={delta > 0 ? 'stat-up' : 'stat-down'}>
+                  {delta > 0 ? `+${delta}` : delta}
+                </span>
+              )}
+            </dd>
+          </div>
+        );
+      })}
+    </dl>
+  );
+}
+
+/**
+ * 素質。A〜Eのまま出す（数字に直さない。エンジンがこの粒度で持っている）。
+ * 等級で色を変えるのは、7項目を読んで良し悪しを判断する場面だから。
+ * 文字だけだと「MATがAで良い人材だ」に気づくのに時間がかかる。
+ */
+function AptitudeGrid({ aptitude }: { aptitude: Aptitude }) {
+  return (
+    <dl className="stat-grid aptitude">
+      {STAT_ORDER.map((key) => (
+        <div key={key} className="stat-cell">
+          <dt>{STAT_SHORT[key]}</dt>
+          <dd data-grade={aptitude[key]}>{aptitude[key]}</dd>
+        </div>
+      ))}
+    </dl>
+  );
+}
+
 function ShopSection({
   shopItems,
   gold,
@@ -738,25 +817,46 @@ function ShopSection({
   error: string | null;
   onBuy: (itemId: string) => void;
 }) {
+  /**
+   * 武器と防具に分け、それぞれ値段順に並べる。
+   *
+   * 20品を1列に流していたため、武器と防具が混ざり、しかも買えない品ごとに
+   * 「金貨が足りません」が並んで20回出ていた。同じ文が20回出るのは、
+   * 1回も読まれないのと同じである。買えるかどうかは押せるかどうかで示し、
+   * 足りない額だけを添える。
+   */
+  const groups: { label: string; items: Equipment[] }[] = [
+    { label: '武器', items: shopItems.filter((i) => i.slot === 'weapon') },
+    { label: '防具', items: shopItems.filter((i) => i.slot === 'armor') },
+  ];
+
   return (
     <section>
       <h2>店</h2>
       {error !== null && <p role="alert">{error}</p>}
-      <ul>
-        {shopItems.map((item) => {
-          const affordable = gold >= item.cost;
-          return (
-            <li key={item.id}>
-              {item.name}（{item.slot === 'weapon' ? '武器' : '防具'} / {equipmentModsLabel(item)} /{' '}
-              {item.cost}ゴールド）
-              <button type="button" disabled={busy || !affordable} onClick={() => onBuy(item.id)}>
-                買う
-              </button>
-              {!affordable && <span>　金貨が足りません</span>}
-            </li>
-          );
-        })}
-      </ul>
+      {groups.map((group) => (
+        <div key={group.label}>
+          <h3>{group.label}</h3>
+          <ul className="shelf">
+            {[...group.items].sort((a, b) => a.cost - b.cost).map((item) => {
+              const affordable = gold >= item.cost;
+              return (
+                <li key={item.id} className="shelf-item" data-affordable={affordable}>
+                  <span className="shelf-name">{item.name}</span>
+                  <span className="shelf-mods">{equipmentModsLabel(item)}</span>
+                  <span className="shelf-cost">
+                    {item.cost}G
+                    {!affordable && <small>あと{item.cost - gold}</small>}
+                  </span>
+                  <button type="button" disabled={busy || !affordable} onClick={() => onBuy(item.id)}>
+                    買う
+                  </button>
+                </li>
+              );
+            })}
+          </ul>
+        </div>
+      ))}
     </section>
   );
 }
@@ -823,10 +923,7 @@ function RecruitCard({
       <p>
         {recruit.name}（{jobName(recruit.jobId)} / 冒険Lv{recruit.adventureLevel} / {recruit.cost}ゴールド）
       </p>
-      <p>
-        素質: HP{recruit.aptitude.maxHp} MP{recruit.aptitude.maxMp} ATK{recruit.aptitude.atk} DEF{recruit.aptitude.def}{' '}
-        MAT{recruit.aptitude.mat} MDF{recruit.aptitude.mdf} SPD{recruit.aptitude.spd}
-      </p>
+      <AptitudeGrid aptitude={recruit.aptitude} />
       <button type="button" onClick={onHire} disabled={busy}>
         雇う
       </button>
