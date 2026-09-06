@@ -137,3 +137,37 @@ describe('合言葉で戻る', () => {
     expect(localStorage.getItem('mq.token')).toBeNull();
   });
 });
+
+/**
+ * 復旧コードを使って戻る流れ。
+ * コードを貼る口が無いと、メールは届くのに使えない。
+ */
+describe('復旧コードで戻る', () => {
+  it('コードを送ってもらい、貼ると新しい合言葉で入れる', async () => {
+    installFetchMock({
+      'POST /api/recover': jsonResponse(200, { ok: true, data: {} }),
+      'POST /api/recover/confirm': jsonResponse(200, { ok: true, data: { token: 'fresh-token' } }),
+      'GET /api/me': jsonResponse(200, { ok: true, data: { name: 'きよし', gold: 0, party: [] } }),
+      'GET /api/today': jsonResponse(200, {
+        ok: true,
+        data: {
+          dayNo: 1, chapter: 1, optionIds: ['crossroads'],
+          myVote: null, chosenId: null, counts: null, tiebroken: null,
+        },
+      }),
+    });
+
+    render(<App />);
+    await userEvent.click(screen.getByRole('button', { name: '合言葉で戻る' }));
+    await userEvent.click(screen.getByRole('button', { name: '合言葉が分からない' }));
+    await userEvent.type(screen.getByLabelText('メールアドレス'), 'a@example.com');
+    await userEvent.click(screen.getByRole('button', { name: '再送を要求する' }));
+
+    await screen.findByText(/登録されていれば送りました/);
+    await userEvent.type(screen.getByLabelText('復旧コード'), 'the-code');
+    await userEvent.click(screen.getByRole('button', { name: 'このコードで戻る' }));
+
+    await screen.findByRole('heading', { name: /1日目/ });
+    expect(localStorage.getItem('mq.token')).toBe('fresh-token');
+  });
+});

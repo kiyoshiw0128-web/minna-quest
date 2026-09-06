@@ -173,6 +173,22 @@ export function requestRecovery(email: string): Promise<RequestRecoveryResult> {
   });
 }
 
+export type ConfirmRecoveryResult = { token: string };
+
+/**
+ * 復旧コードを使って新しい合言葉を受け取る。
+ *
+ * 期限切れ・使用済み・存在しないコードは、サーバが同じ応答で断る。
+ * どれに当たったかを画面側で言い分けようとしないこと。区別できると、
+ * コードの総当たりに手がかりを与える。
+ */
+export function confirmRecovery(code: string): Promise<ConfirmRecoveryResult> {
+  return request('/api/recover/confirm', {
+    method: 'POST',
+    body: JSON.stringify({ code }),
+  });
+}
+
 export type SetActivePetResult = { activePetId: string };
 
 /** 連れるペットを替える。持っていないペットはサーバが断る（設計書 §5）。 */

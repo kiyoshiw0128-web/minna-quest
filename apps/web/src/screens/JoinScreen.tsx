@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import type { FormEvent } from 'react';
-import { join, fetchMe, requestRecovery, ApiError, UnauthorizedError } from '../api.js';
+import { join, fetchMe, requestRecovery, ApiError, UnauthorizedError, confirmRecovery } from '../api.js';
 
 type Props = {
   onJoined: (token: string) => void;
@@ -32,6 +32,7 @@ export function JoinScreen({ onJoined }: Props) {
   const [secret, setSecret] = useState('');
   const [status, setStatus] = useState<Status>({ kind: 'idle' });
   const [recoverEmail, setRecoverEmail] = useState('');
+  const [recoverCode, setRecoverCode] = useState('');
   const [recoverStatus, setRecoverStatus] = useState<RecoverStatus>({ kind: 'idle' });
 
   const loading = status.kind === 'loading';
@@ -55,6 +56,26 @@ export function JoinScreen({ onJoined }: Props) {
    * 「送りました」と断言すると、それだけで登録の有無が外から分かってしまう
    * ため、常に「登録されていれば送りました」という言い回しにする（設計書 §6）。
    */
+  /**
+   * 復旧コードを使う。通れば新しい合言葉が返るので、そのまま入る。
+   * 断られた理由は言い分けない（期限切れか使用済みかを区別できると、
+   * 総当たりに手がかりを与える）。
+   */
+  async function handleConfirmSubmit(event: FormEvent): Promise<void> {
+    event.preventDefault();
+    const code = recoverCode.trim();
+    if (code === '') return;
+
+    setRecoverStatus({ kind: 'loading' });
+    try {
+      const result = await confirmRecovery(code);
+      onJoined(result.token);
+    } catch (error) {
+      const message = error instanceof ApiError ? error.message : '通信に失敗しました';
+      setRecoverStatus({ kind: 'error', message });
+    }
+  }
+
   async function handleRecoverSubmit(event: FormEvent): Promise<void> {
     event.preventDefault();
     const trimmedEmail = recoverEmail.trim();
@@ -154,11 +175,29 @@ export function JoinScreen({ onJoined }: Props) {
       {mode === 'recover' && (
         <>
           <p>
-            合言葉をメールアドレスに登録していれば、今の合言葉を再送できます。
+            メールアドレスを登録していれば、1回だけ使える復旧コードを送れます。
             登録していない場合は何も届きません。
           </p>
           {recoverStatus.kind === 'sent' ? (
-            <p role="status">登録されていれば送りました。届いたメールの合言葉を「合言葉で戻る」に貼ってください。</p>
+            <>
+              <p role="status">登録されていれば送りました。届いた復旧コードを貼ってください。</p>
+              {/*
+                コードを貼る口をここに出す。別の画面に飛ばすと、メールと画面を
+                行き来する間に「どこに貼るのか」を見失う。
+              */}
+              <form onSubmit={(event) => void handleConfirmSubmit(event)}>
+                <label>
+                  復旧コード
+                  <input
+                    value={recoverCode}
+                    onChange={(event) => setRecoverCode(event.target.value)}
+                  />
+                </label>
+                <button type="submit" disabled={recoverCode.trim() === ''}>
+                  このコードで戻る
+                </button>
+              </form>
+            </>
           ) : (
             <form onSubmit={(event) => void handleRecoverSubmit(event)}>
               <label>
