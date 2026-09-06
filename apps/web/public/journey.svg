@@ -1,0 +1,24 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="1000" viewBox="0 0 1200 1000">
+  <defs>
+    <linearGradient id="sky" x2="0" y2="1"><stop stop-color="#ecebdc"/><stop offset="1" stop-color="#d3dfd0"/></linearGradient>
+    <linearGradient id="hill" x2="0" y2="1"><stop stop-color="#789889"/><stop offset="1" stop-color="#426e60"/></linearGradient>
+    <linearGradient id="river" x2="1" y2="1"><stop stop-color="#eff0d9"/><stop offset="1" stop-color="#d0decb"/></linearGradient>
+    <pattern id="paper" width="7" height="7" patternUnits="userSpaceOnUse"><circle cx="1" cy="2" r=".55" fill="#4e6755" opacity=".10"/><circle cx="5" cy="6" r=".4" fill="#fff" opacity=".3"/></pattern>
+  </defs>
+  <path fill="url(#sky)" d="M0 0h1200v1000H0z"/>
+  <circle cx="820" cy="287" r="101" fill="#fbf4dc"/>
+  <circle cx="820" cy="287" r="121" fill="none" stroke="#f8f1dc" stroke-width="1.5"/>
+  <g fill="none" stroke="#768b7d" stroke-width="2" opacity=".55"><path d="M650 280q12-12 24 0 12-12 24 0M925 368q9-9 18 0 9-9 18 0M610 325q7-7 14 0 7-7 14 0"/></g>
+  <path d="M0 587 169 411 270 487 440 282 636 514 759 416 913 527 1079 379 1200 450V1000H0Z" fill="#bdcec0"/>
+  <path d="m440 282-86 155 86-38 69 74Z" fill="#e3e7d5"/>
+  <path d="M0 691 153 585 342 638 559 456 791 659 1008 522 1200 596V1000H0Z" fill="#9bb6a3"/>
+  <path d="M0 780Q218 531 461 650T853 655Q1047 567 1200 711V1000H0Z" fill="#7a9a87"/>
+  <g fill="#657f6c"><path d="M785 600h97v96h-97zM776 600l57-35 58 35zM802 537h21v75h-21zM800 538l12-23 13 23zM856 550h17v68h-17zM853 551l12-27 12 27z"/><path d="M749 648h161v47H749z"/></g>
+  <g fill="#d7dfc7"><path d="M807 566h7v15h-7zM860 576h6v13h-6zM823 625h10v17h-10zM848 625h10v17h-10z"/></g>
+  <path d="M0 873Q197 690 413 744T794 753Q1013 663 1200 831V1000H0Z" fill="url(#hill)"/>
+  <path d="M755 700q-164 93-90 126t-114 58q-204 26-299 116h303q22-66 145-92t61-77q-107-41 9-131Z" fill="url(#river)"/>
+  <path d="M0 758q121 63 235 242H0ZM1200 725q-174 72-226 275h226Z" fill="#335e51"/>
+  <g fill="#294f44"><path d="m86 697-43 106h29l-42 84h116l-43-84h27ZM1110 658l-41 110h25l-45 104h127l-45-104h23ZM1159 802l-39 100h23l-42 83h120l-42-83h23Z"/><path d="M82 850h10v150H82zM1105 838h11v162h-11z"/></g>
+  <g fill="none" stroke="#d4dfbf" stroke-width="2" opacity=".55"><path d="m23 964 14-31m-2 17 14-7m-12-7-8-7M1036 956l12-31m-6 17 14-5m-9-7-7-5"/></g>
+  <path fill="url(#paper)" d="M0 0h1200v1000H0z"/>
+</svg>

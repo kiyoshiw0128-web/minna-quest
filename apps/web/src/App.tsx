@@ -75,7 +75,7 @@ export function App() {
   }
 
   return (
-    <div>
+    <div className="app-shell">
       {saveFailed && (
         <p role="alert">
           参加状態を保存できませんでした。このタブを閉じると、参加からやり直しになります。
@@ -86,11 +86,14 @@ export function App() {
         画面なので、開いた瞬間に何の画面か分かる手がかりを1つ置く。
         見出しではなく飾りなので、h1 は各画面のものを使い続ける。
       */}
-      <div className="brand" aria-hidden="true">
+      <header className="app-header">
+      <div className="brand">
         <img src="/icon.svg" alt="" />
-        日々譚
+        <span>日々譚<small>HIBITAN</small></span>
       </div>
-      <nav>
+      <p className="header-note">仲間と綴る、日々の冒険。</p>
+      </header>
+      <nav className="main-nav" aria-label="冒険のメニュー">
         <button type="button" onClick={() => setTab('today')} aria-current={tab === 'today'}>
           今日
         </button>
@@ -112,6 +115,7 @@ export function App() {
       {tab === 'party' && <PartyScreen token={token} onUnauthorized={handleUnauthorized} />}
       {tab === 'history' && <HistoryScreen token={token} onUnauthorized={handleUnauthorized} />}
       {tab === 'arena' && <ArenaScreen token={token} onUnauthorized={handleUnauthorized} />}
+      <footer className="app-footer">日々譚 <span>物語はみんなで。冒険はあなたらしく。</span></footer>
     </div>
   );
 }

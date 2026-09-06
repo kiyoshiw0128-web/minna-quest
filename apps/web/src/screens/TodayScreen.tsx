@@ -90,10 +90,15 @@ export function TodayScreen({ token, onUnauthorized }: Props) {
   const closed = data.chosenId !== null;
 
   return (
-    <main>
+    <main className="today-screen">
+      <div className="chapter-hero">
+      <p className="eyebrow">THE DAILY CHRONICLE</p>
       <h1>
         {data.chapter}章 {data.dayNo}日目
       </h1>
+      <p className="chapter-title">{closed ? 'ひとつの選択が、物語になった。' : '今日は、どんな道をゆこう。'}</p>
+      <p>仲間と選んだ道が、この世界の続きをつくります。</p>
+      </div>
 
       {closed ? <ClosedDay data={data} /> : <OpenDay data={data} onVote={handleVote} voteState={voteState} />}
     </main>
@@ -110,10 +115,11 @@ function OpenDay({
   voteState: VoteState;
 }) {
   return (
-    <section>
-      <p>毎朝5時（JST）に締まります。</p>
-      <ul>
-        {data.optionIds.map((optionId) => {
+    <section className="daily-choices">
+      <div className="section-heading"><div><p className="eyebrow">TODAY'S CHOICE</p><h2>次の一頁を選ぶ</h2></div><span className="daily-badge">{data.myVote === null ? '投票受付中' : '投票済み'}</span></div>
+      <p className="section-description">毎朝5時（JST）に締まります。</p>
+      <ul className="choice-list">
+        {data.optionIds.map((optionId, index) => {
           const event = resolveEvent(optionId);
           const mine = data.myVote === optionId;
           return (
@@ -132,20 +138,21 @@ function OpenDay({
                 aria-pressed={mine}
               >
                 <span className="choice-mark" aria-hidden="true">
-                  {event.kind === 'battle' ? '⚔' : '✦'}
+                  {String(index + 1).padStart(2, '0')}
                 </span>
                 <span className="choice-body">
                   {mine ? '✓ ' : ''}
                   {event.label}
                   {event.kind !== null && ` (${event.kind === 'battle' ? '戦闘' : '出来事'})`}
                 </span>
+                <span className="choice-arrow" aria-hidden="true">{mine ? '✓' : '↗'}</span>
               </button>
             </li>
           );
         })}
       </ul>
       {/* 締まるまでサーバは票数を返さない。空欄にすると「壊れている」ように見えるので明示する。 */}
-      <p>票数: まだ分かりません（締まるまで公開されません）</p>
+      <p className="vote-note">票数: まだ分かりません（締まるまで公開されません）</p>
       {voteState.kind === 'error' && <p role="alert">{voteState.message}</p>}
     </section>
   );
