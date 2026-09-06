@@ -22,10 +22,11 @@
 | 4c | 第2章・第3章のボス | **完了** |
 | 8 | 装備品（武器・防具・店） | **完了** |
 | 9 | ボス4体の絵 | **完了** |
+| 10 | 締まった日の結果を文章で出す | **完了** |
 
 ## いまの状態
 
-- テスト **717件**（core 483 / worker 188 / web 46）、typecheck クリーン、CI 緑
+- テスト **719件**（core 484 / worker 188 / web 47）、typecheck クリーン、CI 緑
 - **本番稼働中: https://minna-quest.giocoso.workers.dev**（Cloudflare、D1は東京圏）
 - `packages/core` は実行時依存ゼロ、乱数は `daily/` のシード付き純関数のみ
 - `apps/worker` は Cloudflare Worker + D1 + Cron。API 12本、招待コード認証、JST 05:00 の締めと取り戻し
@@ -109,3 +110,5 @@ corepack pnpm run release               # ビルド→移行→デプロイ を�
   生死の閾値を跨がせるには小さい。読みが効くのは第2章のゴウザと闘技場20階だけ
 - **装備で素の能力を大きく動かさない。** 全ての敵の数値が「装備なしのパーティ」で
   実測されている。`bridge.test.ts` と各ボスの検査が、装備なしの結果を固定している
+- **イベントを足したら `resultText` も書く。** 忘れると、その日を選んだ世界の
+  全員に空白の結果が出る。`eventsData.test.ts` が止めるので気づける
