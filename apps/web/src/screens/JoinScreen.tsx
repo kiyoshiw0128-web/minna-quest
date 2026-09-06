@@ -73,7 +73,7 @@ export function JoinScreen({ onJoined }: Props) {
 
   return (
     <main>
-      <h1>みんなクエスト</h1>
+      <h1>日々譚</h1>
 
       <nav>
         <button type="button" onClick={() => switchMode('join')} aria-current={mode === 'join'}>

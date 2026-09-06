@@ -1,0 +1,32 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-label="日々譚">
+  <!--
+    「日」の一文字を金で置いた印。
+
+    文字を書体で描かず、線と面で組んでいる。書体に頼ると、環境に無いときに
+    別の字形に化けるか、そもそも出ない。日は外枠と横棒だけなので、
+    図形として描いたほうが確実で、16pxまで縮めても潰れない。
+
+    背景は不透明にしてある。透過にすると、タブの色が明るいときに
+    金の線が飛んで何も見えなくなる。
+  -->
+  <defs>
+    <linearGradient id="ink" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#232838"/>
+      <stop offset="1" stop-color="#14161f"/>
+    </linearGradient>
+    <linearGradient id="gold" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#f0d79a"/>
+      <stop offset="0.5" stop-color="#e0b464"/>
+      <stop offset="1" stop-color="#b98c3c"/>
+    </linearGradient>
+  </defs>
+
+  <rect x="1" y="1" width="62" height="62" rx="13" fill="url(#ink)"/>
+  <rect x="1" y="1" width="62" height="62" rx="13" fill="none" stroke="url(#gold)" stroke-width="2"/>
+
+  <!-- 日：外枠と中の横棒。線幅は縮小に耐える太さにしてある。 -->
+  <g fill="none" stroke="url(#gold)" stroke-width="5" stroke-linejoin="round" stroke-linecap="round">
+    <rect x="19" y="13" width="26" height="38" rx="3"/>
+    <path d="M19 32h26"/>
+  </g>
+</svg>

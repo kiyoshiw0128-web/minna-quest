@@ -138,12 +138,23 @@ h4 {
  * 毎日ひらく画面なので、開いた瞬間に何かが分かる手がかりを1つ置く。
  */
 .brand {
-  text-align: center;
-  font-size: 0.82rem;
-  letter-spacing: 0.42em;
-  text-indent: 0.42em;
-  color: var(--muted);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.45rem;
+  font-size: 0.95rem;
+  /* 漢字3文字なので、かな向けの広い字間だと間延びする。少しだけ開ける。 */
+  letter-spacing: 0.22em;
+  text-indent: 0.22em;
+  color: var(--accent);
   margin: 0 0 0.7rem;
+}
+
+.brand img {
+  width: 1.15rem;
+  height: 1.15rem;
+  /* 字と並べるので、字の高さに合わせて少し持ち上げる。 */
+  margin-top: -0.1rem;
 }
 
 /* ---- タブ（コマンドウィンドウ風） ---- */

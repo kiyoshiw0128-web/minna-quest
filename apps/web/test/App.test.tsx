@@ -17,7 +17,7 @@ afterEach(() => {
 describe('画面の出し分け', () => {
   it('トークンが無ければ参加画面が出る', () => {
     render(<App />);
-    expect(screen.getByRole('heading', { name: 'みんなクエスト' })).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: '日々譚' })).toBeInTheDocument();
   });
 
   it('トークンがあれば今日の画面が出る', async () => {
@@ -54,7 +54,7 @@ describe('参加', () => {
     expect(await screen.findByRole('alert')).toHaveTextContent('invalid or used invite code');
     expect(window.localStorage.getItem(TOKEN_KEY)).toBeNull();
     // 参加画面のままであること（今日の画面へは進んでいない）。
-    expect(screen.getByRole('heading', { name: 'みんなクエスト' })).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: '日々譚' })).toBeInTheDocument();
   });
 });
 
@@ -68,7 +68,7 @@ describe('401', () => {
     render(<App />);
 
     await waitFor(() => {
-      expect(screen.getByRole('heading', { name: 'みんなクエスト' })).toBeInTheDocument();
+      expect(screen.getByRole('heading', { name: '日々譚' })).toBeInTheDocument();
     });
     // 参加画面に戻るだけでなく、次回起動時も同じ古いトークンで再認証を試みないことを確認する。
     expect(window.localStorage.getItem(TOKEN_KEY)).toBeNull();

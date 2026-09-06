@@ -61,7 +61,7 @@ export function App() {
   if (storage.kind === 'unavailable') {
     return (
       <main>
-        <h1>みんなdeクエスト</h1>
+        <h1>日々譚</h1>
         <p role="alert">
           ブラウザの保存領域が使えないため、参加状態を保てません。
           プライベートモードを解除するか、このサイトのデータ保存を許可してください。
@@ -87,7 +87,8 @@ export function App() {
         見出しではなく飾りなので、h1 は各画面のものを使い続ける。
       */}
       <div className="brand" aria-hidden="true">
-        みんなdeクエスト
+        <img src="/icon.svg" alt="" />
+        日々譚
       </div>
       <nav>
         <button type="button" onClick={() => setTab('today')} aria-current={tab === 'today'}>
