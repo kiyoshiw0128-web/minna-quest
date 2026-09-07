@@ -61,7 +61,7 @@ export function HistoryScreen({ token, onUnauthorized }: Props) {
   const { data } = load;
 
   return (
-    <main>
+    <main className="story-history">
       <h1>{data.name}</h1>
       <p>
         {data.chapter}章 {data.currentDay}日目
@@ -86,7 +86,7 @@ export function HistoryScreen({ token, onUnauthorized }: Props) {
             {data.history.map((day) => {
               const chosen = day.chosenId !== null ? resolveEvent(day.chosenId) : null;
               return (
-                <li key={day.dayNo}>
+                <li key={day.dayNo} className="story-day">
                   <strong>{day.dayNo}日目: {chosen?.label ?? '(未決定)'}</strong>
                   {day.tiebroken === true && '（同数・シード決定）'}
                   {/* 通ってきた道を読み返せるようにする。ここが冒険の記録になる。 */}

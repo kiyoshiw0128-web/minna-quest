@@ -1,7 +1,8 @@
+import { BattleChronicle } from './BattleChronicle.js';
 import { enemyArtPath } from './enemyArt.js';
 import { DEFAULT_MAX_TURNS } from '@mq/core';
 import type { BattleLog, DamageSpec, Element, Enemy, PartyMember, Skill } from '@mq/core';
-import { groupBattleLog, summarizeResult } from './battleLog.js';
+import { summarizeResult } from './battleLog.js';
 import type { NameTable, SkillNameTable } from './battleLog.js';
 
 /**
@@ -282,25 +283,13 @@ export function BattleResultView({
     ...party.flatMap((member) => member.skills.map((skill): [string, string] => [skill.id, skill.name])),
     ...enemy.skills.map((skill): [string, string] => [skill.id, skill.name]),
   ]);
-  const groups = groupBattleLog(log.events, names, skillNames);
 
   return (
     <section>
       <h3>結果: {summarizeResult(log.events)}</h3>
       <p>{rewarded ? rewardedMessage : notRewardedMessage}</p>
       {children}
-      {groups.map((group) => (
-        <div key={group.turn} className="log-turn">
-          <h4>ターン{group.turn}</h4>
-          <ul>
-            {group.lines.map((line, i) => (
-              // 同一ターン内で同文が複数回起きうる（例: 全体攻撃で複数人が同じダメージ表記）ため、
-              // key はインデックスに頼らざるを得ない。この配列はターンごとに作り直されるので害はない。
-              <li key={i}>{line}</li>
-            ))}
-          </ul>
-        </div>
-      ))}
+      <BattleChronicle events={log.events} names={names} skills={skillNames} enemyId={enemy.id} />
     </section>
   );
 }

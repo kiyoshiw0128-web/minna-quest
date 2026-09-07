@@ -147,7 +147,7 @@ describe('送信（設計書 §4.4）', () => {
     expect(turn1Heading).toBeInTheDocument();
     expect(turn2Heading).toBeInTheDocument();
     expect(screen.getByText(/MP不足/)).toBeInTheDocument();
-    expect(screen.getByText(/斬る を使った/)).toBeInTheDocument();
+    expect(screen.getByText('斬る！')).toBeInTheDocument();
   });
 
   it('負けてもプランが残る', async () => {

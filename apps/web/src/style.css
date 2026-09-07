@@ -485,37 +485,31 @@ summary {
   letter-spacing: 0.04em;
 }
 
-/* ---- 戦闘のログ ---- */
-
-/*
- * ログはターンごとの塊で読む。塊の頭が見えないと、8ターンぶんの行が
- * ひと続きに見えて、何ターン目に何が起きたのかを追えない。
- */
-.log-turn {
-  margin: 0.9rem 0;
-  padding-left: 0.9rem;
-  border-left: 2px solid var(--line);
-}
-
-.log-turn h4 {
-  display: inline-block;
-  margin: 0 0 0.3rem;
-  padding: 0.1rem 0.6rem;
-  font-size: 0.78rem;
-  letter-spacing: 0.1em;
-  color: var(--bg-panel);
-  background: var(--accent);
-  border-radius: 999px;
-}
-
-.log-turn ul {
-  margin: 0;
-}
-
-.log-turn li {
-  margin-bottom: 0.15rem;
-  font-size: 0.92rem;
-  color: var(--fg);
+/* ---- 縦に読み下す戦闘記録 ---- */
+.battle-chronicle { margin-top: 28px; max-width: 640px; }
+.chronicle-turn { margin-top: 28px; border-top: 1px solid var(--line-strong); }
+.chronicle-turn h4 { margin: 0; padding: 12px 0; color: var(--accent); font-size: 1.05rem; letter-spacing: .08em; border-bottom: 1px solid var(--line); }
+.chronicle-actions { list-style: none; padding: 0; margin: 0; }
+.chronicle-actions > .chronicle-action { padding: 18px 0; margin: 0; border-bottom: 1px solid var(--line); }
+.chronicle-actor { display: flex; align-items: baseline; flex-wrap: wrap; gap: 8px; margin: 0; font-size: 1.1rem; font-weight: 600; }
+.chronicle-actor > span { color: var(--accent); }
+.chronicle-actor small { color: var(--muted); font-size: .65rem; font-weight: 400; }
+.chronicle-action[data-side='enemy'] .chronicle-actor > span { color: var(--alert); }
+.chronicle-skill { margin: 5px 0 0 24px; font-size: 1rem; color: var(--accent); }
+.chronicle-outcomes { margin: 6px 0 0 42px; padding: 0; }
+.chronicle-outcome { margin: 0 0 12px; }
+.chronicle-outcome:last-child { margin-bottom: 0; }
+.chronicle-target { margin: 0; overflow-wrap: anywhere; }
+.chronicle-amount { margin: 2px 0 0 18px; font-size: .88rem; }
+.chronicle-amount strong { font-size: 1.5rem; font-variant-numeric: tabular-nums; margin-right: 4px; }
+.chronicle-hp { margin: 1px 0 0 18px; font-size: .75rem; color: var(--muted); }
+.chronicle-hp strong { font-weight: 500; font-variant-numeric: tabular-nums; }
+.chronicle-note { margin: 0; font-size: .9rem; overflow-wrap: anywhere; }
+.chronicle-outcome[data-kind='heal'] .chronicle-amount { color: var(--good); }
+.chronicle-outcome[data-kind='down'] .chronicle-note { color: var(--alert); }
+@media (max-width: 30rem) {
+  .chronicle-outcomes { margin-left: 28px; }
+  .chronicle-skill { margin-left: 18px; }
 }
 
 /* 見出しの飾り罫は、ログの塊の頭には要らない（上で別に組んでいる）。 */
@@ -824,3 +818,25 @@ section > h2:first-child { margin-top: 0; }
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { transition: none !important; animation: none !important; }
 }
+
+/* 物語と行動選択は、罫線で区切った縦読みの冒険記録に揃える。 */
+.today-screen, .story-history { max-width: 640px; margin: 0 auto; }
+.journey-heading { text-align: center; border-block: 1px solid var(--line-strong); padding: 12px 0; }
+.journey-heading h1 { font-size: 1.25rem; margin: 4px 0; }
+.journey-illustration { height: 150px; max-width: 360px; margin: 20px auto; border: 1px solid var(--line); background: linear-gradient(#101b1888, #101b1888), url('/journey.svg') center 65% / cover; }
+.journey-intro { font-size: .95rem; margin: 20px 0; line-height: 1.9; }
+.today-screen .daily-choices, .today-screen .journey-story, .story-history section { background: transparent; border: none; border-top: 1px solid var(--line-strong); border-radius: 0; padding: 16px 0; margin: 20px 0; box-shadow: none; }
+.today-screen h2, .story-history h2 { font-family: inherit; font-size: 1.05rem; margin: 0 0 12px; }
+.journey-options { border: 0; padding: 0; margin: 0 0 12px; min-width: 0; }
+.journey-options legend { font-size: .85rem; color: var(--muted); margin-bottom: 8px; }
+.journey-options .journey-option { display: flex; align-items: center; gap: 10px; margin: 0; padding: 10px 4px; min-height: 44px; color: var(--fg); font-size: .95rem; cursor: pointer; }
+.journey-option input[type='radio'] { flex: 0 0 18px; width: 18px; height: 18px; min-height: 18px; margin: 0; accent-color: var(--accent); }
+.journey-option:has(input:checked) { color: var(--accent); }
+.journey-option:has(input:disabled) { cursor: wait; }
+.journey-confirm { min-width: 100px; border-color: var(--accent); color: var(--accent); }
+.journey-vote-status { margin-top: 20px; padding-top: 14px; border-top: 1px solid var(--line); font-size: .9rem; }
+.today-screen .vote-note { text-align: left; }
+.journey-story .narrative, .story-history .narrative { border: none; padding: 0; margin: 16px 0; font-family: inherit; font-size: .95rem; line-height: 2; white-space: pre-line; }
+.story-day { border-top: 1px solid var(--line); padding: 16px 0; margin: 0; }
+.story-day > strong { color: var(--accent); font-weight: 500; }
+.story-day > ul { font-size: .8rem; color: var(--muted); }

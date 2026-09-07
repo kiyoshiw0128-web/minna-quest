@@ -40,10 +40,10 @@ describe('未締めの日', () => {
 
     render(<TodayScreen token="t" onUnauthorized={vi.fn()} />);
 
-    const votedButton = await screen.findByRole('button', { name: /泉で休む/ });
-    const otherButton = screen.getByRole('button', { name: /分かれ道/ });
-    expect(votedButton).toHaveAttribute('aria-pressed', 'true');
-    expect(otherButton).toHaveAttribute('aria-pressed', 'false');
+    const votedButton = await screen.findByRole('radio', { name: /泉で休む/ });
+    const otherButton = screen.getByRole('radio', { name: /分かれ道/ });
+    expect(votedButton).toBeChecked();
+    expect(otherButton).not.toBeChecked();
   });
 
   it('マスタに無いIDが来たとき、IDをそのまま表示する（空欄にしない）', async () => {
@@ -59,7 +59,7 @@ describe('未締めの日', () => {
 
     render(<TodayScreen token="t" onUnauthorized={vi.fn()} />);
 
-    expect(await screen.findByRole('button', { name: /no-such-event-id/ })).toBeInTheDocument();
+    expect(await screen.findByRole('radio', { name: /no-such-event-id/ })).toBeInTheDocument();
   });
 });
 
@@ -111,7 +111,8 @@ describe('投票の締切競合', () => {
 
     render(<TodayScreen token="t" onUnauthorized={vi.fn()} />);
 
-    await user.click(await screen.findByRole('button', { name: /分かれ道/ }));
+    await user.click(await screen.findByRole('radio', { name: /分かれ道/ }));
+    await user.click(screen.getByRole('button', { name: '決定' }));
 
     // エラー文言をそのまま出すのではなく、締まった後の画面に切り替わることを確認する。
     await waitFor(() => {
@@ -147,5 +148,25 @@ describe('締まった日の結果の文章', () => {
     const narrative = document.querySelector('.narrative');
     expect(narrative).not.toBeNull();
     expect((narrative?.textContent ?? '').length).toBeGreaterThan(10);
+  });
+});
+
+describe('選択して決定する', () => {
+  it('選んだだけでは送信せず、失敗したら選択を残して再試行できる', async () => {
+    const data = { dayNo: 1, chapter: 1, optionIds: ['crossroads', 'restAtSpring'], myVote: null, chosenId: null, counts: null, tiebroken: null };
+    installFetchMock({
+      'GET /api/today': [jsonResponse(200, { ok: true, data }), jsonResponse(200, { ok: true, data: { ...data, myVote: 'restAtSpring' } })],
+      'POST /api/vote': [jsonResponse(500, { ok: false, error: '一時的なエラー' }), jsonResponse(200, { ok: true, data: {} })],
+    });
+    const user = userEvent.setup();
+    render(<TodayScreen token="t" onUnauthorized={vi.fn()} />);
+    await user.click(await screen.findByRole('radio', { name: /泉で休む/ }));
+    expect(vi.mocked(fetch).mock.calls.filter(([, init]) => init?.method === 'POST')).toHaveLength(0);
+    await user.click(screen.getByRole('button', { name: '決定' }));
+    await screen.findByRole('alert');
+    expect(screen.getByRole('radio', { name: /泉で休む/ })).toBeChecked();
+    await user.click(screen.getByRole('button', { name: '決定' }));
+    await screen.findByText('投票済み：泉で休む');
+    expect(screen.getByRole('button', { name: '決定' })).toBeDisabled();
   });
 });

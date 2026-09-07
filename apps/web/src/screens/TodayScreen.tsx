@@ -91,16 +91,14 @@ export function TodayScreen({ token, onUnauthorized }: Props) {
 
   return (
     <main className="today-screen">
-      <div className="chapter-hero">
-      <p className="eyebrow">THE DAILY CHRONICLE</p>
-      <h1>
-        {data.chapter}章 {data.dayNo}日目
-      </h1>
-      <p className="chapter-title">{closed ? 'ひとつの選択が、物語になった。' : '今日は、どんな道をゆこう。'}</p>
-      <p>仲間と選んだ道が、この世界の続きをつくります。</p>
-      </div>
+      <header className="journey-heading">
+        <p className="eyebrow">日々譚 / 冒険の記録</p>
+        <h1>{data.chapter}章 {data.dayNo}日目</h1>
+      </header>
+      <div className="journey-illustration" aria-hidden="true" />
+      <p className="journey-intro">{closed ? '仲間と選んだ道。その先の物語を読みましょう。' : '旅は、まだ続きます。仲間と進む次の道を選んでください。'}</p>
 
-      {closed ? <ClosedDay data={data} /> : <OpenDay data={data} onVote={handleVote} voteState={voteState} />}
+      {closed ? <ClosedDay data={data} /> : <OpenDay key={data.dayNo} data={data} onVote={handleVote} voteState={voteState} />}
     </main>
   );
 }
@@ -114,44 +112,31 @@ function OpenDay({
   onVote: (optionId: string) => void;
   voteState: VoteState;
 }) {
+  const [selected, setSelected] = useState<string | null>(data.myVote);
+  const submitting = voteState.kind === 'voting';
   return (
     <section className="daily-choices">
-      <div className="section-heading"><div><p className="eyebrow">TODAY'S CHOICE</p><h2>次の一頁を選ぶ</h2></div><span className="daily-badge">{data.myVote === null ? '投票受付中' : '投票済み'}</span></div>
-      <p className="section-description">毎朝5時（JST）に締まります。</p>
-      <ul className="choice-list">
-        {data.optionIds.map((optionId, index) => {
-          const event = resolveEvent(optionId);
-          const mine = data.myVote === optionId;
-          return (
-            <li key={optionId}>
-              {/*
-                data-kind は見た目のためだけの印。戦闘と出来事を色と記号で
-                分けたいが、文言（「(戦闘)」）を消すとテストと読み上げの
-                両方が失われるので、文言は残したまま印を足す。
-              */}
-              <button
-                type="button"
-                className="choice"
-                data-kind={event.kind ?? 'unknown'}
-                onClick={() => onVote(optionId)}
-                disabled={voteState.kind === 'voting'}
-                aria-pressed={mine}
-              >
-                <span className="choice-mark" aria-hidden="true">
-                  {String(index + 1).padStart(2, '0')}
-                </span>
-                <span className="choice-body">
-                  {mine ? '✓ ' : ''}
-                  {event.label}
-                  {event.kind !== null && ` (${event.kind === 'battle' ? '戦闘' : '出来事'})`}
-                </span>
-                <span className="choice-arrow" aria-hidden="true">{mine ? '✓' : '↗'}</span>
-              </button>
-            </li>
-          );
-        })}
-      </ul>
-      {/* 締まるまでサーバは票数を返さない。空欄にすると「壊れている」ように見えるので明示する。 */}
+      <h2>次の行動</h2>
+      <form onSubmit={(event) => {
+        event.preventDefault();
+        if (selected !== null && !submitting && selected !== data.myVote) onVote(selected);
+      }}>
+        <fieldset className="journey-options" disabled={submitting}>
+          <legend>どこへ進みますか？</legend>
+          {data.optionIds.map((optionId) => {
+            const event = resolveEvent(optionId);
+            return (
+              <label key={optionId} className="journey-option">
+                <input type="radio" name="next-action" value={optionId} checked={selected === optionId} onChange={() => setSelected(optionId)} />
+                <span>{event.label}{event.kind !== null && ` (${event.kind === 'battle' ? '戦闘' : '出来事'})`}</span>
+              </label>
+            );
+          })}
+        </fieldset>
+        <button className="journey-confirm" type="submit" disabled={selected === null || submitting || selected === data.myVote}>{submitting ? '送信中…' : '決定'}</button>
+      </form>
+      <p className="journey-vote-status" role="status">{data.myVote === null ? 'まだ投票していません。' : `投票済み：${resolveEvent(data.myVote).label}`}</p>
+      <p className="section-description">毎朝5時（JST）に締まります。締切までは選び直せます。</p>
       <p className="vote-note">票数: まだ分かりません（締まるまで公開されません）</p>
       {voteState.kind === 'error' && <p role="alert">{voteState.message}</p>}
     </section>
@@ -161,7 +146,7 @@ function OpenDay({
 function ClosedDay({ data }: { data: TodayResult }) {
   const chosen = resolveEvent(data.chosenId as string);
   return (
-    <section>
+    <section className="journey-story">
       <h2>今日決まったこと: {chosen.label}</h2>
       {/*
         名前と票数だけだと「分かれ道に決まりました」で終わり、何が起きたのか

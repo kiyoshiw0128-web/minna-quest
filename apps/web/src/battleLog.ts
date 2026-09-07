@@ -1,7 +1,15 @@
 import type { BattleEvent, BattleResult, Effect, SkipReason } from '@mq/core';
 
 /** ターンごとにまとめた表示用の単位（設計書 §4.4「ターンごとにまとめて、順に表示する」）。 */
-export type TurnGroup = { turn: number; lines: string[] };
+export type LogOutcome = {
+  kind: BattleEvent['t'];
+  target?: string;
+  amount?: number;
+  hpAfter?: number;
+  text?: string;
+};
+export type LogEntry = { actorId?: string; skillId?: string; outcomes: LogOutcome[] };
+export type TurnGroup = { turn: number; entries: LogEntry[] };
 
 const SKIP_REASON_LABEL: Record<SkipReason, string> = {
   noMp: 'MP不足',
@@ -48,31 +56,11 @@ function nameOf(table: NameTable, id: string): string {
   return table.get(id) ?? id;
 }
 
-function skillNameOf(table: SkillNameTable, id: string): string {
-  return table.get(id) ?? id;
-}
-
-/**
- * BattleEvent の1件を1行の日本語にする。turnStart と end はグループの境界に
- * 使うだけなので、ここでは行を作らない（呼び出し側の groupBattleLog が処理する）。
- */
-function describeEvent(event: BattleEvent, names: NameTable, skills: SkillNameTable): string | null {
+/** 技とは独立した状態変化も、発生順を保って表示する。 */
+function describeNotice(event: Extract<BattleEvent, { t: 'expire' | 'enrage' | 'down' }>, names: NameTable): string {
   switch (event.t) {
-    case 'turnStart':
-    case 'end':
-      return null;
-    case 'act':
-      return `${nameOf(names, event.actorId)} が ${skillNameOf(skills, event.skillId)} を使った`;
-    case 'damage':
-      return `${nameOf(names, event.targetId)} に ${event.amount} ダメージ（残りHP ${event.hpAfter}）`;
-    case 'heal':
-      return `${nameOf(names, event.targetId)} が ${event.amount} 回復（残りHP ${event.hpAfter}）`;
-    case 'effect':
-      return `${nameOf(names, event.targetId)} に ${describeEffect(event.effect)} が付与された`;
     case 'expire':
       return `${nameOf(names, event.targetId)} の ${describeEffect(event.effect)} が切れた`;
-    case 'skip':
-      return `${nameOf(names, event.actorId)} は行動できなかった（${SKIP_REASON_LABEL[event.reason]}）`;
     case 'enrage':
       return `${nameOf(names, event.actorId)} が激昂した`;
     case 'down':
@@ -81,18 +69,42 @@ function describeEvent(event: BattleEvent, names: NameTable, skills: SkillNameTa
 }
 
 /** ログ全体をターン単位に分ける。turnStart より前に起きるイベントは無い前提。 */
-export function groupBattleLog(events: readonly BattleEvent[], names: NameTable, skills: SkillNameTable): TurnGroup[] {
+export function groupBattleLog(events: readonly BattleEvent[], names: NameTable): TurnGroup[] {
   const groups: TurnGroup[] = [];
   let current: TurnGroup | null = null;
+  let action: LogEntry | null = null;
 
   for (const event of events) {
     if (event.t === 'turnStart') {
-      current = { turn: event.turn, lines: [] };
+      current = { turn: event.turn, entries: [] };
       groups.push(current);
+      action = null;
       continue;
     }
-    const line = describeEvent(event, names, skills);
-    if (line !== null && current !== null) current.lines.push(line);
+    if (current === null || event.t === 'end') continue;
+    if (event.t === 'act') {
+      action = { actorId: event.actorId, skillId: event.skillId, outcomes: [] };
+      current.entries.push(action);
+      continue;
+    }
+    if (event.t === 'skip') {
+      current.entries.push({ actorId: event.actorId, outcomes: [{ kind: event.t, text: `行動できなかった（${SKIP_REASON_LABEL[event.reason]}）` }] });
+      action = null;
+      continue;
+    }
+    // 激昂やターン末の失効は直前の技による効果として表示しない。
+    if (event.t === 'enrage' || event.t === 'expire') {
+      current.entries.push({ outcomes: [{ kind: event.t, text: describeNotice(event, names) }] });
+      action = null;
+      continue;
+    }
+    const outcome: LogOutcome = event.t === 'damage' || event.t === 'heal'
+      ? { kind: event.t, target: nameOf(names, event.targetId), amount: event.amount, hpAfter: event.hpAfter }
+      : event.t === 'effect'
+        ? { kind: event.t, target: nameOf(names, event.targetId), text: `${describeEffect(event.effect)} が付与された` }
+        : { kind: event.t, text: describeNotice(event, names) };
+    if (action !== null) action.outcomes.push(outcome);
+    else current.entries.push({ outcomes: [outcome] });
   }
 
   return groups;
