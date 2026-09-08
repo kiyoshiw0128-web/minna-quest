@@ -1,3 +1,4 @@
+import { AdventureMap } from '../AdventureMap.js';
 import { useState } from 'react';
 import type { FormEvent } from 'react';
 import { join, fetchMe, requestRecovery, ApiError, UnauthorizedError, confirmRecovery } from '../api.js';
@@ -122,21 +123,15 @@ export function JoinScreen({ onJoined }: Props) {
 
   return (
     <main className="join-layout">
-      <div className="book-cover">
-        <p className="eyebrow">HIBITAN / A SHARED ADVENTURE</p>
+      <header className="title-banner">
+        <p>仲間とつむぐ、毎日の冒険</p>
         <h1>日々譚</h1>
-        <p className="book-reading">ひびたん</p>
-        <div className="cover-story">
-          <p className="cover-title">今日の一票が、<br />明日の物語になる。</p>
-          <p>仲間と選ぶ道。自分だけのパーティ。<br />毎日、少しずつ綴る冒険の書。</p>
-        </div>
-        <p className="cover-footnote">物語はみんなで。冒険はあなたらしく。</p>
-      </div>
-
+        <p className="title-sub">― エルムの道と星の記憶 ―</p>
+      </header>
+      <AdventureMap />
       <div className="join-panel">
-      <p className="eyebrow">YOUR JOURNEY</p>
-      <h2 className="join-title">冒険の書をひらく</h2>
-      <p className="join-intro">{mode === 'join' ? '招待状を手に、新しい物語へ。' : 'あなたの物語の続きを、ここから。'}</p>
+      <h2 className="join-title">◆ 冒険をはじめる ◆</h2>
+      <p className="join-intro">{mode === 'join' ? '招待コードを受け取ったら、あなたの名前を登録しよう。' : '合言葉を入力して、冒険の続きへ。'}</p>
 
       <nav aria-label="参加方法">
         <button type="button" onClick={() => switchMode('join')} aria-current={mode === 'join'}>

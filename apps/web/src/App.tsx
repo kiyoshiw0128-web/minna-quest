@@ -88,10 +88,10 @@ export function App() {
       */}
       <header className="app-header">
       <div className="brand">
-        <img src="/icon.svg" alt="" />
-        <span>日々譚<small>HIBITAN</small></span>
+        <span className="brand-sigil" aria-hidden="true">✦</span>
+        <span>日々譚<small>エルムの道と星の記憶</small></span>
       </div>
-      <p className="header-note">仲間と綴る、日々の冒険。</p>
+      <p className="header-note">みんなで進む冒険の世界</p>
       </header>
       <nav className="main-nav" aria-label="冒険のメニュー">
         <button type="button" onClick={() => setTab('today')} aria-current={tab === 'today'}>

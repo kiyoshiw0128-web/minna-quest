@@ -21,6 +21,8 @@ export const ALREADY_CLOSED_MESSAGE = 'this day is already closed';
 export type JoinResult = { token: string; player: { id: string; name: string; worldId: string } };
 
 export type TodayResult = {
+  /** 前日の確定イベント。旧応答では省略される。 */
+  previousChosenId?: string | null;
   dayNo: number;
   chapter: number;
   optionIds: string[];

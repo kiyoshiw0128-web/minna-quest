@@ -1,842 +1,183 @@
-/* 日々譚 — 黒と控えめな金の冒険の書。 */
+/* 日々譚：青いコマンド画面とドット絵地図の、縦読みブラウザRPG。 */
 :root {
   color-scheme: dark;
-  --bg: #0e1010;
-  --bg-panel: #181c1b;
-  --bg-sunken: #111413;
-  --fg: #eee9dc;
-  --muted: #a9afa3;
-  --line: #333b34;
-  --line-strong: #697261;
-  --accent: #d4b77d;
-  --accent-soft: #2b2c23;
-  --alert: #ed9d91;
-  --good: #a0c5a7;
-  --shadow: rgba(0, 0, 0, .22);
-  font-family: -apple-system, BlinkMacSystemFont, 'Hiragino Kaku Gothic ProN', 'Yu Gothic', sans-serif;
-  font-size: 15px;
-  font-synthesis: none;
+  --bg: #173f91;
+  --bg-panel: #163879;
+  --bg-sunken: #102e68;
+  --fg: #f3f5ff;
+  --muted: #c4d5f6;
+  --line: #7da5df;
+  --line-strong: #c5e6ff;
+  --accent: #fff19a;
+  --accent-soft: #285baa;
+  --alert: #ffc4bb;
+  --good: #c1ffc6;
+  font: 16px/1.65 'MS PGothic', 'Hiragino Kaku Gothic ProN', 'Yu Gothic', sans-serif;
 }
 * { box-sizing: border-box; }
-body {
-  margin: 0;
-  padding: 0;
-  color: var(--fg);
-  background: var(--bg);
-  line-height: 1.8;
-  -webkit-text-size-adjust: 100%;
+body { margin: 0; color: var(--fg); background: #071b45; -webkit-text-size-adjust: 100%; }
+#root { min-height: 100svh; }
+.app-shell, .join-layout, #root > main:not(.join-layout) {
+  width: min(100%, 620px); min-height: 100svh; margin: 0 auto; padding: 12px 18px 28px;
+  background: linear-gradient(90deg, #163b86, #214d9d 52%, #173c87);
+  border-inline: 2px solid #547db7; box-shadow: 0 0 0 2px #041536;
 }
-h1, h2, h3, .brand, .cover-title, .chapter-title {
-  font-family: 'Hiragino Mincho ProN', 'Yu Mincho', serif;
-  font-weight: 500;
-}
-h1 { margin: 0 0 24px; font-size: 2rem; letter-spacing: .12em; }
-h2 { margin: 24px 0 16px; font-size: 1.25rem; letter-spacing: .06em; color: var(--accent); }
-h3 { margin: 20px 0 10px; font-size: 1.12rem; }
-h4 { font-size: .92rem; color: var(--muted); }
-button, input, select { -webkit-tap-highlight-color: transparent; }
-:focus-visible { outline: 3px solid var(--accent); outline-offset: 4px; }
-a { color: var(--accent); }
+h1, h2, h3, h4 { font-family: inherit; font-weight: 600; line-height: 1.5; }
+h1 { font-size: 1.2rem; margin: 8px 0 14px; }
+h2 { font-size: 1.05rem; margin: 12px 0; color: var(--accent); }
+h3 { font-size: 1rem; margin: 12px 0 8px; }
+h4 { font-size: 1rem; margin: 12px 0 8px; }
+p { margin: 8px 0; }
 main { min-width: 0; }
-#root > main:not(.join-layout) { max-width: 960px; margin: 60px auto; padding: 24px; }
-.eyebrow { font-size: .68rem; font-weight: 600; letter-spacing: .22em; color: var(--muted); }
-nav { display: flex; gap: 6px; }
-nav button { flex: 1; }
-nav button[aria-current='true'] { background: var(--accent-soft); color: var(--accent); font-weight: 600; }
-.app-shell { max-width: 1080px; margin: 0 auto; padding: 0 40px; }
-.app-header { display: flex; justify-content: space-between; align-items: center; padding: 28px 0; }
-.brand { display: flex; align-items: center; gap: 12px; font-size: 1.7rem; letter-spacing: .18em; }
-.brand img { width: 36px; height: 36px; }
-.brand small { display: block; font: 9px sans-serif; letter-spacing: .25em; margin-top: 2px; }
-.header-note { font-size: .78rem; letter-spacing: .12em; color: var(--muted); }
-.main-nav { border-top: 1px solid var(--line); border-bottom: 1px solid var(--line); margin-bottom: 32px; padding: 8px 0; }
-.main-nav button { border: none; background: transparent; box-shadow: none; border-radius: 4px; min-height: 48px; letter-spacing: .12em; }
-.app-footer { border-top: 1px solid var(--line); margin-top: 48px; padding: 24px 0 32px; font-family: serif; letter-spacing: .12em; }
-.app-footer span { float: right; font-family: sans-serif; font-size: .7rem; color: var(--muted); letter-spacing: .05em; }
-.join-layout { display: grid; grid-template-columns: 1.1fr 1fr; min-height: 100svh; }
-.book-cover { position: relative; display: flex; flex-direction: column; align-items: center; min-height: 780px; padding: 68px 36px 28px; text-align: center; background: linear-gradient(#0d1514b8, #101b18a8), url('/journey.svg') center bottom / cover no-repeat; }
-.book-cover::before { content: ''; position: absolute; inset: 20px; border: 1px solid #d4b77d40; pointer-events: none; }
-.book-cover > * { position: relative; }
-.book-cover .eyebrow { color: #d4c5a5; font-size: .63rem; }
-.book-cover h1 { font-size: clamp(3.5rem, 6vw, 5.5rem); letter-spacing: .25em; margin: 12px 0 0 .25em; line-height: 1.5; }
-.book-reading { font-size: .72rem; letter-spacing: .5em; margin: 0; }
-.cover-story { margin-top: 38px; }
-.cover-title { font-size: clamp(1.5rem, 2.4vw, 2.2rem); line-height: 1.8; letter-spacing: .1em; }
-.cover-story > p:last-child { font-size: .8rem; line-height: 2; margin-top: 18px; }
-.cover-footnote { margin-top: auto; padding: 5px 12px; background: #15241e; border-radius: 3px; font-size: .65rem; color: #f1f1dc; letter-spacing: .12em; }
-.join-panel { align-self: center; width: 100%; max-width: 470px; margin: 0 auto; padding: 64px 46px; }
-.join-title { font-size: 1.8rem; margin: 12px 0; letter-spacing: .08em; }
-.join-intro { color: var(--muted); font-size: .85rem; }
-.join-panel nav { margin: 36px 0 28px; padding: 4px; background: var(--bg-sunken); border-radius: 6px; }
-.join-panel nav button { border: none; background: transparent; box-shadow: none; font-size: .78rem; padding: 12px 6px; }
-.join-panel nav button[aria-current='true'] { background: var(--bg-panel); box-shadow: 0 2px 6px var(--shadow); }
-.join-panel form label { font-size: .8rem; color: var(--fg); margin-bottom: 20px; }
-.join-panel input { margin-top: 8px; padding: 13px 14px; background: var(--bg-panel); border: 1px solid var(--line); border-radius: 5px; }
-.join-panel form > button[type='submit'] { width: 100%; margin-top: 8px; padding: 14px; border-color: var(--accent); background: var(--accent); color: #191b16; letter-spacing: .12em; }
-.join-panel form > button[type='submit']:hover:not(:disabled) { background: #e4c992; }
-.join-panel form > button:disabled { opacity: 1; background: #30372f; color: #abb1a4; border-color: #30372f; }
-.join-note { margin-top: 32px; text-align: center; font-size: .72rem; color: var(--muted); }
-.chapter-hero { position: relative; padding: 42px; min-height: 285px; background: linear-gradient(90deg, #18211ef5 20%, #18211ed9 52%, #18211e80 100%), url('/journey.svg') 70% 64% / cover; border: 1px solid var(--line); border-radius: 8px; overflow: hidden; }
-.chapter-hero h1 { font-family: inherit; font-size: .9rem; letter-spacing: .12em; margin: 22px 0 8px; }
-.chapter-title { font-size: clamp(1.3rem, 2.8vw, 1.9rem); letter-spacing: .05em; }
-.chapter-hero > p:last-child { font-size: .78rem; max-width: 75%; }
-section.daily-choices { background: transparent; box-shadow: none; border: none; padding: 32px 0 0; }
-.section-heading { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
-.section-heading h2 { margin: 6px 0; font-size: 1.5rem; }
-.daily-badge { background: var(--accent-soft); color: var(--accent); padding: 5px 12px; border-radius: 20px; font-size: .73rem; white-space: nowrap; }
-.section-description { color: var(--muted); font-size: .78rem; }
-.choice-list { display: grid; gap: 12px; margin: 24px 0; }
-.choice-list li { margin: 0; }
-.choice-list .choice { min-height: 94px; padding: 20px 24px; border: 1px solid var(--line); border-radius: 6px; gap: 24px; background: var(--bg-panel); box-shadow: 0 4px 12px var(--shadow); }
-.choice-list .choice-mark { width: 38px; height: auto; background: none; border: none; border-radius: 0; font: italic 1.7rem Georgia, serif; color: var(--accent); }
-.choice-list .choice-body { font-size: .96rem; }
-.choice-arrow { color: var(--accent); font-size: 1.2rem; }
-.choice-list .choice[aria-pressed='true'] { background: var(--accent-soft); border-color: var(--accent); box-shadow: inset 3px 0 0 var(--accent); }
-.vote-note { font-size: .73rem; color: var(--muted); text-align: center; }
-
-/* ---- 面 ---- */
-
-section {
-  margin: 1.1rem 0;
-  padding: 1rem 1.1rem;
-  background: var(--bg-panel);
-  border: 1px solid var(--line);
-  border-radius: 6px;
-  box-shadow:
-    0 1px 0 var(--bg-panel) inset,
-    0 2px 8px var(--shadow);
-}
-
-section section {
-  background: transparent;
-  border: none;
-  border-top: 1px dashed var(--line);
-  border-radius: 0;
-  padding: 0.6rem 0 0;
-  margin: 0.8rem 0 0;
-}
-
-/* ---- 文字 ---- */
-
-p {
-  margin: 0.5rem 0;
-}
-
-code {
-  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
-  font-size: 0.85em;
-  padding: 0.15em 0.4em;
-  background: var(--bg-sunken);
-  border: 1px solid var(--line);
-  border-radius: 3px;
-  word-break: break-all;
-}
-
-[role='alert'] {
-  color: var(--alert);
-  font-weight: bold;
-}
-
-[role='status'] {
-  color: var(--good);
-}
-
-/* ---- 選択肢・ボタン ---- */
-
+a { color: #ffed8f; text-underline-offset: 3px; }
+button, input, select { font: inherit; }
 button {
-  font-family: inherit;
-  font-size: 0.95rem;
-  line-height: 1.5;
-  cursor: pointer;
-  min-height: 2.5rem;
-  padding: 0.45rem 0.9rem;
-  color: var(--fg);
-  background: var(--bg-panel);
-  border: 1px solid var(--line-strong);
-  border-radius: 4px;
-  box-shadow: 0 1px 2px var(--shadow);
-}
-
-button:hover:not(:disabled) {
-  background: var(--accent-soft);
-}
-
-button:active:not(:disabled) {
-  transform: translateY(1px);
-  box-shadow: none;
-}
-
-button:disabled {
-  opacity: 0.45;
-  cursor: not-allowed;
-  box-shadow: none;
-}
-
-/* 自分が選んでいるもの。太字だけだと一覧の中で埋もれる。 */
-button[aria-pressed='true'] {
-  border-color: var(--accent);
-  background: var(--accent-soft);
-  color: var(--accent);
-  font-weight: bold;
-}
-
-/* ---- 一覧（今日の3択など） ---- */
-
-ul {
-  list-style: none;
-  padding: 0;
-  margin: 0.5rem 0;
-}
-
-li {
-  margin-bottom: 0.5rem;
-}
-
-/* 3択は指で押す対象なので、行いっぱいに広げる。 */
-li > button {
-  display: block;
-  width: 100%;
-  text-align: left;
-}
-
-/*
- * その日の3択。押せる箱ではなく「選ぶ札」に見せる。
- * 毎日ここだけを見て決めるので、この画面でいちばん目立つべき要素。
- */
-.choice {
-  display: flex;
-  align-items: center;
-  gap: 0.8rem;
-  padding: 0.85rem 1rem;
-  min-height: 3.4rem;
-  font-size: 1.02rem;
-  line-height: 1.5;
-  border-radius: 6px;
-  border-left-width: 4px;
-  transition: transform 0.08s ease, border-color 0.12s ease, background 0.12s ease;
-}
-
-.choice[data-kind='battle'] {
-  border-left-color: var(--alert);
-}
-
-.choice[data-kind='story'] {
-  border-left-color: var(--good);
-}
-
-.choice-mark {
-  flex: none;
-  width: 1.9rem;
-  height: 1.9rem;
-  display: grid;
-  place-items: center;
-  font-size: 1rem;
-  border-radius: 50%;
-  background: var(--bg-sunken);
-  border: 1px solid var(--line);
-}
-
-.choice[data-kind='battle'] .choice-mark {
-  color: var(--alert);
-}
-
-.choice[data-kind='story'] .choice-mark {
-  color: var(--good);
-}
-
-.choice-body {
-  flex: 1;
-}
-
-.choice:hover:not(:disabled) {
-  transform: translateX(2px);
-}
-
-/* いま自分が入れている札。一覧の中で一目で分からないと押し直せない。 */
-.choice[aria-pressed='true'] {
-  border-color: var(--accent);
-  border-left-color: var(--accent);
-  box-shadow: 0 0 0 1px var(--accent) inset, 0 2px 8px var(--shadow);
-}
-
-/* ---- 入力 ---- */
-
-form label {
-  display: block;
-  margin-bottom: 0.8rem;
-  color: var(--muted);
-  font-size: 0.9rem;
-}
-
-input {
-  display: block;
-  width: 100%;
-  margin-top: 0.25rem;
-  padding: 0.5rem 0.6rem;
-  font: inherit;
-  color: var(--fg);
-  background: var(--bg-sunken);
-  border: 1px solid var(--line-strong);
-  border-radius: 4px;
-}
-
-input[type='checkbox'] {
-  display: inline-block;
-  width: auto;
-  min-width: 1.15rem;
-  min-height: 1.15rem;
-  margin: 0;
-  accent-color: var(--accent);
-}
-
-select {
-  font: inherit;
-  font-size: 0.85rem;
-  padding: 0.3rem 0.35rem;
-  color: var(--fg);
-  background: var(--bg-panel);
-  border: 1px solid var(--line);
-  border-radius: 3px;
-  max-width: 100%;
-}
-
-/* ---- 表 ---- */
-
-table {
-  width: 100%;
-  border-collapse: collapse;
-  font-size: 0.85rem;
-  margin: 0.5rem 0;
-}
-
-caption {
-  caption-side: top;
-  text-align: left;
-  font-size: 0.8rem;
-  color: var(--muted);
-  padding-bottom: 0.4rem;
-}
-
-th,
-td {
-  padding: 0.35rem 0.5rem;
-  border: 1px solid var(--line);
-  text-align: left;
-  white-space: nowrap;
-}
-
-thead th {
-  background: var(--bg-sunken);
-  color: var(--accent);
-  font-weight: bold;
-}
-
-tbody th[scope='row'] {
-  background: var(--bg-sunken);
-  color: var(--muted);
-  font-weight: normal;
-}
-
-/* 行動表とプランは横に長い。画面ごと横スクロールさせず、表だけ流す。 */
-div:has(> table) {
-  overflow-x: auto;
-}
-
-/*
- * 敵の行動表と自分のプランを、同じ枠の中で列を揃えて重ねる。
- *
- * 別々に置くと列幅が揃わず、片方をスクロールしても片方は動かないので、
- * 「5ターン目に何が来るか」と「5ターン目に何をするか」を同時に見られない。
- * それを見比べることがこの画面の目的なので、ここだけは列幅を固定する。
- */
-.turn-grid {
-  overflow-x: auto;
-  padding-bottom: 0.25rem;
-}
-
-.turn-grid table {
-  table-layout: fixed;
-  /* 1列目6rem + 8ターン × 7rem。狭い画面では枠内で横スクロールする。 */
-  min-width: 62rem;
-  margin: 0;
-}
-
-.turn-grid table + table {
-  margin-top: 0.5rem;
-}
-
-.turn-grid th:first-child,
-.turn-grid td:first-child {
-  width: 6rem;
-}
-
-.turn-grid th:not(:first-child),
-.turn-grid td:not(:first-child) {
-  width: 7rem;
-  text-align: center;
-}
-
-.turn-grid td {
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-
-.turn-grid select {
-  width: 100%;
-}
-
-/* 技名は列に収まらないことがある。切るより小さくして読ませる。 */
-.turn-grid td,
-.turn-grid select {
-  font-size: 0.78rem;
-}
-
-/* 敵の行を一目で敵と分かるようにする。自分の行と混ざると読み違える。 */
-.turn-grid table:first-child tbody th[scope='row'],
-.turn-grid table:first-child tbody td {
-  background: var(--accent-soft);
-}
-
-/* ---- 塔（闘技場） ---- */
-
-/*
- * 塔は「上から積み上がった階」に見せたいが、この画面は上から下に読むので
- * 縦のリストのまま、1階ずつ横長の札にする。.choice と同じ「押せる札」の
- * 言語を使い、闘技場だけの別語彙を増やさない。状態（挑戦可・突破済み・未到達）
- * は色と縁で分け、テキストでも必ず言う（色だけに頼らない）。
- */
-.tower {
-  display: flex;
-  flex-direction: column;
-  gap: 0.4rem;
-}
-
-.tower-floor {
-  display: flex;
-  align-items: center;
-  gap: 0.8rem;
-  width: 100%;
-  min-height: 3rem;
-  padding: 0.6rem 0.9rem;
-  text-align: left;
-  border-left-width: 4px;
-  border-radius: 6px;
-}
-
-.tower-floor-no {
-  flex: none;
-  width: 3.4rem;
-  font-weight: bold;
-  color: var(--accent);
-}
-
-.tower-floor-state {
-  flex: 1;
-  color: var(--muted);
-}
-
-.tower-floor-first {
-  flex: none;
-  font-size: 0.78rem;
-  color: var(--muted);
-}
-
-/* 挑戦可能な階。いちばん目を引くべき行。 */
-.tower-floor[data-state='open'] {
-  border-left-color: var(--alert);
-}
-
-/* 突破済みの階。戻って練習できることが分かればよいので、地味にする。 */
-.tower-floor[data-state='cleared'] {
-  border-left-color: var(--good);
-}
-
-.tower-floor[data-state='cleared'] .tower-floor-state {
-  color: var(--good);
-}
-
-/* まだ見えない階（未到達、または裏ボスを19階クリア前に見た場合）。
-   押せない見た目にして、闘技場の他の行と紛れないようにする。 */
-.tower-floor[data-state='unknown'] {
-  border-left-color: var(--line);
-  opacity: 0.6;
-}
-
-.tower-floor[aria-pressed='true'] {
-  border-color: var(--accent);
-  border-left-color: var(--accent);
-  box-shadow: 0 0 0 1px var(--accent) inset;
-}
-
-/* ---- 折りたたみ ---- */
-
-details {
-  margin: 0.6rem 0;
-  padding: 0.5rem 0.7rem;
-  background: var(--bg-sunken);
-  border: 1px solid var(--line);
-  border-radius: 4px;
-}
-
-summary {
-  cursor: pointer;
-  font-weight: bold;
-  color: var(--accent);
-  letter-spacing: 0.04em;
-}
-
-/* ---- 縦に読み下す戦闘記録 ---- */
-.battle-chronicle { margin-top: 28px; max-width: 640px; }
-.chronicle-turn { margin-top: 28px; border-top: 1px solid var(--line-strong); }
-.chronicle-turn h4 { margin: 0; padding: 12px 0; color: var(--accent); font-size: 1.05rem; letter-spacing: .08em; border-bottom: 1px solid var(--line); }
-.chronicle-actions { list-style: none; padding: 0; margin: 0; }
-.chronicle-actions > .chronicle-action { padding: 18px 0; margin: 0; border-bottom: 1px solid var(--line); }
-.chronicle-actor { display: flex; align-items: baseline; flex-wrap: wrap; gap: 8px; margin: 0; font-size: 1.1rem; font-weight: 600; }
-.chronicle-actor > span { color: var(--accent); }
-.chronicle-actor small { color: var(--muted); font-size: .65rem; font-weight: 400; }
-.chronicle-action[data-side='enemy'] .chronicle-actor > span { color: var(--alert); }
-.chronicle-skill { margin: 5px 0 0 24px; font-size: 1rem; color: var(--accent); }
-.chronicle-outcomes { margin: 6px 0 0 42px; padding: 0; }
-.chronicle-outcome { margin: 0 0 12px; }
-.chronicle-outcome:last-child { margin-bottom: 0; }
-.chronicle-target { margin: 0; overflow-wrap: anywhere; }
-.chronicle-amount { margin: 2px 0 0 18px; font-size: .88rem; }
-.chronicle-amount strong { font-size: 1.5rem; font-variant-numeric: tabular-nums; margin-right: 4px; }
-.chronicle-hp { margin: 1px 0 0 18px; font-size: .75rem; color: var(--muted); }
-.chronicle-hp strong { font-weight: 500; font-variant-numeric: tabular-nums; }
-.chronicle-note { margin: 0; font-size: .9rem; overflow-wrap: anywhere; }
-.chronicle-outcome[data-kind='heal'] .chronicle-amount { color: var(--good); }
-.chronicle-outcome[data-kind='down'] .chronicle-note { color: var(--alert); }
-@media (max-width: 30rem) {
-  .chronicle-outcomes { margin-left: 28px; }
-  .chronicle-skill { margin-left: 18px; }
-}
-
-/* 見出しの飾り罫は、ログの塊の頭には要らない（上で別に組んでいる）。 */
-section > h4 {
-  margin-top: 1rem;
-  padding-bottom: 0.2rem;
-  border-bottom: 1px solid var(--line);
-  color: var(--muted);
-}
-
-@media (max-width: 30rem) {
-  body {
-    padding: 0.5rem 0.5rem 3rem;
-  }
-
-  h1 {
-    font-size: 1.3rem;
-  }
-
-  nav button {
-    font-size: 0.85rem;
-    letter-spacing: 0.02em;
-  }
-
-  section {
-    padding: 0.7rem 0.75rem;
-  }
-}
-
-/* ---- 敵の絵 ---- */
-
-/*
- * 絵があるのはボス4体だけで、雑魚と闘技場の敵には無い。
- * 無いときは何も出さない（enemyArt.ts 参照）ので、ここは絵がある場合の指定。
- */
-.portrait {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 0.3rem;
-  margin: 0.5rem 0 1rem;
-}
-
-.portrait img {
-  width: min(220px, 60vw);
-  height: auto;
-  /* 背景が透過なので、羊皮紙にも夜にも乗る。影だけこちらで付ける。 */
-  filter: drop-shadow(0 6px 10px var(--shadow));
-}
-
-.portrait-name {
-  font-size: 0.85rem;
-  letter-spacing: 0.12em;
-  color: var(--muted);
-}
-
-/* ---- 能力値の格子 ---- */
-
-/*
- * 「HP 128 / MP 20 / ATK 15 / ...」と1行に流していた。7項目が横に繋がると
- * どれがどれだか目で追えない。項目名の下に数字を置き、縦の位置で探せるようにする。
- */
-.stat-grid {
-  display: grid;
-  grid-template-columns: repeat(7, minmax(0, 1fr));
-  gap: 1px;
-  margin: 0.6rem 0;
-  padding: 0;
-  background: var(--line);
-  border: 1px solid var(--line);
-  border-radius: 4px;
-  overflow: hidden;
-}
-
-.stat-cell {
-  background: var(--bg-sunken);
-  padding: 0.35rem 0.2rem;
-  text-align: center;
-}
-
-.stat-grid dt {
-  font-size: 0.68rem;
-  letter-spacing: 0.04em;
-  color: var(--muted);
-}
-
-.stat-grid dd {
-  margin: 0;
-  font-size: 0.95rem;
-  font-weight: bold;
-}
-
-/* 装備を替えたときの増減。数字だけだと、上がったのか下がったのか読み取れない。 */
-.stat-up,
-.stat-down {
-  display: block;
-  font-size: 0.7rem;
-  font-weight: normal;
-}
-
-.stat-up {
-  color: var(--good);
-}
-
-.stat-down {
-  color: var(--alert);
-}
-
-/* 素質はA〜Eのまま出す。等級で色を変えるのは、7項目を見て良し悪しを判断する場面だから。 */
-.aptitude dd[data-grade='A'] { color: #d4a017; }
-.aptitude dd[data-grade='B'] { color: var(--good); }
-.aptitude dd[data-grade='C'] { color: var(--fg); }
-.aptitude dd[data-grade='D'] { color: var(--muted); }
-.aptitude dd[data-grade='E'] { color: var(--alert); }
-
-/* ---- 店の棚 ---- */
-
-/*
- * 20品を1列に流し、買えない品ごとに「金貨が足りません」を出していた。
- * 同じ文が20回並ぶのは、1回も読まれないのと同じ。買えるかどうかは
- * ボタンが押せるかで示し、足りない額だけを添える。
- */
-.shelf {
-  margin: 0.3rem 0 1rem;
-}
-
-.shelf-item {
-  display: grid;
-  grid-template-columns: minmax(6rem, 1fr) minmax(6rem, 1.2fr) auto auto;
-  align-items: center;
-  gap: 0.5rem;
-  padding: 0.4rem 0.6rem;
-  margin-bottom: 0.3rem;
-  background: var(--bg-sunken);
-  border: 1px solid var(--line);
-  border-radius: 4px;
-}
-
-/* 買えない品は沈める。並びから消さないのは、次に何を狙うかの目安になるため。 */
-.shelf-item[data-affordable='false'] {
-  opacity: 0.55;
-}
-
-.shelf-name {
-  font-weight: bold;
-}
-
-.shelf-mods {
-  font-size: 0.8rem;
-  color: var(--muted);
-}
-
-.shelf-cost {
-  font-size: 0.85rem;
-  text-align: right;
-  white-space: nowrap;
-}
-
-.shelf-cost small {
-  display: block;
-  font-size: 0.7rem;
-  color: var(--alert);
-}
-
-.shelf-item button {
-  min-height: 2.1rem;
-  padding: 0.25rem 0.7rem;
-  font-size: 0.85rem;
-}
-
-@media (max-width: 30rem) {
-  .stat-grid {
-    grid-template-columns: repeat(4, minmax(0, 1fr));
-  }
-
-  .shelf-item {
-    grid-template-columns: 1fr auto;
-    row-gap: 0.2rem;
-  }
-
-  .shelf-mods {
-    grid-column: 1 / -1;
-  }
-}
-
-/* ---- 職業の一覧 ---- */
-
-/*
- * 名前・状態・操作を同じ列に揃える。以前は1行に流していたため、
- * ボタンの位置が行ごとにずれ、押せる行を目で探すことになっていた。
- */
-.joblist li {
-  display: grid;
-  grid-template-columns: minmax(6rem, 1fr) minmax(5rem, auto) 6rem;
-  align-items: center;
-  gap: 0.5rem;
-  padding: 0.35rem 0.6rem;
-  margin-bottom: 0.25rem;
-  background: var(--bg-sunken);
-  border: 1px solid var(--line);
-  border-radius: 4px;
-}
-
-.job-name {
-  font-weight: bold;
-}
-
-.job-note {
-  font-size: 0.8rem;
-  color: var(--muted);
-}
-
-.job-current {
-  font-size: 0.8rem;
-  color: var(--accent);
-  text-align: center;
-}
-
-.joblist button {
-  min-height: 2.1rem;
-  padding: 0.25rem 0.5rem;
-  font-size: 0.82rem;
-}
-
-/* まだ就けない職業。消さずに沈める。見えていないと目標にできない。 */
-.joblist.locked li {
-  grid-template-columns: minmax(6rem, 1fr) 1fr;
-  opacity: 0.6;
-}
-
-@media (max-width: 30rem) {
-  .joblist li,
-  .joblist.locked li {
-    grid-template-columns: 1fr auto;
-  }
-
-  .job-note {
-    grid-column: 1 / -1;
-  }
-}
-
-/* ---- 結果の文章 ---- */
-
-/*
- * その日に何が起きたかの読み物。締まった日にこれが出ないと、名前と票数だけが
- * 残り、選んだ意味がその場で消える。数字の並びと区別が付くよう、字を大きめに、
- * 行間を広く、左に罫を引いて「読むもの」として置く。
- */
-.narrative {
-  margin: 0.6rem 0 1rem;
-  padding: 0.6rem 0 0.6rem 0.9rem;
-  border-left: 3px solid var(--accent);
-  font-size: 1rem;
-  line-height: 1.9;
-  color: var(--fg);
-}
-
-/* Layout refinements shared by the existing battle, party and history screens. */
-section { border-radius: 8px; padding: 24px; margin: 20px 0; box-shadow: 0 4px 20px var(--shadow); }
-button { transition: background .15s ease, border-color .15s ease; }
-input, select { min-height: 44px; }
+  min-height: 40px; padding: 4px 12px; cursor: pointer; color: #132954; background: #d7e2ec;
+  border: 2px solid; border-color: #fff #68768e #68768e #fff; border-radius: 0;
+  box-shadow: 1px 1px 0 #061840;
+}
+button:hover:not(:disabled) { background: #fff3b9; }
+button:active:not(:disabled) { border-color: #68768e #fff #fff #68768e; }
+button:disabled { opacity: .55; cursor: not-allowed; }
+button[aria-pressed='true'] { color: var(--accent); background: #244f9e; border-color: #fff2a8; }
+:focus-visible { outline: 3px solid #ffe778; outline-offset: 3px; }
+input, select { max-width: 100%; color: #10264d; background: #f4f5e9; border: 2px inset #9eb3d1; border-radius: 0; min-height: 40px; padding: 6px 8px; }
+input { display: block; width: 100%; margin-top: 4px; }
+input[type='checkbox'], input[type='radio'] { display: inline-block; width: 18px; height: 18px; min-height: 18px; margin: 0; accent-color: #e9cf67; }
+form label { display: block; margin: 12px 0; }
+select { font-size: .85rem; }
+code { background: var(--bg-sunken); padding: 2px 4px; border: 1px solid var(--line); overflow-wrap: anywhere; }
+[role='alert'] { color: var(--alert); font-weight: 600; }
+[role='status'] { color: var(--good); }
+ul { list-style: none; padding: 0; margin: 8px 0; }
+li { margin: 5px 0; }
+section { margin: 16px 0; padding: 12px 0; border-top: 3px ridge #aed1ef; }
+section section { border-top: 1px solid var(--line); margin: 12px 0 0; }
 section > h2:first-child { margin-top: 0; }
-.turn-grid { scrollbar-color: var(--line-strong) var(--bg-sunken); }
-.turn-grid select { min-height: 36px; }
-.stat-grid { border-radius: 6px; }
-.stat-cell { padding: 10px 4px; }
-.stat-grid dd { font-family: Georgia, serif; font-size: 1.2rem; font-weight: 400; }
-.tower { gap: 8px; }
-.tower-floor { padding: 14px 18px; }
-.narrative { font-family: 'Hiragino Mincho ProN', 'Yu Mincho', serif; line-height: 2.2; }
-@media (min-width: 900px) {
-  .tower { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); }
-}
-@media (max-width: 760px) {
-  .join-layout { grid-template-columns: 1fr; }
-  .book-cover { min-height: 410px; padding: 28px 24px 24px; background-image: linear-gradient(#0d1514c4, #101b18b8 75%, #101b1888), url('/journey.svg'); background-position: center 57%; }
-  .book-cover::before { inset: 12px; }
-  .book-cover h1 { font-size: 3.6rem; margin-top: 4px; }
-  .book-cover .eyebrow { font-size: .55rem; }
-  .cover-story { margin-top: 12px; }
-  .cover-title { font-size: 1.45rem; }
-  .cover-story > p:last-child { margin-top: 10px; font-size: .75rem; }
-  .cover-footnote { display: none; }
-  .join-panel { padding: 36px 28px 44px; max-width: 500px; }
-  .join-title { font-size: 1.6rem; }
-  .join-panel nav { margin-top: 24px; }
-  .app-shell { padding: 0 20px; }
-  .app-header { padding: 20px 0; }
-  .header-note { font-size: .63rem; letter-spacing: 0; }
-  .brand { font-size: 1.35rem; }
-  .brand img { width: 30px; height: 30px; }
-  .main-nav { gap: 2px; margin-bottom: 20px; }
-  .main-nav button { font-size: .8rem; padding: 8px 2px; }
-  .chapter-hero { min-height: 260px; padding: 26px 22px; background-position: 65% 65%; }
-  .chapter-hero > p:last-child { max-width: 85%; }
-  .choice-list .choice { padding: 18px 16px; gap: 12px; }
-  .choice-list .choice-body { font-size: .86rem; }
-  .app-footer span { float: none; display: block; margin-top: 8px; }
-}
-@media (max-width: 30rem) {
-  body { padding: 0; }
-  h1 { font-size: 1.6rem; }
-  section { padding: 18px 16px; }
-  .app-shell { padding: 0 16px; }
-}
-@media (prefers-reduced-motion: reduce) {
-  *, *::before, *::after { transition: none !important; animation: none !important; }
-}
-
-/* 物語と行動選択は、罫線で区切った縦読みの冒険記録に揃える。 */
-.today-screen, .story-history { max-width: 640px; margin: 0 auto; }
-.journey-heading { text-align: center; border-block: 1px solid var(--line-strong); padding: 12px 0; }
-.journey-heading h1 { font-size: 1.25rem; margin: 4px 0; }
-.journey-illustration { height: 150px; max-width: 360px; margin: 20px auto; border: 1px solid var(--line); background: linear-gradient(#101b1888, #101b1888), url('/journey.svg') center 65% / cover; }
-.journey-intro { font-size: .95rem; margin: 20px 0; line-height: 1.9; }
-.today-screen .daily-choices, .today-screen .journey-story, .story-history section { background: transparent; border: none; border-top: 1px solid var(--line-strong); border-radius: 0; padding: 16px 0; margin: 20px 0; box-shadow: none; }
-.today-screen h2, .story-history h2 { font-family: inherit; font-size: 1.05rem; margin: 0 0 12px; }
-.journey-options { border: 0; padding: 0; margin: 0 0 12px; min-width: 0; }
-.journey-options legend { font-size: .85rem; color: var(--muted); margin-bottom: 8px; }
-.journey-options .journey-option { display: flex; align-items: center; gap: 10px; margin: 0; padding: 10px 4px; min-height: 44px; color: var(--fg); font-size: .95rem; cursor: pointer; }
-.journey-option input[type='radio'] { flex: 0 0 18px; width: 18px; height: 18px; min-height: 18px; margin: 0; accent-color: var(--accent); }
+.app-header { text-align: center; padding: 4px 0 8px; }
+.brand { display: inline-flex; align-items: center; gap: 8px; font-weight: 800; font-size: 1.7rem; letter-spacing: .12em; text-shadow: 2px 2px #07183b; }
+.brand-sigil { color: #ffe186; }
+.brand small { display: block; font-size: .62rem; letter-spacing: .08em; font-weight: 400; color: #e2ecff; }
+.header-note { display: none; }
+.main-nav { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 4px; padding: 8px 0 12px; border-bottom: 4px ridge #aed1ef; margin-bottom: 8px; }
+.main-nav button { padding: 4px 1px; font-size: .82rem; }
+.main-nav button[aria-current='true'] { color: #362503; background: #ffdf80; }
+.app-footer { border-top: 4px ridge #aed1ef; margin-top: 24px; padding-top: 12px; text-align: center; color: #dae7ff; font-size: .8rem; }
+.app-footer span { display: block; font-size: .65rem; }
+.title-banner { margin: 4px 0 12px; padding: 14px 8px; text-align: center; border: 4px ridge #e8c977; background: linear-gradient(#8c501d, #bb8336 45%, #8e5423); box-shadow: inset 0 0 0 2px #542f12; color: #fff4c6; }
+.title-banner p { font-size: .7rem; margin: 0; }
+.title-banner h1 { font-weight: 900; font-size: 2.6rem; letter-spacing: .22em; margin: 0 0 2px .22em; text-shadow: 2px 2px #422300, -1px -1px #ffe198; }
+.title-banner .title-sub { font-size: .82rem; }
+.join-panel { border-top: 4px ridge #aed1ef; padding: 8px 0; }
+.join-title { text-align: center; }
+.join-intro, .join-note { font-size: .85rem; }
+.join-panel nav { display: flex; gap: 8px; margin: 16px 0; }
+.join-panel nav button { flex: 1; font-size: .85rem; }
+.join-panel nav button[aria-current='true'] { background: #ffe194; }
+.join-panel form > button[type='submit'] { margin-top: 8px; min-width: 100px; }
+.join-note { border-top: 1px solid var(--line); margin-top: 20px; padding-top: 12px; color: var(--muted); }
+.journey-heading { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; padding: 4px 0; }
+.journey-heading h1 { font-size: .9rem; margin: 4px 0; font-weight: 400; }
+.screen-caption { font-size: 1rem; margin: 4px 0; color: var(--accent); }
+.adventure-map { margin: 8px auto 12px; max-width: 480px; }
+.map-surface { position: relative; aspect-ratio: 3 / 2; background: #176dbb; border: 3px ridge #cfbb7d; overflow: hidden; }
+.map-surface > img { display: block; width: 100%; height: 100%; object-fit: cover; image-rendering: pixelated; }
+.map-labels { list-style: none; margin: 0; padding: 0; }
+.map-labels li { position: absolute; margin: 0; transform: translate(-50%, -25%); text-align: center; white-space: nowrap; font-size: clamp(10px, 2.7vw, 12px); line-height: 1.3; }
+.map-pin { display: block; color: #fff; font-size: 13px; line-height: 1; text-shadow: 1px 1px #04152e, -1px -1px #04152e; }
+.map-place { display: block; padding: 1px 3px; border: 1px solid #d9e9ff; background: #0e275ee8; color: #fff9da; text-shadow: 1px 1px #071932; }
+.map-labels li[aria-current='location'] { z-index: 1; }
+.map-labels li[aria-current='location'] .map-pin { color: #fff16b; font-size: 19px; }
+.map-labels li[aria-current='location'] .map-place { background: #fff09b; color: #332209; border-color: #714c17; font-weight: 700; text-shadow: none; }
+.adventure-map figcaption { font-size: .78rem; text-align: center; color: #fff3a6; margin-top: 6px; }
+.location-story { border-block: 4px ridge #aed1ef; padding: 8px 0; margin: 14px 0; }
+.location-story h2 { margin: 0 0 8px; color: #eff6ff; }
+.location-story p { line-height: 1.8; }
+.previous-story { color: #e0edff; }
+.journey-prompt { margin: 20px 0 4px; }
+.daily-choices { border-top: none; margin-top: 8px; padding-top: 0; }
+.daily-choices h2 { color: #fff; }
+.journey-options { border: none; min-width: 0; margin: 0 0 10px; padding: 0; }
+.journey-options legend { color: var(--muted); font-size: .8rem; }
+.journey-options .journey-option { display: flex; align-items: center; gap: 9px; min-height: 48px; margin: 0; padding: 6px 2px; cursor: pointer; }
+.journey-option input { flex: 0 0 18px; }
 .journey-option:has(input:checked) { color: var(--accent); }
-.journey-option:has(input:disabled) { cursor: wait; }
-.journey-confirm { min-width: 100px; border-color: var(--accent); color: var(--accent); }
-.journey-vote-status { margin-top: 20px; padding-top: 14px; border-top: 1px solid var(--line); font-size: .9rem; }
-.today-screen .vote-note { text-align: left; }
-.journey-story .narrative, .story-history .narrative { border: none; padding: 0; margin: 16px 0; font-family: inherit; font-size: .95rem; line-height: 2; white-space: pre-line; }
-.story-day { border-top: 1px solid var(--line); padding: 16px 0; margin: 0; }
-.story-day > strong { color: var(--accent); font-weight: 500; }
-.story-day > ul { font-size: .8rem; color: var(--muted); }
+.journey-option:has(input:disabled) { opacity: .65; cursor: wait; }
+.journey-option > span { font-size: .88rem; }
+.destination { display: block; font-size: 1rem; }
+.journey-confirm { min-width: 80px; }
+.journey-vote-status { border-top: 4px ridge #aed1ef; padding-top: 12px; margin-top: 16px; font-size: .9rem; }
+.section-description, .vote-note { color: var(--muted); font-size: .75rem; }
+.narrative { line-height: 1.95; white-space: pre-line; margin: 12px 0; }
+.story-day { border-top: 3px ridge #aed1ef; padding: 12px 0; margin: 12px 0; }
+.story-day > strong { color: var(--accent); }
+.story-day > ul { color: var(--muted); font-size: .8rem; }
+details { padding: 8px; margin: 8px 0; background: #123477; border: 1px solid #83a9da; }
+summary { cursor: pointer; color: #fff1ac; overflow-wrap: anywhere; }
+table { width: 100%; border-collapse: collapse; font-size: .82rem; margin: 8px 0; }
+caption { text-align: left; color: var(--muted); font-size: .75rem; padding-bottom: 4px; }
+th, td { border: 1px solid #6c93cd; padding: 5px 6px; white-space: nowrap; text-align: left; }
+thead th, tbody th { background: #0c2d6b; color: #fff0ac; font-weight: 500; }
+div:has(> table), details:has(> table) { overflow-x: auto; }
+.turn-grid { overflow-x: auto; padding-bottom: 6px; }
+.turn-grid table { table-layout: fixed; min-width: 62rem; margin: 0; }
+.turn-grid table + table { margin-top: 10px; }
+.turn-grid th:first-child, .turn-grid td:first-child { width: 6rem; }
+.turn-grid th:not(:first-child), .turn-grid td:not(:first-child) { width: 7rem; text-align: center; }
+.turn-grid td { overflow: hidden; text-overflow: ellipsis; }
+.turn-grid select { width: 100%; min-height: 36px; }
+.turn-grid td, .turn-grid select { font-size: .78rem; }
+.turn-grid table:first-child tbody td { background: #244d91; }
+.portrait { text-align: center; margin: 12px auto; }
+.portrait img { display: block; width: min(180px, 55vw); height: auto; margin: auto; image-rendering: pixelated; }
+.portrait-name { font-size: .9rem; }
+.stat-grid { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); border: 1px solid var(--line); margin: 10px 0; }
+.stat-cell { text-align: center; padding: 5px 1px; background: #143577; border: 1px solid #537fb8; }
+.stat-grid dt { color: var(--muted); font-size: .65rem; }
+.stat-grid dd { margin: 0; font-size: 1rem; font-variant-numeric: tabular-nums; }
+.stat-up, .stat-down { display: block; font-size: .7rem; }
+.stat-up, .aptitude dd[data-grade='B'] { color: var(--good); }
+.stat-down, .aptitude dd[data-grade='E'] { color: var(--alert); }
+.aptitude dd[data-grade='A'] { color: #fff39a; }
+.aptitude dd[data-grade='D'] { color: var(--muted); }
+.shelf-item { display: grid; grid-template-columns: 1fr auto; align-items: center; gap: 4px 10px; padding: 10px 0; border-bottom: 1px solid var(--line); }
+.shelf-mods { grid-column: 1 / -1; color: var(--muted); font-size: .8rem; }
+.shelf-cost { font-size: .85rem; white-space: nowrap; }
+.shelf-cost small { display: block; color: var(--alert); }
+.shelf-item[data-affordable='false'] .shelf-name { color: #c9d7f4; }
+.joblist li { display: grid; grid-template-columns: 1fr auto; gap: 4px 8px; padding: 8px 0; border-bottom: 1px solid var(--line); }
+.job-note { grid-column: 1 / -1; font-size: .8rem; color: var(--muted); }
+.job-current { color: var(--accent); font-size: .8rem; }
+.tower { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
+.tower-floor { display: flex; align-items: center; flex-wrap: wrap; gap: 4px 8px; width: 100%; padding: 6px; text-align: left; font-size: .85rem; }
+.tower-floor-no { font-weight: 600; }
+.tower-floor-first { width: 100%; font-size: .68rem; }
+.tower-floor[data-state='cleared'] { background: #c1dec7; }
+.tower-floor[data-state='unknown'] { background: #9daece; }
+.battle-chronicle { margin-top: 20px; }
+.chronicle-turn { border-top: 4px ridge #aed1ef; margin-top: 20px; }
+.chronicle-turn h4 { margin: 0; padding: 8px 0; color: #fff; border-bottom: 2px ridge #aed1ef; }
+.chronicle-actions { list-style: none; padding: 0; margin: 0; }
+.chronicle-action { margin: 0; padding: 12px 0; }
+.chronicle-actor { display: flex; align-items: baseline; flex-wrap: wrap; gap: 6px; margin: 0; font-size: 1rem; }
+.chronicle-actor > span { color: #fff3a6; }
+.chronicle-actor small { font-size: .65rem; color: var(--muted); }
+.chronicle-action[data-side='enemy'] .chronicle-actor > span { color: #ffcbbf; }
+.chronicle-skill { margin: 2px 0 0 20px; color: #fff; }
+.chronicle-outcomes { padding: 0; margin: 2px 0 0 30px; }
+.chronicle-outcome { margin: 0 0 8px; }
+.chronicle-target, .chronicle-note { margin: 0; overflow-wrap: anywhere; }
+.chronicle-amount { margin: 0 0 0 16px; }
+.chronicle-amount strong { font-weight: 400; font-size: 1.12rem; margin-right: 3px; font-variant-numeric: tabular-nums; }
+.chronicle-hp { margin: 0 0 0 16px; font-size: .78rem; color: var(--muted); }
+.chronicle-hp strong { font-weight: 400; }
+.chronicle-outcome[data-kind='heal'] .chronicle-amount { color: var(--good); }
+.chronicle-outcome[data-kind='down'] { color: var(--alert); }
+@media (max-width: 400px) {
+  .app-shell, .join-layout { padding: 8px 10px 24px; border-inline-width: 1px; }
+  .main-nav { gap: 3px; }
+  .main-nav button { font-size: .77rem; }
+  .stat-grid { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+  .map-labels li { font-size: 10px; }
+}
+.tower-floor[aria-pressed='true'], .tower-floor[aria-pressed='true']:hover { background: #173f91; color: #fff19a; }

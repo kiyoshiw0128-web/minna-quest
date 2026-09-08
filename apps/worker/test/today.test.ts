@@ -126,3 +126,22 @@ describe('POST /api/vote', () => {
     expect(response.status).toBe(401);
   });
 });
+
+describe('冒険の現在地に使う前日の結果', () => {
+  it('初日は前日の確定イベントを持たない', async () => {
+    const payload = await (await authed('/api/today')).json<{ data: { previousChosenId: string | null } }>();
+    expect(payload.data.previousChosenId).toBeNull();
+  });
+
+  it('前日の確定結果だけを返し、今日の投票先とは分ける', async () => {
+    await setup(2);
+    await env.DB.prepare('INSERT INTO world_days (world_id, day_no, option_ids, chosen_id) VALUES (?, 1, ?, ?)')
+      .bind(WORLD, JSON.stringify(['forestSpiritPray']), 'forestSpiritPray').run();
+    await authed('/api/vote', { method: 'POST', body: JSON.stringify({ optionId: 'town' }) });
+    const payload = await (await authed('/api/today')).json<{ data: { previousChosenId: string; myVote: string; chosenId: null; counts: null } }>();
+    expect(payload.data.previousChosenId).toBe('forestSpiritPray');
+    expect(payload.data.myVote).toBe('town');
+    expect(payload.data.chosenId).toBeNull();
+    expect(payload.data.counts).toBeNull();
+  });
+});

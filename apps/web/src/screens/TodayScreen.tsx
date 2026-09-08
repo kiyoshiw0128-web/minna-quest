@@ -1,3 +1,5 @@
+import { AdventureMap } from '../AdventureMap.js';
+import { eventLocation, LOCATIONS } from '../geography.js';
 import { useCallback, useEffect, useState } from 'react';
 import { fetchToday, vote as voteApi, ApiError, UnauthorizedError, ALREADY_CLOSED_MESSAGE } from '../api.js';
 import type { TodayResult } from '../api.js';
@@ -88,15 +90,23 @@ export function TodayScreen({ token, onUnauthorized }: Props) {
 
   const { data } = load;
   const closed = data.chosenId !== null;
+  const lastEventId = data.chosenId ?? data.previousChosenId ?? null;
+  const location = eventLocation(lastEventId) ?? (data.dayNo === 1 && lastEventId === null ? 'leaf' : null);
+  const previousStory = data.previousChosenId ? resolveEvent(data.previousChosenId).resultText : null;
 
   return (
     <main className="today-screen">
       <header className="journey-heading">
-        <p className="eyebrow">日々譚 / 冒険の記録</p>
+        <p className="screen-caption">◆ 冒険 ◆</p>
         <h1>{data.chapter}章 {data.dayNo}日目</h1>
       </header>
-      <div className="journey-illustration" aria-hidden="true" />
-      <p className="journey-intro">{closed ? '仲間と選んだ道。その先の物語を読みましょう。' : '旅は、まだ続きます。仲間と進む次の道を選んでください。'}</p>
+      <AdventureMap current={location} />
+      <div className="location-story">
+        <h2>{location !== null ? `${LOCATIONS[location].symbol} ${LOCATIONS[location].name}` : '◆ 旅の途中'}</h2>
+        {!closed && previousStory && <p className="previous-story">{previousStory}</p>}
+        <p>{location !== null ? LOCATIONS[location].description : '街道の先には、まだ知らない土地が広がっている。'}</p>
+        {!closed && <p className="journey-prompt">さて、どこへ向かおうか。</p>}
+      </div>
 
       {closed ? <ClosedDay data={data} /> : <OpenDay key={data.dayNo} data={data} onVote={handleVote} voteState={voteState} />}
     </main>
@@ -116,7 +126,7 @@ function OpenDay({
   const submitting = voteState.kind === 'voting';
   return (
     <section className="daily-choices">
-      <h2>次の行動</h2>
+      <h2>∞ 次回行動選択</h2>
       <form onSubmit={(event) => {
         event.preventDefault();
         if (selected !== null && !submitting && selected !== data.myVote) onVote(selected);
@@ -125,10 +135,11 @@ function OpenDay({
           <legend>どこへ進みますか？</legend>
           {data.optionIds.map((optionId) => {
             const event = resolveEvent(optionId);
+            const destination = eventLocation(optionId);
             return (
               <label key={optionId} className="journey-option">
                 <input type="radio" name="next-action" value={optionId} checked={selected === optionId} onChange={() => setSelected(optionId)} />
-                <span>{event.label}{event.kind !== null && ` (${event.kind === 'battle' ? '戦闘' : '出来事'})`}</span>
+                <span>{destination !== null && <span className="destination">{LOCATIONS[destination].name}へ</span>}{event.label}{event.kind !== null && ` (${event.kind === 'battle' ? '戦闘' : '出来事'})`}</span>
               </label>
             );
           })}

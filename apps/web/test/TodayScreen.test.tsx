@@ -170,3 +170,20 @@ describe('選択して決定する', () => {
     expect(screen.getByRole('button', { name: '決定' })).toBeDisabled();
   });
 });
+
+describe('地図と実際に確定した冒険', () => {
+  it('投票先を選び直しても、前日の結果から決まる現在地は変わらない', async () => {
+    installFetchMock({
+      'GET /api/today': jsonResponse(200, { ok: true, data: {
+        dayNo: 2, chapter: 1, optionIds: ['restAtSpring', 'meetElder'],
+        previousChosenId: 'forestSpiritPray', myVote: null, chosenId: null, counts: null, tiebroken: null,
+      } }),
+    });
+    const user = userEvent.setup();
+    const { container } = render(<TodayScreen token="t" onUnauthorized={vi.fn()} />);
+    await screen.findByText('▼ 現在地：月影の森');
+    await user.click(screen.getByRole('radio', { name: /泉で休む/ }));
+    expect(container.querySelector('[aria-current="location"]')).toHaveTextContent('月影の森');
+    expect(screen.getByText('▼ 現在地：月影の森')).toBeInTheDocument();
+  });
+});

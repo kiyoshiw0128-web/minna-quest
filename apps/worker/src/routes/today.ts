@@ -19,8 +19,11 @@ export async function handleToday(request: Request, env: Env): Promise<Response>
   // 票数は締めるまで返さない。先に見えると後から投票する人が流されるため。
   const closed = day.chosenId !== null;
 
+  const previous = day.dayNo > 1 ? await getDay(env.DB, world.id, day.dayNo - 1) : null;
+
   return ok({
     dayNo: day.dayNo,
+    previousChosenId: previous?.chosenId ?? null,
     chapter: world.chapter,
     optionIds: day.optionIds,
     myVote: mine?.optionId ?? null,
