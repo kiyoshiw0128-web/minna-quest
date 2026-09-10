@@ -1,5 +1,7 @@
 import { AdventureMap } from '../AdventureMap.js';
-import { eventLocation, LOCATIONS } from '../geography.js';
+import { eventLocation, LOCATIONS, locationDescription, chapterStory, routeTo } from '../geography.js';
+import type { LocationId } from '../geography.js';
+import { questProgress } from '@mq/core';
 import { useCallback, useEffect, useState } from 'react';
 import { fetchToday, vote as voteApi, ApiError, UnauthorizedError, ALREADY_CLOSED_MESSAGE } from '../api.js';
 import type { TodayResult } from '../api.js';
@@ -92,6 +94,8 @@ export function TodayScreen({ token, onUnauthorized }: Props) {
   const closed = data.chosenId !== null;
   const lastEventId = data.chosenId ?? data.previousChosenId ?? null;
   const location = eventLocation(lastEventId) ?? (data.dayNo === 1 && lastEventId === null ? 'leaf' : null);
+  const tags = data.tags ?? [];
+  const quests = questProgress(tags);
   const previousStory = data.previousChosenId ? resolveEvent(data.previousChosenId).resultText : null;
 
   return (
@@ -101,23 +105,37 @@ export function TodayScreen({ token, onUnauthorized }: Props) {
         <h1>{data.chapter}章 {data.dayNo}日目</h1>
       </header>
       <AdventureMap current={location} />
+      <p className="chapter-story">{chapterStory(data.chapter, tags)}</p>
       <div className="location-story">
         <h2>{location !== null ? `${LOCATIONS[location].symbol} ${LOCATIONS[location].name}` : '◆ 旅の途中'}</h2>
-        {!closed && previousStory && <p className="previous-story">{previousStory}</p>}
-        <p>{location !== null ? LOCATIONS[location].description : '街道の先には、まだ知らない土地が広がっている。'}</p>
+        {!closed && previousStory && <div className="previous-story"><h3>前回の出来事</h3><p>{previousStory}</p></div>}
+        <p>{location !== null ? locationDescription(location, tags) : '街道の先には、まだ知らない土地が広がっている。'}</p>
         {!closed && <p className="journey-prompt">さて、どこへ向かおうか。</p>}
       </div>
 
-      {closed ? <ClosedDay data={data} /> : <OpenDay key={data.dayNo} data={data} onVote={handleVote} voteState={voteState} />}
+      {quests.length > 0 && <section className="quest-journal" aria-label="依頼の手帳">
+        <h2>◆ 依頼の手帳</h2>
+        <p className="section-description">勝利した依頼の続きは、次の日の行動候補に反映されます。</p>
+        <ul>{quests.map((quest) => <li key={quest.id}>
+          <strong>{quest.completed ? '✓' : '◇'} {quest.name}</strong>
+          <p>{quest.completed ? '依頼完了' : quest.awaitingBattle
+            ? `${quest.step.objective}。「戦闘」でこの依頼の日を選んで挑もう。誰かが勝つと、次の締切で続きが候補になる。`
+            : `次の目的：${quest.step.objective}（${LOCATIONS[quest.step.location].name}）`}</p>
+        </li>)}</ul>
+      </section>}
+
+      {closed ? <ClosedDay data={data} /> : <OpenDay key={data.dayNo} current={location} data={data} onVote={handleVote} voteState={voteState} />}
     </main>
   );
 }
 
 function OpenDay({
+  current,
   data,
   onVote,
   voteState,
 }: {
+  current: LocationId | null;
   data: TodayResult;
   onVote: (optionId: string) => void;
   voteState: VoteState;
@@ -136,10 +154,12 @@ function OpenDay({
           {data.optionIds.map((optionId) => {
             const event = resolveEvent(optionId);
             const destination = eventLocation(optionId);
+            const route = current !== null && destination !== null ? routeTo(current, destination) : [];
+            const direction = destination === null ? '' : `${LOCATIONS[destination].name}${destination === current ? 'で' : 'へ'}`;
             return (
               <label key={optionId} className="journey-option">
                 <input type="radio" name="next-action" value={optionId} checked={selected === optionId} onChange={() => setSelected(optionId)} />
-                <span>{destination !== null && <span className="destination">{LOCATIONS[destination].name}へ</span>}{event.label}{event.kind !== null && ` (${event.kind === 'battle' ? '戦闘' : '出来事'})`}</span>
+                <span>{destination !== null && <span className="destination">{direction}</span>}{event.label}{event.kind !== null && ` (${event.kind === 'battle' ? '戦闘' : '出来事'})`}{route.length > 1 && <small className="journey-route">街道：{route.map((place) => LOCATIONS[place].name).join(' → ')}</small>}</span>
               </label>
             );
           })}

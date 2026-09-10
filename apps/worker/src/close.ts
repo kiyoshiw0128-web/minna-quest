@@ -1,8 +1,9 @@
 import {
-  EVENTS, applyOutcome, chapterOf, closeDay, daySeed, jstDayNumber, pickEvents, voteSeed,
+  EVENTS, applyOutcome, chapterOf, closeDay, daySeed, jstDayNumber, pickAdventureEvents, eventLocation, voteSeed,
 } from '@mq/core';
 import type { DailyEvent, WorldFlags } from '@mq/core';
 import { advanceDay, getWorld, listOpenDaysBefore, listVotes } from './store.js';
+import { questVictoryTags } from './questProgress.js';
 
 const POOL: readonly DailyEvent[] = Object.values(EVENTS);
 
@@ -21,7 +22,7 @@ export async function catchUp(db: D1Database, worldId: string, now: Date): Promi
 
   const today = jstDayNumber(world.startedAt, now);
 
-  let flags: WorldFlags = { chapter: world.chapter, tags: world.tags };
+  let flags: WorldFlags = { chapter: world.chapter, tags: [...new Set([...world.tags, ...await questVictoryTags(db, worldId)])] };
   let closedCount = 0;
 
   // 対象が無くなるまで繰り返す。1日締めるたびに翌日の行が増えるので、
@@ -41,7 +42,7 @@ export async function catchUp(db: D1Database, worldId: string, now: Date): Promi
     const nextDayNo = day.dayNo + 1;
     const advancedFlags: WorldFlags = { ...nextFlags, chapter: chapterOf(nextDayNo) };
 
-    const options = pickEvents(POOL, advancedFlags, daySeed(worldId, nextDayNo));
+    const options = pickAdventureEvents(POOL, advancedFlags, daySeed(worldId, nextDayNo), eventLocation(resolved.chosenId) ?? 'leaf', nextDayNo);
 
     // 選んだ選択肢に金貨があれば世界の全員に配る（設計書 §4）。ルートが共有なので
     // 得られるものも共有でよく、誰が投票したかで差をつけない。締めと同じバッチに

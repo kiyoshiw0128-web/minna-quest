@@ -263,3 +263,28 @@ describe('ペットの配布（段階6・設計書 §5・§8 テスト1〜3）',
     expect(result.activePetId).toBe('kitten');
   });
 });
+
+describe('地理と依頼を引き継ぐ締め処理', () => {
+  it('すでに投票した候補は保ち、翌日から現在地に接する候補を出す', async () => {
+    await forceEventOnDay(1, 'millRequest');
+    await catchUp(env.DB, WORLD, atDay(2));
+    const original = await getDay(env.DB, WORLD, 1);
+    const next = await getDay(env.DB, WORLD, 2);
+    expect(original?.optionIds).toEqual(['millRequest']);
+    expect(original?.chosenId).toBe('millRequest');
+    expect(next?.optionIds).toContain('millTracks');
+    const { eventLocation, ROADS } = await import('@mq/core');
+    for (const id of next!.optionIds) expect(['leaf', ...ROADS.leaf]).toContain(eventLocation(id));
+  });
+  it('実際の討伐済み記録から、報告へ進む候補とフラグを用意する', async () => {
+    await seed(2, [2]);
+    await env.DB.prepare('UPDATE worlds SET tags = ? WHERE id = ?')
+      .bind(JSON.stringify(['q-mill-1', 'q-mill-2', 'q-mill-3']), WORLD).run();
+    await env.DB.prepare('INSERT INTO world_days (world_id, day_no, option_ids, chosen_id, defeated_by) VALUES (?, 1, ?, ?, ?)')
+      .bind(WORLD, JSON.stringify(['millBoar']), 'millBoar', 'p1').run();
+    await forceEventOnDay(2, 'crossroads');
+    await catchUp(env.DB, WORLD, atDay(3));
+    expect((await getDay(env.DB, WORLD, 3))?.optionIds).toContain('millRepair');
+    expect((await getWorld(env.DB, WORLD))?.tags).toContain('q-mill-won');
+  });
+});

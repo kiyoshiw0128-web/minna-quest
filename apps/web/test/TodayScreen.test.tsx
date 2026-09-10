@@ -187,3 +187,36 @@ describe('地図と実際に確定した冒険', () => {
     expect(screen.getByText('▼ 現在地：月影の森')).toBeInTheDocument();
   });
 });
+
+describe('物語と依頼のつながり', () => {
+  it('焼けた集落の現在地と説明をそろえ、無関係な村の説明を出さない', async () => {
+    installFetchMock({ 'GET /api/today': jsonResponse(200, { ok: true, data: {
+      dayNo: 9, chapter: 2, previousChosenId: 'burnedVillage', tags: ['saw-ruins'],
+      optionIds: ['aidSurvivors', 'lootRelic', 'portCargo'], myVote: null, chosenId: null, counts: null, tiebroken: null,
+    } }) });
+    const { container } = render(<TodayScreen token="t" onUnauthorized={vi.fn()} />);
+    await screen.findByText('▼ 現在地：星詠みの遺跡');
+    expect(container.querySelector('.location-story')).toHaveTextContent('焼けたアッシュ村');
+    expect(container.querySelector('.location-story')).not.toHaveTextContent('赤い屋根');
+    expect(screen.getByRole('radio', { name: /生存者の救出/ })).toHaveAccessibleName(/星詠みの遺跡で/);
+  });
+  it('依頼の討伐待ちを明示し、投票を選んでも完了扱いにしない', async () => {
+    installFetchMock({ 'GET /api/today': jsonResponse(200, { ok: true, data: {
+      dayNo: 4, chapter: 1, previousChosenId: 'millBoar', tags: ['q-mill-1', 'q-mill-2', 'q-mill-3'],
+      optionIds: ['crossroads', 'restAtSpring'], myVote: null, chosenId: null, counts: null, tiebroken: null,
+    } }) });
+    render(<TodayScreen token="t" onUnauthorized={vi.fn()} />);
+    const journal = await screen.findByRole('region', { name: '依頼の手帳' });
+    expect(journal).toHaveTextContent('水路を守る大猪を倒す');
+    expect(journal).toHaveTextContent('戦闘');
+    await userEvent.setup().click(screen.getByRole('radio', { name: /分かれ道/ }));
+    expect(journal).not.toHaveTextContent('依頼完了');
+  });
+  it('旧版で提示済みの遠方の行動には経由地を表示する', async () => {
+    installFetchMock({ 'GET /api/today': jsonResponse(200, { ok: true, data: {
+      dayNo: 1, chapter: 1, optionIds: ['dragonlingClash'], myVote: null, chosenId: null, counts: null, tiebroken: null,
+    } }) });
+    render(<TodayScreen token="t" onUnauthorized={vi.fn()} />);
+    expect(await screen.findByText(/街道：リーフ村 → 月影の森 → 白峰の峠 → 黒曜の砦/)).toBeInTheDocument();
+  });
+});

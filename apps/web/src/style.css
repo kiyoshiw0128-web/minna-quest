@@ -181,3 +181,11 @@ div:has(> table), details:has(> table) { overflow-x: auto; }
   .map-labels li { font-size: 10px; }
 }
 .tower-floor[aria-pressed='true'], .tower-floor[aria-pressed='true']:hover { background: #173f91; color: #fff19a; }
+.chapter-story { font-size: .85rem; color: var(--muted); line-height: 1.8; }
+.journey-route { display: block; margin-top: 4px; font-size: .75rem; color: var(--muted); }
+.previous-story h3 { font-size: .85rem; color: var(--accent); margin-bottom: 4px; }
+.quest-journal { border-top: 4px ridge #aed1ef; margin-top: 20px; padding-top: 8px; }
+.quest-journal ul { list-style: none; padding: 0; }
+.quest-journal li { border-bottom: 1px solid var(--line); padding: 8px 0; }
+.quest-journal strong { color: var(--accent); }
+.quest-journal p { margin: 4px 0; font-size: .85rem; }

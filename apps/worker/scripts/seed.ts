@@ -10,7 +10,7 @@
  * crypto が無いから。
  */
 import { createHash, randomBytes } from 'node:crypto';
-import { EVENTS, chapterOf, daySeed, pickEvents } from '@mq/core';
+import { EVENTS, chapterOf, daySeed, pickAdventureEvents } from '@mq/core';
 import type { DailyEvent } from '@mq/core';
 
 const name = process.argv[2] ?? 'みんなの冒険';
@@ -24,7 +24,7 @@ const worldId = token();
 const now = new Date().toISOString();
 
 const pool: readonly DailyEvent[] = Object.values(EVENTS);
-const firstOptions = pickEvents(pool, { chapter: chapterOf(1), tags: [] }, daySeed(worldId, 1));
+const firstOptions = pickAdventureEvents(pool, { chapter: chapterOf(1), tags: [] }, daySeed(worldId, 1), 'leaf');
 
 const lines: string[] = [
   `INSERT INTO worlds (id, name, started_at, current_day, chapter, tags, created_at) VALUES (${quote(worldId)}, ${quote(name)}, ${quote(now)}, 1, ${chapterOf(1)}, '[]', ${quote(now)});`,

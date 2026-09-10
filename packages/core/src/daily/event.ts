@@ -21,7 +21,7 @@ export type EventCondition = {
   readonly forbidsTags?: readonly string[];
 };
 
-/** 非戦闘イベントを選んだ結果。 */
+/** 選択確定時の結果。戦闘の addTags は遭遇を表し、勝利は victoryTag で区別する。 */
 export type EventOutcome = {
   readonly gold?: number;
   readonly addTags?: readonly string[];
@@ -34,7 +34,9 @@ export type DailyEvent = {
   readonly kind: EventKind;
   /** kind が 'battle' のとき、戦う相手のID */
   readonly enemyId?: string;
-  /** kind が 'story' のとき、選んだ結果 */
+  /** 誰かが実際にこの戦闘へ勝ったときにだけ有効になる共有フラグ。 */
+  readonly victoryTag?: string;
+  /** 選択確定時の結果。戦闘では勝利を意味するタグをここに入れない。 */
   readonly outcome?: EventOutcome;
   /**
    * その日が締まったあとに読ませる、結果の文章。

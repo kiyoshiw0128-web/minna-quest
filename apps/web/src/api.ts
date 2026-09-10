@@ -23,6 +23,8 @@ export type JoinResult = { token: string; player: { id: string; name: string; wo
 export type TodayResult = {
   /** 前日の確定イベント。旧応答では省略される。 */
   previousChosenId?: string | null;
+  /** 確定した世界の状態。旧応答では省略される。 */
+  tags?: string[];
   dayNo: number;
   chapter: number;
   optionIds: string[];

@@ -187,3 +187,12 @@ describe('敵の強さと出現する章の噛み合い', () => {
     expect(tooStrong).toEqual([]);
   });
 });
+
+describe('街の依頼に登場する新しい敵', () => {
+  it.each([
+    ['grainRat', 1], ['bogSlime', 1], ['brambleBoar', 1],
+    ['brineCrab', 2], ['ridgeHarrier', 3], ['starSentinel', 5],
+  ] as const)('%s は冒険Lv%dの戦士1人で8ターン以内に勝てる', (id, level) => {
+    expect(fightAtLevel(level, ENEMIES[id]).result).toBe('win');
+  });
+});

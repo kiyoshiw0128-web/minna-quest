@@ -111,3 +111,9 @@ export { NAMES } from './data/names.js';
 
 export { BATTLE_REWARDS } from './data/battleRewards.js';
 export type { BattleReward } from './data/battleRewards.js';
+
+export { LOCATIONS, EVENT_LOCATIONS, ROADS, eventLocation, routeTo, locationDescription, chapterStory, pickAdventureEvents } from './daily/geography.js';
+export type { LocationId } from './daily/geography.js';
+export { QUESTS } from './data/quests.js';
+export { QUEST_ENEMIES } from './data/questEnemies.js';
+export { questProgress } from './daily/quest.js';

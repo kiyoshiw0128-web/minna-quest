@@ -1,3 +1,4 @@
+import { QUEST_ENEMIES } from './questEnemies.js';
 import type { Enemy } from '../battle/enemy.js';
 import type { Skill } from '../battle/skill.js';
 
@@ -426,4 +427,5 @@ export const ENEMIES = {
   direWyvern: DIRE_WYVERN,
   stoneGolem: STONE_GOLEM,
   voidWraith: VOID_WRAITH,
+  ...QUEST_ENEMIES,
 } as const satisfies Record<string, Enemy>;

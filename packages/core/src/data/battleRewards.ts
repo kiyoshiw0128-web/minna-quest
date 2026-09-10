@@ -38,6 +38,12 @@ export type BattleReward = { readonly gold: number; readonly exp: number };
  * balgosが章ボスとして特別重い報酬を持つ一方、雑魚は何度も倒す前提だから）。
  */
 export const BATTLE_REWARDS: Readonly<Record<string, BattleReward>> = {
+  grainRat: { gold: 18, exp: 20 },
+  bogSlime: { gold: 22, exp: 25 },
+  brambleBoar: { gold: 30, exp: 40 },
+  brineCrab: { gold: 38, exp: 50 },
+  ridgeHarrier: { gold: 45, exp: 65 },
+  starSentinel: { gold: 65, exp: 100 },
   balgos: { gold: 200, exp: 400 },
   // adventureExpToNext(1)=60。15/60=25%。何度も出会う一番弱い雑魚なので低め。
   banditScout: { gold: 20, exp: 15 },

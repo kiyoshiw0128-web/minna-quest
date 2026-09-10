@@ -54,7 +54,7 @@ describe('イベントマスタの健全性', () => {
     // どちらも誰も付与しないタグを書くと、書き間違いに気づけないまま
     // 「絶対に出ない」または「絶対に隠れない（常に真の排他になっていない）」
     // イベントが生まれる。
-    const grantable = new Set(events.flatMap((event) => event.outcome?.addTags ?? []));
+    const grantable = new Set(events.flatMap((event) => [...event.outcome?.addTags ?? [], ...event.victoryTag ? [event.victoryTag] : []]));
     for (const event of events) {
       for (const tag of event.condition.requiresTags ?? []) {
         expect(grantable).toContain(tag);
@@ -111,7 +111,7 @@ describe('イベントマスタの健全性', () => {
   });
 
   it('フラグを集めきった状態でも、どの章でも3択を埋められる', () => {
-    const allTags = events.flatMap((event) => event.outcome?.addTags ?? []);
+    const allTags = events.flatMap((event) => [...event.outcome?.addTags ?? [], ...event.victoryTag ? [event.victoryTag] : []]);
     for (const chapter of CHAPTERS_TO_CHECK) {
       const count = eligibleEvents(events, { chapter, tags: allTags }).length;
       expect(count).toBeGreaterThanOrEqual(MIN_CANDIDATES);

@@ -2,6 +2,7 @@ import { requirePlayer } from '../auth.js';
 import { getDay, getWorld, listVotes } from '../store.js';
 import { fail, ok } from '../respond.js';
 import type { Env } from '../env.js';
+import { questVictoryTags } from '../questProgress.js';
 
 export async function handleToday(request: Request, env: Env): Promise<Response> {
   const player = await requirePlayer(env.DB, request);
@@ -25,6 +26,7 @@ export async function handleToday(request: Request, env: Env): Promise<Response>
     dayNo: day.dayNo,
     previousChosenId: previous?.chosenId ?? null,
     chapter: world.chapter,
+    tags: [...new Set([...world.tags, ...await questVictoryTags(env.DB, world.id)])],
     optionIds: day.optionIds,
     myVote: mine?.optionId ?? null,
     chosenId: day.chosenId,

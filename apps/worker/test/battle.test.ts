@@ -449,19 +449,21 @@ describe('複数日がまとめて締まったとき', () => {
       `INSERT INTO votes (world_id, day_no, player_id, option_id, voted_at) VALUES (?, 1, ?, 'banditAmbush', ?)`,
     ).bind(WORLD, PLAYER_A, startedAt).run();
 
-    // 3日ぶんまとめて締める。1日目は戦闘、2日目以降は投票が無いのでシードで決まる
-    // 別の選択肢になる（非戦闘イベントを足した今の抽選では2日目はたまたま戦闘
-    // （banditAmbush）、3日目は非戦闘（travelingBard）を引く。どちらに転んでも
-    // 「指定した日がちゃんと引ける」ことは変わらない）。
+    // 3日ぶんまとめて締める。無投票の日の戦闘種別は保存された抽選結果に従う。
     const { catchUp } = await import('../src/close.js');
     const closed = await catchUp(env.DB, WORLD, new Date('2026-09-04T00:00:00.000Z'));
     expect(closed).toBeGreaterThan(1);
 
-    // 3日目を指定すれば非戦闘（このシードでは travelingBard）。
+    // 3日目の応答は、実際に保存された選択肢の戦闘種別に一致する。
     const day2 = await (await battleRequest(TOKEN_A, 'GET', undefined, 3)).json() as {
       data: { hasBattle: boolean; dayNo: number };
     };
-    expect(day2.data.hasBattle).toBe(false);
+    const { getDay } = await import('../src/store.js');
+    const { EVENTS } = await import('@mq/core');
+    const saved = await getDay(env.DB, WORLD, 3);
+    const expected = Object.values(EVENTS).find((event) => event.id === saved?.chosenId);
+    expect(expected).toBeDefined();
+    expect(day2.data.hasBattle).toBe(expected?.kind === 'battle');
     expect(day2.data.dayNo).toBe(3);
 
     // 1日目を指定すれば挑める。ここが飛ぶと、離れていた間の戦いが失われる。
@@ -575,5 +577,29 @@ describe('ペットの有無が戦闘に届いているか', () => {
     const events = await fightWithFang();
     expect(events.some((e) => e.t === 'skip' && e.reason === 'noPet')).toBe(false);
     expect(events.some((e) => e.t === 'act' && (e as { skillId?: string }).skillId === 'petFang')).toBe(true);
+  });
+});
+
+describe('依頼の勝利フラグ', () => {
+  it('投票確定や敗北では付かず、実際の勝利だけが世界全体に伝わる', async () => {
+    await seedWorld(3, 'millBoar');
+    await addPlayer(PLAYER_A, TOKEN_A);
+    await seedWinningHero(PLAYER_A, HERO_A);
+    const { questVictoryTags } = await import('../src/questProgress.js');
+    expect(await questVictoryTags(env.DB, WORLD)).toEqual([]);
+    await battleRequest(TOKEN_A, 'POST', { [HERO_A]: Array(8).fill(null) });
+    expect(await questVictoryTags(env.DB, WORLD)).toEqual([]);
+    const result = await readOk<{ log: BattleLog }>(await battleRequest(TOKEN_A, 'POST', { [HERO_A]: WINNING_PLAN }));
+    expect(result.log.result).toBe('win');
+    expect(await questVictoryTags(env.DB, WORLD)).toEqual(['q-mill-won']);
+    expect(await questVictoryTags(env.DB, 'another-world')).toEqual([]);
+  });
+  it('章ボスを倒しても依頼戦を倒した扱いにはしない', async () => {
+    await seedWorld(7, 'millBoar');
+    await addPlayer(PLAYER_A, TOKEN_A);
+    await seedWinningHero(PLAYER_A, HERO_A);
+    await battleRequest(TOKEN_A, 'POST', { [HERO_A]: WINNING_PLAN });
+    const { questVictoryTags } = await import('../src/questProgress.js');
+    expect(await questVictoryTags(env.DB, WORLD)).toEqual([]);
   });
 });
