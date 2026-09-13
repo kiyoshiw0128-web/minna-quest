@@ -59,7 +59,7 @@ section > h2:first-child { margin-top: 0; }
 .brand-sigil { color: #ffe186; }
 .brand small { display: block; font-size: .62rem; letter-spacing: .08em; font-weight: 400; color: #e2ecff; }
 .header-note { display: none; }
-.main-nav { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 4px; padding: 8px 0 12px; border-bottom: 4px ridge #aed1ef; margin-bottom: 8px; }
+.main-nav { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 4px; padding: 8px 0 12px; border-bottom: 4px ridge #aed1ef; margin-bottom: 8px; }
 .main-nav button { padding: 4px 1px; font-size: .82rem; }
 .main-nav button[aria-current='true'] { color: #362503; background: #ffdf80; }
 .app-footer { border-top: 4px ridge #aed1ef; margin-top: 24px; padding-top: 12px; text-align: center; color: #dae7ff; font-size: .8rem; }
@@ -189,3 +189,6 @@ div:has(> table), details:has(> table) { overflow-x: auto; }
 .quest-journal li { border-bottom: 1px solid var(--line); padding: 8px 0; }
 .quest-journal strong { color: var(--accent); }
 .quest-journal p { margin: 4px 0; font-size: .85rem; }
+
+.equipment-character { display: block; margin: 16px 0 8px; }
+.equipment-character select { display: block; width: 100%; margin-top: 6px; }

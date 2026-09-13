@@ -1,6 +1,8 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
+import { EquipmentScreen } from '../src/screens/EquipmentScreen.js';
+import { ShopScreen } from '../src/screens/ShopScreen.js';
 import { PartyScreen } from '../src/screens/PartyScreen.js';
 import { jsonResponse, installFetchMock } from './mockFetch.js';
 
@@ -266,13 +268,11 @@ describe('仲間画面（設計書 §5）', () => {
     });
     const user = userEvent.setup();
 
-    render(<PartyScreen token="t" onUnauthorized={vi.fn()} />);
-    await user.click(await screen.findByText(/ゆうしゃ/));
+    render(<EquipmentScreen token="t" onUnauthorized={vi.fn()} />);
+    await screen.findByRole('heading', { name: 'ゆうしゃ' });
 
     await user.click(screen.getByLabelText('挑発をアクティブに装備'));
-    // 段階8で武器・防具の装備パネルにも同名のボタンが増えたため、
-    // 先に描画されるアクティブ技/パッシブの装備パネル側（1つ目）を狙う。
-    await user.click(screen.getAllByRole('button', { name: '装備を更新する' })[0]);
+    await user.click(screen.getByRole('button', { name: 'スキルを保存' }));
 
     await waitFor(() => {
       const call = vi.mocked(fetch).mock.calls.find(([, init]) => init?.method === 'POST'
@@ -353,14 +353,12 @@ describe('装備の更新でパッシブが消えない', () => {
       'POST /api/equip': jsonResponse(200, { ok: true, data: {} }),
     });
 
-    render(<PartyScreen token="t" onUnauthorized={vi.fn()} />);
-    await screen.findByText(/所持金/);
+    render(<EquipmentScreen token="t" onUnauthorized={vi.fn()} />);
+    await screen.findByRole('combobox', { name: '設定する仲間' });
 
     // アクティブ技をもう1つ足すだけ。パッシブには触らない。
     await userEvent.click(screen.getByLabelText(/挑発をアクティブに装備/));
-    // 段階8の武器・防具パネルにも同名ボタンが増えたため、1つ目（アクティブ/
-    // パッシブの装備パネル）を狙う。
-    await userEvent.click(screen.getAllByRole('button', { name: '装備を更新する' })[0]);
+    await userEvent.click(screen.getByRole('button', { name: 'スキルを保存' }));
 
     const call = (fetch as unknown as { mock: { calls: unknown[][] } }).mock.calls
       .find((c) => String(c[0]).includes('/api/equip') && !String(c[0]).includes('/api/equip-item'));
@@ -479,8 +477,8 @@ describe('ペットが要る技の表示', () => {
       'GET /api/shop': shopResponse(),
     });
 
-    render(<PartyScreen token="t" onUnauthorized={vi.fn()} />);
-    await screen.findByText(/所持金/);
+    render(<EquipmentScreen token="t" onUnauthorized={vi.fn()} />);
+    await screen.findByRole('combobox', { name: '設定する仲間' });
     expect(screen.getByText(/要ペット/)).toBeInTheDocument();
   });
 });
@@ -503,7 +501,7 @@ describe('店（設計書 §6・§7）', () => {
       'GET /api/shop': shopWithRustedSword(),
     });
 
-    render(<PartyScreen token="t" onUnauthorized={vi.fn()} />);
+    render(<ShopScreen token="t" onUnauthorized={vi.fn()} />);
     expect(await screen.findByText(/錆びた剣/)).toBeInTheDocument();
     expect(screen.getByText(/ATK \+3/)).toBeInTheDocument();
     // 値段は「100G」、足りない場合は不足額を添える。同じ文言を品数だけ
@@ -522,7 +520,7 @@ describe('店（設計書 §6・§7）', () => {
     });
     const user = userEvent.setup();
 
-    render(<PartyScreen token="t" onUnauthorized={vi.fn()} />);
+    render(<ShopScreen token="t" onUnauthorized={vi.fn()} />);
     const buyButton = await screen.findByRole('button', { name: '買う' });
     expect(buyButton).toBeEnabled();
     await user.click(buyButton);
@@ -570,12 +568,11 @@ describe('装備パネル（設計書 §7）', () => {
     });
     const user = userEvent.setup();
 
-    render(<PartyScreen token="t" onUnauthorized={vi.fn()} />);
-    await user.click(await screen.findByText(/ゆうしゃ/));
+    render(<EquipmentScreen token="t" onUnauthorized={vi.fn()} />);
+    await screen.findByRole('heading', { name: 'ゆうしゃ' });
 
     await user.click(screen.getByLabelText(/錆びた剣/));
-    // 装備パネル側の「装備を更新する」（アクティブ/パッシブのパネルより後に描画される2つ目）。
-    await user.click(screen.getAllByRole('button', { name: '装備を更新する' })[1]);
+    await user.click(screen.getByRole('button', { name: '武器・防具を保存' }));
 
     await waitFor(() => {
       const call = vi.mocked(fetch).mock.calls.find(([url, init]) => init?.method === 'POST'
@@ -592,11 +589,65 @@ describe('装備パネル（設計書 §7）', () => {
       'GET /api/shop': shopResponse(),
     });
 
-    render(<PartyScreen token="t" onUnauthorized={vi.fn()} />);
-    await userEvent.click(await screen.findByText(/ゆうしゃ/));
+    render(<EquipmentScreen token="t" onUnauthorized={vi.fn()} />);
+    await screen.findByRole('heading', { name: 'ゆうしゃ' });
 
     const swordOption = screen.getByLabelText(/錆びた剣/) as HTMLInputElement;
     expect(swordOption.checked).toBe(true);
     expect(swordOption).not.toBeDisabled();
+  });
+});
+
+describe('仲間・装備・店の分離', () => {
+  it('仲間画面は店の通信に依存せず、購入や装備フォームを表示しない', async () => {
+    installFetchMock({
+      'GET /api/me': meResponse(500),
+      'GET /api/tavern': tavernResponse(),
+    });
+    render(<PartyScreen token="t" onUnauthorized={vi.fn()} />);
+    await userEvent.click(await screen.findByText(/ゆうしゃ/));
+    expect(screen.queryByRole('button', { name: '買う' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'スキルを保存' })).not.toBeInTheDocument();
+    expect(vi.mocked(fetch).mock.calls.some(([url]) => String(url).includes('/api/shop'))).toBe(false);
+  });
+
+  it('選んだ仲間に保存し、保存後も仲間の選択と未保存の技を保つ', async () => {
+    const payload = await meResponseTwoMembers(500).json();
+    payload.data.items = ['rustedSword'];
+    payload.data.party[1].learnedSkillIds = ['slash', 'provoke'];
+    const saved = structuredClone(payload);
+    saved.data.party[1].equippedWeaponId = 'rustedSword';
+    installFetchMock({
+      'GET /api/me': [jsonResponse(200, payload), jsonResponse(200, saved)],
+      'POST /api/equip-item': jsonResponse(200, { ok: true, data: {} }),
+    });
+    const user = userEvent.setup();
+    render(<EquipmentScreen token="t" onUnauthorized={vi.fn()} />);
+    await user.selectOptions(await screen.findByRole('combobox'), 'hire1');
+    await user.click(screen.getByLabelText('挑発をアクティブに装備'));
+    await user.click(screen.getByLabelText(/錆びた剣/));
+    await user.click(screen.getByRole('button', { name: '武器・防具を保存' }));
+    expect(await screen.findByRole('status')).toHaveTextContent('武器・防具を保存しました');
+    expect(screen.getByRole('combobox')).toHaveValue('hire1');
+    expect(screen.getByLabelText('挑発をアクティブに装備')).toBeChecked();
+    const call = vi.mocked(fetch).mock.calls.find(([url, init]) => String(url).endsWith('/api/equip-item') && init?.method === 'POST');
+    expect(JSON.parse(String(call?.[1]?.body))).toEqual({ characterId: 'hire1', weaponId: 'rustedSword', armorId: null });
+    await user.selectOptions(screen.getByRole('combobox'), 'hero1');
+    expect(screen.getByLabelText(/錆びた剣/)).toBeDisabled();
+    expect(screen.getByLabelText(/錆びた剣/)).not.toBeChecked();
+    expect(screen.queryByLabelText('挑発をアクティブに装備')).not.toBeInTheDocument();
+  });
+
+  it('保存に失敗しても選択を残し、成功したとは表示しない', async () => {
+    installFetchMock({
+      'GET /api/me': meResponseWithProvoke(500),
+      'POST /api/equip': jsonResponse(400, { ok: false, error: '保存できませんでした' }),
+    });
+    render(<EquipmentScreen token="t" onUnauthorized={vi.fn()} />);
+    await userEvent.click(await screen.findByLabelText('挑発をアクティブに装備'));
+    await userEvent.click(screen.getByRole('button', { name: 'スキルを保存' }));
+    expect(await screen.findByRole('alert')).toHaveTextContent('保存できませんでした');
+    expect(screen.getByLabelText('挑発をアクティブに装備')).toBeChecked();
+    expect(screen.queryByRole('status')).not.toBeInTheDocument();
   });
 });

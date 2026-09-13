@@ -1,14 +1,16 @@
 import { useCallback, useEffect, useState } from 'react';
 import type { FormEvent } from 'react';
-import { ARMORS, JOBS, PASSIVES, PETS, SKILLS, WEAPONS, applyEquipment } from '@mq/core';
+import { JOBS, PASSIVES, PETS, SKILLS } from '@mq/core';
 import type {
-  Aptitude, DamageSpec, Effect, Element, Equipment, Job, LearnEntry, Passive, Pet, Recruit, Skill, StatBlock,
+  Aptitude, Job, LearnEntry, Pet, Recruit,
 } from '@mq/core';
 import {
-  ApiError, UnauthorizedError, buyItem, changeCharacterJob, dismissCharacter, fetchMe, fetchShop, fetchTavern,
-  hireRecruit, registerEmail, reorderParty, setActivePet, updateCharacterEquipmentItems, updateEquipment,
+  ApiError, UnauthorizedError, changeCharacterJob, dismissCharacter, fetchMe, fetchTavern,
+  hireRecruit, registerEmail, reorderParty, setActivePet,
 } from '../api.js';
-import type { MeResult, MePartyMember, ShopResult, TavernResult } from '../api.js';
+import type { MeResult, MePartyMember, TavernResult } from '../api.js';
+
+import { effectLabel, StatGrid, STAT_ORDER, STAT_SHORT } from './partyDisplay.js';
 
 type Props = {
   token: string;
@@ -18,13 +20,10 @@ type Props = {
 type LoadState =
   | { kind: 'loading' }
   | { kind: 'error'; message: string }
-  | { kind: 'loaded'; me: MeResult; tavern: TavernResult; shop: ShopResult };
+  | { kind: 'loaded'; me: MeResult; tavern: TavernResult };
 
 /** 雇用は同時に1件まで。複数のボタンを連打されても二重に送らせない。 */
 type HireState = { kind: 'idle' } | { kind: 'hiring'; recruitId: string } | { kind: 'error'; message: string };
-
-/** 装備の購入も雇用と同じく同時に1件まで。 */
-type BuyState = { kind: 'idle' } | { kind: 'buying'; itemId: string } | { kind: 'error'; message: string };
 
 /**
  * 転職・装備・並べ替え・解雇に共通の実行状態。key で「今どの操作が動いているか
@@ -43,81 +42,6 @@ function jobName(jobId: string): string {
 
 function skillName(skillId: string): string {
   return SKILLS[skillId as keyof typeof SKILLS]?.name ?? skillId;
-}
-
-const ELEMENT_LABEL: Record<Element, string> = {
-  none: 'なし', fire: '火', ice: '氷', thunder: '雷', holy: '光', dark: '闇',
-};
-
-/**
- * 技の「威力」欄。BattleScreen.tsx の damageLabel と同じ内容だが、
- * どちらもファイル内で完結する短い関数なので、共有ヘルパーに切り出すほどの
- * 重複ではないと判断してそのまま複製している（apps/worker/src/routes/me.ts の
- * jobOf に同じ考え方のコメントがある）。
- */
-function damageLabel(damage: DamageSpec | undefined): string {
-  if (damage === undefined) return '-';
-  switch (damage.kind) {
-    case 'physical':
-      return `物理 ${damage.power}`;
-    case 'magical':
-      return `魔法 ${damage.power}`;
-    case 'fixed':
-      return `固定 ${damage.amount}`;
-    case 'ratio':
-      return `残HPの${damage.percent}%（上限${damage.cap}）`;
-  }
-}
-
-const STAT_LABEL: Record<string, string> = { atk: 'ATK', def: 'DEF', mat: 'MAT', mdf: 'MDF', spd: 'SPD' };
-
-/** 装備の効果欄用。パッシブ・ペットと違いStatBlockの全項目（maxHp等）を持ちうる。 */
-const EQUIP_STAT_LABEL: Record<keyof StatBlock, string> = {
-  maxHp: 'HP', maxMp: 'MP', atk: 'ATK', def: 'DEF', mat: 'MAT', mdf: 'MDF', spd: 'SPD',
-};
-
-/** 装備1つの効果を数字で出す（設計書 §7「効果を数字で出す」）。加算のみなので符号は常に+。 */
-function equipmentModsLabel(item: Equipment): string {
-  return (Object.entries(item.mods) as Array<[keyof StatBlock, number]>)
-    .map(([key, value]) => `${EQUIP_STAT_LABEL[key]} +${value}`)
-    .join('・');
-}
-
-/** そのプレイヤーが持つ装備IDごとの所持数。同じIDを複数買えるので集計が要る（設計書 §6）。 */
-function ownedItemCounts(itemIds: readonly string[]): Record<string, number> {
-  const counts: Record<string, number> = {};
-  for (const id of itemIds) counts[id] = (counts[id] ?? 0) + 1;
-  return counts;
-}
-
-/**
- * 指定したキャラを除く、パーティ内の他キャラが今つけている装備の個数。
- * 所持数からこれを引いた分だけ「まだ付け替えに回せる」（設計書 §8 テスト5）。
- */
-function equippedElsewhereCounts(party: readonly MePartyMember[], excludeCharacterId: string): Record<string, number> {
-  const counts: Record<string, number> = {};
-  for (const member of party) {
-    if (member.id === excludeCharacterId) continue;
-    if (member.equippedWeaponId != null) counts[member.equippedWeaponId] = (counts[member.equippedWeaponId] ?? 0) + 1;
-    if (member.equippedArmorId != null) counts[member.equippedArmorId] = (counts[member.equippedArmorId] ?? 0) + 1;
-  }
-  return counts;
-}
-
-/**
- * 効果を数字で出す（設計書 §7「効果を数字で出す。曖昧にしない」）。
- * パッシブとペットは同じ Effect 型で表されている（設計書 §2）ので、
- * ラベル化のロジックも1つで足りる。
- */
-function effectLabel(effect: Effect): string {
-  if (effect.kind === 'statMod') return `${STAT_LABEL[effect.stat] ?? effect.stat} +${Math.round(effect.rate * 100)}%`;
-  if (effect.kind === 'damageTaken') return `被ダメージ ${Math.round(effect.rate * 100)}%`;
-  return `${effect.turns}ターン行動不能`;
-}
-
-/** パッシブは常時効果なので、MP・クールダウンの代わりに効果そのものを短く出す。 */
-function passiveEffectLabel(passive: Passive): string {
-  return effectLabel(passive.effect);
 }
 
 /** ペットの効果欄。パッシブと同じ書式にする（設計書 §7）。 */
@@ -145,14 +69,13 @@ function requirementText(job: Job): string {
 export function PartyScreen({ token, onUnauthorized }: Props) {
   const [load, setLoad] = useState<LoadState>({ kind: 'loading' });
   const [hireState, setHireState] = useState<HireState>({ kind: 'idle' });
-  const [buyState, setBuyState] = useState<BuyState>({ kind: 'idle' });
   const [actionState, setActionState] = useState<ActionState>({ kind: 'idle' });
 
   const reload = useCallback(async () => {
     setLoad({ kind: 'loading' });
     try {
-      const [me, tavern, shop] = await Promise.all([fetchMe(token), fetchTavern(token), fetchShop(token)]);
-      setLoad({ kind: 'loaded', me, tavern, shop });
+      const [me, tavern] = await Promise.all([fetchMe(token), fetchTavern(token)]);
+      setLoad({ kind: 'loaded', me, tavern });
     } catch (error) {
       if (error instanceof UnauthorizedError) {
         onUnauthorized();
@@ -167,13 +90,7 @@ export function PartyScreen({ token, onUnauthorized }: Props) {
     void reload();
   }, [reload]);
 
-  /**
-   * 転職・装備・並べ替え・解雇の共通の実行経路。成功したら読み直す（設計書の
-   * どの操作も「サーバの判定結果がそのまま最新の状態」なので、楽観的更新は
-   * せずサーバに聞き直す方が安全）。読み直し中に画面全体が「読み込み中」に
-   * 戻ることはない（reload はここから呼ばずactionState経由のときだけ
-   * loaded のまま留める）ため、選択途中の他の入力を壊さない。
-   */
+  /** 操作成功後はサーバから最新の編成を読み直す。 */
   async function runAction(key: string, fn: () => Promise<unknown>): Promise<void> {
     setActionState({ kind: 'busy', key });
     try {
@@ -207,23 +124,6 @@ export function PartyScreen({ token, onUnauthorized }: Props) {
     }
   }
 
-  async function handleBuy(itemId: string): Promise<void> {
-    setBuyState({ kind: 'buying', itemId });
-    try {
-      await buyItem(token, itemId);
-      setBuyState({ kind: 'idle' });
-      await reload();
-    } catch (error) {
-      if (error instanceof UnauthorizedError) {
-        onUnauthorized();
-        return;
-      }
-      // 金貨不足はサーバの文言をそのまま出す（設計書 §6）。
-      const message = error instanceof ApiError ? error.message : '通信に失敗しました';
-      setBuyState({ kind: 'error', message });
-    }
-  }
-
   if (load.kind === 'loading') {
     return (
       <main>
@@ -245,7 +145,7 @@ export function PartyScreen({ token, onUnauthorized }: Props) {
     );
   }
 
-  const { me, tavern, shop } = load;
+  const { me, tavern } = load;
   const partyFull = me.party.length >= 4;
   const busy = actionState.kind === 'busy';
 
@@ -265,6 +165,7 @@ export function PartyScreen({ token, onUnauthorized }: Props) {
   return (
     <main>
       <h1>仲間</h1>
+      <p>編成・転職・育成はここで。武器や技の付け替えは「装備・スキル」、購入は「店」へ。</p>
       <p>所持金: {me.gold} ゴールド</p>
 
       <RestoreKey token={token} />
@@ -281,8 +182,6 @@ export function PartyScreen({ token, onUnauthorized }: Props) {
           <PartyMemberCard
             key={member.id}
             member={member}
-            party={me.party}
-            items={me.items ?? []}
             index={index}
             partySize={me.party.length}
             busy={busy}
@@ -291,13 +190,6 @@ export function PartyScreen({ token, onUnauthorized }: Props) {
             onDismiss={() => void runAction(`dismiss:${member.id}`, () => dismissCharacter(token, member.id))}
             onChangeJob={(jobId) =>
               void runAction(`job:${member.id}`, () => changeCharacterJob(token, member.id, jobId))
-            }
-            onUpdateEquipment={(activeIds, passiveIds) =>
-              void runAction(`equip:${member.id}`, () => updateEquipment(token, member.id, activeIds, passiveIds))
-            }
-            onUpdateEquipmentItems={(weaponId, armorId) =>
-              void runAction(`equip-item:${member.id}`, () =>
-                updateCharacterEquipmentItems(token, member.id, weaponId, armorId))
             }
           />
         ))}
@@ -309,14 +201,6 @@ export function PartyScreen({ token, onUnauthorized }: Props) {
         busy={busy}
         error={errorFor('pet')}
         onSelect={(petId) => void runAction('pet', () => setActivePet(token, petId))}
-      />
-
-      <ShopSection
-        shopItems={shop.items}
-        gold={me.gold}
-        busy={buyState.kind === 'buying'}
-        error={buyState.kind === 'error' ? buyState.message : null}
-        onBuy={(itemId) => void handleBuy(itemId)}
       />
 
       <section>
@@ -341,8 +225,6 @@ export function PartyScreen({ token, onUnauthorized }: Props) {
 
 function PartyMemberCard({
   member,
-  party,
-  items,
   index,
   partySize,
   busy,
@@ -350,12 +232,8 @@ function PartyMemberCard({
   onMove,
   onDismiss,
   onChangeJob,
-  onUpdateEquipment,
-  onUpdateEquipmentItems,
 }: {
   member: MePartyMember;
-  party: readonly MePartyMember[];
-  items: readonly string[];
   index: number;
   partySize: number;
   busy: boolean;
@@ -363,8 +241,6 @@ function PartyMemberCard({
   onMove: (direction: -1 | 1) => void;
   onDismiss: () => void;
   onChangeJob: (jobId: string) => void;
-  onUpdateEquipment: (activeIds: string[], passiveIds: string[]) => void;
-  onUpdateEquipmentItems: (weaponId: string | null, armorId: string | null) => void;
 }) {
   const dismissError = errorFor(`dismiss:${member.id}`);
 
@@ -399,15 +275,6 @@ function PartyMemberCard({
       {dismissError !== null && <p role="alert">{dismissError}</p>}
 
       <JobPanel member={member} busy={busy} error={errorFor(`job:${member.id}`)} onChangeJob={onChangeJob} />
-      <EquipPanel member={member} busy={busy} error={errorFor(`equip:${member.id}`)} onSave={onUpdateEquipment} />
-      <EquipmentItemPanel
-        member={member}
-        party={party}
-        items={items}
-        busy={busy}
-        error={errorFor(`equip-item:${member.id}`)}
-        onSave={onUpdateEquipmentItems}
-      />
     </details>
   );
 }
@@ -517,281 +384,6 @@ function JobOption({
  * アクティブもパッシブも、いま装備しているものを初期値に置く。ここを
  * 空から始めると、パッシブを触らずに更新しただけで装備が消える。
  */
-function EquipPanel({
-  member,
-  busy,
-  error,
-  onSave,
-}: {
-  member: MePartyMember;
-  busy: boolean;
-  error: string | null;
-  onSave: (activeIds: string[], passiveIds: string[]) => void;
-}) {
-  const [activeIds, setActiveIds] = useState<string[]>(member.equippedSkillIds);
-  const [passiveIds, setPassiveIds] = useState<string[]>(member.equippedPassiveIds);
-  const learnedPassiveIds = member.learnedPassiveIds;
-
-  function toggle(ids: string[], setIds: (ids: string[]) => void, id: string, max: number): void {
-    if (ids.includes(id)) {
-      setIds(ids.filter((existing) => existing !== id));
-      return;
-    }
-    if (ids.length >= max) return; // 上限に達した枠はチェックボックスをdisabledにして防ぐ。
-    setIds([...ids, id]);
-  }
-
-  return (
-    <section>
-      <h3>装備（アクティブ {activeIds.length} / 6・パッシブ {passiveIds.length} / 2）</h3>
-
-      <h4>アクティブ技</h4>
-      {member.learnedSkillIds.length === 0 && <p>まだ技を習得していません。</p>}
-      <table>
-        <thead>
-          <tr>
-            <th scope="col" />
-            <th scope="col">技</th>
-            <th scope="col">MP</th>
-            <th scope="col">クールダウン</th>
-            <th scope="col">威力</th>
-            <th scope="col">属性</th>
-          </tr>
-        </thead>
-        <tbody>
-          {member.learnedSkillIds.map((skillId) => {
-            const skill = SKILLS[skillId as keyof typeof SKILLS] as Skill | undefined;
-            if (skill === undefined) return null;
-            const checked = activeIds.includes(skillId);
-            return (
-              <tr key={skillId}>
-                <td>
-                  <input
-                    type="checkbox"
-                    aria-label={`${skill.name}をアクティブに装備`}
-                    checked={checked}
-                    disabled={busy || (!checked && activeIds.length >= 6)}
-                    onChange={() => toggle(activeIds, setActiveIds, skillId, 6)}
-                  />
-                </td>
-                <td>
-                  {skill.name}
-                  {/* 装備を選ぶ画面でも、ペットが要ることは見えていないと選べない。 */}
-                  {skill.requiresPet === true && '（要ペット）'}
-                </td>
-                <td>{skill.mpCost}</td>
-                <td>{skill.cooldown === 0 ? '無し' : `${skill.cooldown}ターン`}</td>
-                <td>{damageLabel(skill.damage)}</td>
-                <td>{ELEMENT_LABEL[skill.element]}</td>
-              </tr>
-            );
-          })}
-        </tbody>
-      </table>
-
-      <h4>パッシブ</h4>
-      {learnedPassiveIds.length === 0 && <p>まだパッシブを習得していません。</p>}
-      <table>
-        <thead>
-          <tr>
-            <th scope="col" />
-            <th scope="col">パッシブ</th>
-            <th scope="col">効果</th>
-          </tr>
-        </thead>
-        <tbody>
-          {learnedPassiveIds.map((passiveId) => {
-            const passive = PASSIVES[passiveId as keyof typeof PASSIVES];
-            if (passive === undefined) return null;
-            const checked = passiveIds.includes(passiveId);
-            return (
-              <tr key={passiveId}>
-                <td>
-                  <input
-                    type="checkbox"
-                    aria-label={`${passive.name}をパッシブに装備`}
-                    checked={checked}
-                    disabled={busy || (!checked && passiveIds.length >= 2)}
-                    onChange={() => toggle(passiveIds, setPassiveIds, passiveId, 2)}
-                  />
-                </td>
-                <td>{passive.name}</td>
-                <td>{passiveEffectLabel(passive)}</td>
-              </tr>
-            );
-          })}
-        </tbody>
-      </table>
-
-      <button type="button" disabled={busy} onClick={() => onSave(activeIds, passiveIds)}>
-        装備を更新する
-      </button>
-      {error !== null && <p role="alert">{error}</p>}
-    </section>
-  );
-}
-
-/**
- * 武器・防具の装備パネル（段階8・設計書 §7）。
- *
- * 「なし」を含む選択式（ラジオボタン）にしてあるのは、武器1・防具1の枠しか
- * 無く、アクティブ技のような複数選択の余地が無いため。選ぶたびに、
- * その組み合わせで実際どれだけ能力が上がるかを数字で出す
- * （設計書 §7「能力がいくつ上がるかを数字で出す」）。
- *
- * 「あと何個装備に回せるか」はサーバから来る所持数（items）と、パーティ内の
- * 他キャラの装備状況（party）から画面側で数える。所持数を超えて複数人に
- * 付けようとする選択肢はここで disabled にする（実際の可否はサーバのSQLが
- * 最終的に守るので、これは案内であって防御ではない。設計書 §8 テスト5）。
- */
-function EquipmentItemPanel({
-  member,
-  party,
-  items,
-  busy,
-  error,
-  onSave,
-}: {
-  member: MePartyMember;
-  party: readonly MePartyMember[];
-  items: readonly string[];
-  busy: boolean;
-  error: string | null;
-  onSave: (weaponId: string | null, armorId: string | null) => void;
-}) {
-  const [weaponId, setWeaponId] = useState<string | null>(member.equippedWeaponId ?? null);
-  const [armorId, setArmorId] = useState<string | null>(member.equippedArmorId ?? null);
-
-  const owned = ownedItemCounts(items);
-  const elsewhere = equippedElsewhereCounts(party, member.id);
-
-  function availableCount(itemId: string): number {
-    return (owned[itemId] ?? 0) - (elsewhere[itemId] ?? 0);
-  }
-
-  const ownedWeaponIds = Object.keys(WEAPONS).filter((id) => (owned[id] ?? 0) > 0);
-  const ownedArmorIds = Object.keys(ARMORS).filter((id) => (owned[id] ?? 0) > 0);
-
-  // 装備前の実効ステータスを基準に、選んでいる組み合わせでの見込み値を出す。
-  // baseStats はサーバ（段階8で足した項目）が返す。古い応答（テストのモック等）
-  // には無いことがあるので、その場合は現在のstats（装備込み）で代用する。
-  const base = member.baseStats ?? member.stats;
-  const previewWeapon = weaponId === null ? null : WEAPONS[weaponId as keyof typeof WEAPONS] ?? null;
-  const previewArmor = armorId === null ? null : ARMORS[armorId as keyof typeof ARMORS] ?? null;
-  const preview = applyEquipment(base, previewWeapon, previewArmor);
-
-  function equipmentOption(
-    id: string | null,
-    name: string,
-    modsLabel: string,
-    groupName: string,
-    current: string | null,
-    selected: string | null,
-    onSelect: (id: string | null) => void,
-  ) {
-    const isCurrent = id !== null && current === id;
-    const canSelect = id === null || isCurrent || availableCount(id) > 0;
-    return (
-      <li key={id ?? 'none'}>
-        <label>
-          <input
-            type="radio"
-            name={groupName}
-            checked={selected === id}
-            disabled={busy || !canSelect}
-            onChange={() => onSelect(id)}
-          />
-          {name}
-          {modsLabel !== '' && `（${modsLabel}）`}
-          {id !== null && !canSelect && '　他のキャラが装備中で所持数が足りません'}
-        </label>
-      </li>
-    );
-  }
-
-  return (
-    <section>
-      <h3>装備</h3>
-      {/* 装備を選び直した結果を、いまの値との差付きで出す。差が見えないと
-          「この剣に替えると何がどれだけ上がるのか」を暗算することになる。 */}
-      <StatGrid stats={preview} diff={member.stats} />
-
-      <h4>武器</h4>
-      {ownedWeaponIds.length === 0 && <p>まだ武器を持っていません。店で買えます。</p>}
-      <ul>
-        {equipmentOption(null, 'なし', '', `weapon-${member.id}`, member.equippedWeaponId ?? null, weaponId, setWeaponId)}
-        {ownedWeaponIds.map((id) => {
-          const item = WEAPONS[id as keyof typeof WEAPONS];
-          return equipmentOption(
-            id, item.name, equipmentModsLabel(item), `weapon-${member.id}`,
-            member.equippedWeaponId ?? null, weaponId, setWeaponId,
-          );
-        })}
-      </ul>
-
-      <h4>防具</h4>
-      {ownedArmorIds.length === 0 && <p>まだ防具を持っていません。店で買えます。</p>}
-      <ul>
-        {equipmentOption(null, 'なし', '', `armor-${member.id}`, member.equippedArmorId ?? null, armorId, setArmorId)}
-        {ownedArmorIds.map((id) => {
-          const item = ARMORS[id as keyof typeof ARMORS];
-          return equipmentOption(
-            id, item.name, equipmentModsLabel(item), `armor-${member.id}`,
-            member.equippedArmorId ?? null, armorId, setArmorId,
-          );
-        })}
-      </ul>
-
-      <button type="button" disabled={busy} onClick={() => onSave(weaponId, armorId)}>
-        装備を更新する
-      </button>
-      {error !== null && <p role="alert">{error}</p>}
-    </section>
-  );
-}
-
-/**
- * 店（段階8・設計書 §6・§7）。値段と効果を出し、買えない場合は理由
- * （金貨不足）をそのまま出す。品揃えは全員共通・日替わりにしない
- * （worker/src/routes/shop.ts）。
- */
-/** 能力の並び順。表示は常にこの順にする。順が揺れると見比べられない。 */
-const STAT_ORDER: readonly (keyof StatBlock)[] = ['maxHp', 'maxMp', 'atk', 'def', 'mat', 'mdf', 'spd'];
-
-const STAT_SHORT: Readonly<Record<keyof StatBlock, string>> = {
-  maxHp: 'HP', maxMp: 'MP', atk: 'ATK', def: 'DEF', mat: 'MAT', mdf: 'MDF', spd: 'SPD',
-};
-
-/**
- * 能力値の一覧。
- *
- * 「HP 128 / MP 20 / ATK 15 / ...」と1行に流していたが、7項目が横に繋がると
- * どれがどれだか目で追えない。項目名の下に数字を置いた格子にして、
- * 縦の位置で項目を探せるようにする。装備の前後を見比べるのもこの形なら効く。
- */
-function StatGrid({ stats, diff }: { stats: StatBlock; diff?: StatBlock }) {
-  return (
-    <dl className="stat-grid">
-      {STAT_ORDER.map((key) => {
-        const delta = diff === undefined ? 0 : stats[key] - diff[key];
-        return (
-          <div key={key} className="stat-cell">
-            <dt>{STAT_SHORT[key]}</dt>
-            <dd>
-              {stats[key]}
-              {delta !== 0 && (
-                <span className={delta > 0 ? 'stat-up' : 'stat-down'}>
-                  {delta > 0 ? `+${delta}` : delta}
-                </span>
-              )}
-            </dd>
-          </div>
-        );
-      })}
-    </dl>
-  );
-}
-
 /**
  * 素質。A〜Eのまま出す（数字に直さない。エンジンがこの粒度で持っている）。
  * 等級で色を変えるのは、7項目を読んで良し悪しを判断する場面だから。
@@ -807,63 +399,6 @@ function AptitudeGrid({ aptitude }: { aptitude: Aptitude }) {
         </div>
       ))}
     </dl>
-  );
-}
-
-function ShopSection({
-  shopItems,
-  gold,
-  busy,
-  error,
-  onBuy,
-}: {
-  shopItems: readonly Equipment[];
-  gold: number;
-  busy: boolean;
-  error: string | null;
-  onBuy: (itemId: string) => void;
-}) {
-  /**
-   * 武器と防具に分け、それぞれ値段順に並べる。
-   *
-   * 20品を1列に流していたため、武器と防具が混ざり、しかも買えない品ごとに
-   * 「金貨が足りません」が並んで20回出ていた。同じ文が20回出るのは、
-   * 1回も読まれないのと同じである。買えるかどうかは押せるかどうかで示し、
-   * 足りない額だけを添える。
-   */
-  const groups: { label: string; items: Equipment[] }[] = [
-    { label: '武器', items: shopItems.filter((i) => i.slot === 'weapon') },
-    { label: '防具', items: shopItems.filter((i) => i.slot === 'armor') },
-  ];
-
-  return (
-    <section>
-      <h2>店</h2>
-      {error !== null && <p role="alert">{error}</p>}
-      {groups.map((group) => (
-        <div key={group.label}>
-          <h3>{group.label}</h3>
-          <ul className="shelf">
-            {[...group.items].sort((a, b) => a.cost - b.cost).map((item) => {
-              const affordable = gold >= item.cost;
-              return (
-                <li key={item.id} className="shelf-item" data-affordable={affordable}>
-                  <span className="shelf-name">{item.name}</span>
-                  <span className="shelf-mods">{equipmentModsLabel(item)}</span>
-                  <span className="shelf-cost">
-                    {item.cost}G
-                    {!affordable && <small>あと{item.cost - gold}</small>}
-                  </span>
-                  <button type="button" disabled={busy || !affordable} onClick={() => onBuy(item.id)}>
-                    買う
-                  </button>
-                </li>
-              );
-            })}
-          </ul>
-        </div>
-      ))}
-    </section>
   );
 }
 
