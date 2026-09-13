@@ -1,3 +1,4 @@
+import { battleReportStatement, getBattleReport } from '../battleReports.js';
 import {
   BATTLE_REWARDS, ENEMIES, EVENTS, JOBS, PASSIVES, SKILLS, bossForChapter, chapterOf, gainExp,
   isBossDay, simulate, toPartyMember,
@@ -113,9 +114,10 @@ export async function handleGetBattle(request: Request, env: Env): Promise<Respo
   const characters = await getPartyCharacters(env.DB, player.id);
   const party = characters.map((character) => toPartyMember(character, jobOf(character), SKILLS, PASSIVES));
 
-  const [battleResult, defeatedBy] = await Promise.all([
+  const [battleResult, defeatedBy, report] = await Promise.all([
     getBattleResult(env.DB, world.id, day.dayNo, player.id),
     getDefeatedBy(env.DB, world.id, day.dayNo),
+    getBattleReport(env.DB, world.id, day.dayNo, player.id),
   ]);
 
   return ok({
@@ -127,6 +129,7 @@ export async function handleGetBattle(request: Request, env: Env): Promise<Respo
     // 各人の実効ステータスと装備中の技。育成側の生データではなく、
     // 戦闘に持ち込む形（toPartyMember）そのままを返す。
     party,
+    report,
     won: battleResult?.result === 'win',
     worldDefeated: defeatedBy !== null,
   });
@@ -196,7 +199,8 @@ export async function handlePostBattle(request: Request, env: Env): Promise<Resp
   });
 
   if (log.result !== 'win') {
-    // 負けても罰は無く、挑戦の回数も記録しない（何度でも挑み直せる）。DBには何も残さない。
+    // 敗北も読み返せるよう最新ログを残す。報酬や討伐の記録には触れない。
+    await battleReportStatement(env.DB, world.id, day.dayNo, player.id, { log, enemy, party: partyMembers, rewarded: false }).run();
     return ok({ log, rewarded: false, worldDefeated: (await getDefeatedBy(env.DB, world.id, day.dayNo)) !== null });
   }
 
@@ -237,6 +241,7 @@ export async function handlePostBattle(request: Request, env: Env): Promise<Resp
     rewardedAt,
     goldAward: reward.gold,
     party: partyRewards,
+    report: { log, enemy, party: partyMembers, rewarded: true },
   });
 
   // defeated は「このリクエストで討伐フラグを立てたか」であり、世界がすでに

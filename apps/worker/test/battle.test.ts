@@ -603,3 +603,22 @@ describe('依頼の勝利フラグ', () => {
     expect(await questVictoryTags(env.DB, WORLD)).toEqual([]);
   });
 });
+
+describe('冒険から読み返す戦闘ログ', () => {
+  it('敗北のログを保存し、勝利後は再挑戦で勝利記録を上書きしない', async () => {
+    await seedWorld(3, 'millBoar');
+    await addPlayer(PLAYER_A, TOKEN_A);
+    await seedWinningHero(PLAYER_A, HERO_A);
+    const { getBattleReport } = await import('../src/battleReports.js');
+    const failed = await readOk<{ log: BattleLog }>(await battleRequest(TOKEN_A, 'POST', { [HERO_A]: Array(8).fill(null) }));
+    expect(failed.log.result).not.toBe('win');
+    expect((await getBattleReport(env.DB, WORLD, 3, PLAYER_A))?.log).toEqual(failed.log);
+    const won = await readOk<{ log: BattleLog }>(await battleRequest(TOKEN_A, 'POST', { [HERO_A]: WINNING_PLAN }));
+    expect(won.log.result).toBe('win');
+    await battleRequest(TOKEN_A, 'POST', { [HERO_A]: Array(8).fill(null) });
+    expect((await getBattleReport(env.DB, WORLD, 3, PLAYER_A))?.log).toEqual(won.log);
+    expect(await getBattleReport(env.DB, WORLD, 3, PLAYER_B)).toBeNull();
+    const info = await readOk<{ report: { log: BattleLog } }>(await battleRequest(TOKEN_A, 'GET'));
+    expect(info.report.log).toEqual(won.log);
+  });
+});

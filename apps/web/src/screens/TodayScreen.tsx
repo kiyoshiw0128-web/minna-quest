@@ -1,7 +1,8 @@
 import { AdventureMap } from '../AdventureMap.js';
 import { eventLocation, LOCATIONS, locationDescription, chapterStory, routeTo } from '../geography.js';
 import type { LocationId } from '../geography.js';
-import { questProgress } from '@mq/core';
+import { BattleScreen } from './BattleScreen.js';
+import { questProgress, isBossDay } from '@mq/core';
 import { useCallback, useEffect, useState } from 'react';
 import { fetchToday, vote as voteApi, ApiError, UnauthorizedError, ALREADY_CLOSED_MESSAGE } from '../api.js';
 import type { TodayResult } from '../api.js';
@@ -24,6 +25,19 @@ type VoteState = { kind: 'idle' } | { kind: 'voting' } | { kind: 'error'; messag
 export function TodayScreen({ token, onUnauthorized }: Props) {
   const [load, setLoad] = useState<LoadState>({ kind: 'loading' });
   const [voteState, setVoteState] = useState<VoteState>({ kind: 'idle' });
+  const [battleRefreshError, setBattleRefreshError] = useState(false);
+
+  async function refreshAfterBattle(): Promise<void> {
+    try {
+      const data = await fetchToday(token);
+      // 戦闘の行動表と今の試行結果を残したまま、依頼だけ最新にする。
+      setLoad({ kind: 'loaded', data });
+      setBattleRefreshError(false);
+    } catch (error) {
+      if (error instanceof UnauthorizedError) onUnauthorized();
+      else setBattleRefreshError(true);
+    }
+  }
 
   const reload = useCallback(async () => {
     setLoad({ kind: 'loading' });
@@ -96,6 +110,8 @@ export function TodayScreen({ token, onUnauthorized }: Props) {
   const location = eventLocation(lastEventId) ?? (data.dayNo === 1 && lastEventId === null ? 'leaf' : null);
   const tags = data.tags ?? [];
   const quests = questProgress(tags);
+  const resultDay = closed ? data.dayNo : data.dayNo - 1;
+  const hasResultBattle = resultDay > 0 && (isBossDay(resultDay) || (lastEventId !== null && resolveEvent(lastEventId).kind === 'battle'));
   const previousStory = data.previousChosenId ? resolveEvent(data.previousChosenId).resultText : null;
 
   return (
@@ -110,8 +126,10 @@ export function TodayScreen({ token, onUnauthorized }: Props) {
         <h2>{location !== null ? `${LOCATIONS[location].symbol} ${LOCATIONS[location].name}` : '◆ 旅の途中'}</h2>
         {!closed && previousStory && <div className="previous-story"><h3>前回の出来事</h3><p>{previousStory}</p></div>}
         <p>{location !== null ? locationDescription(location, tags) : '街道の先には、まだ知らない土地が広がっている。'}</p>
-        {!closed && <p className="journey-prompt">さて、どこへ向かおうか。</p>}
       </div>
+
+      {hasResultBattle && <BattleScreen key={resultDay} token={token} onUnauthorized={onUnauthorized} dayNo={resultDay} embedded onResolved={() => void refreshAfterBattle()} />}
+      {battleRefreshError && <p role="alert">戦闘結果は保存されましたが、依頼の表示を更新できませんでした。画面を開き直してください。</p>}
 
       {quests.length > 0 && <section className="quest-journal" aria-label="依頼の手帳">
         <h2>◆ 依頼の手帳</h2>
@@ -124,6 +142,7 @@ export function TodayScreen({ token, onUnauthorized }: Props) {
         </li>)}</ul>
       </section>}
 
+      {!closed && <p className="journey-prompt">さて、どこへ向かおうか。</p>}
       {closed ? <ClosedDay data={data} /> : <OpenDay key={data.dayNo} current={location} data={data} onVote={handleVote} voteState={voteState} />}
     </main>
   );

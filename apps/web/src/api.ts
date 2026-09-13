@@ -302,6 +302,8 @@ export function dismissCharacter(token: string, characterId: string): Promise<Di
 // worker/src/routes/battle.ts の応答をそのまま写す。hasBattle が false のときは
 // enemy・party を持たない（サーバがそもそも組み立てないため）。この判別で
 // 分岐しないと、戦闘の無い日に敵の行動表を描こうとして落ちる。
+export type BattleReport = { log: BattleLog; enemy: Enemy; party: PartyMember[]; rewarded: boolean };
+
 export type BattleInfo =
   | { dayNo: number; hasBattle: false }
   | {
@@ -309,6 +311,7 @@ export type BattleInfo =
       hasBattle: true;
       enemy: Enemy;
       party: PartyMember[];
+      report?: BattleReport | null;
       won: boolean;
       worldDefeated: boolean;
     };

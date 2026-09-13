@@ -1,6 +1,8 @@
 import { useCallback, useEffect, useState } from 'react';
 import { fetchWorld, ApiError, UnauthorizedError } from '../api.js';
 import type { WorldResult } from '../api.js';
+import { isBossDay } from '@mq/core';
+import { BattleScreen } from './BattleScreen.js';
 import { resolveEvent } from '../events.js';
 
 type Props = {
@@ -15,6 +17,7 @@ type LoadState =
 
 /** 世界の履歴画面。締まった日の一覧と、獲得タグをそのまま出す。 */
 export function HistoryScreen({ token, onUnauthorized }: Props) {
+  const [openedBattles, setOpenedBattles] = useState<number[]>([]);
   const [load, setLoad] = useState<LoadState>({ kind: 'loading' });
 
   const reload = useCallback(async () => {
@@ -91,6 +94,11 @@ export function HistoryScreen({ token, onUnauthorized }: Props) {
                   {day.tiebroken === true && '（同数・シード決定）'}
                   {/* 通ってきた道を読み返せるようにする。ここが冒険の記録になる。 */}
                   {chosen?.resultText != null && <p className="narrative">{chosen.resultText}</p>}
+                  {(chosen?.kind === 'battle' || isBossDay(day.dayNo)) && (
+                    openedBattles.includes(day.dayNo)
+                      ? <BattleScreen token={token} onUnauthorized={onUnauthorized} dayNo={day.dayNo} embedded />
+                      : <button type="button" onClick={() => setOpenedBattles((days) => [...days, day.dayNo])}>戦闘結果を読む</button>
+                  )}
                   <ul>
                     {day.optionIds.map((optionId) => {
                       const event = resolveEvent(optionId);

@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
+import { isBossDay } from '@mq/core';
 import type { BattlePlan, PartyMember } from '@mq/core';
 import {
   ApiError, UnauthorizedError, fetchBattle, fetchWorld, submitBattle,
@@ -10,6 +11,9 @@ import type { PlanState } from '../battlePlanner.js';
 
 type Props = {
   token: string;
+  dayNo?: number;
+  embedded?: boolean;
+  onResolved?: () => void;
   onUnauthorized: () => void;
 };
 
@@ -27,11 +31,11 @@ type SubmitState =
 /** 世界の履歴のうち、戦闘だった日（締まっている）だけを日付の昇順で返す（設計書 §4.2）。 */
 function battleDayNumbers(world: WorldResult): number[] {
   return world.history
-    .filter((day) => day.chosenId !== null && resolveEvent(day.chosenId).kind === 'battle')
+    .filter((day) => isBossDay(day.dayNo) || (day.chosenId !== null && resolveEvent(day.chosenId).kind === 'battle'))
     .map((day) => day.dayNo);
 }
 
-export function BattleScreen({ token, onUnauthorized }: Props) {
+export function BattleScreen({ token, onUnauthorized, dayNo: requestedDay, embedded = false, onResolved }: Props) {
   const [load, setLoad] = useState<LoadState>({ kind: 'loading' });
   const [plan, setPlan] = useState<PlanState>({});
   const [submitState, setSubmitState] = useState<SubmitState>({ kind: 'idle' });
@@ -64,8 +68,8 @@ export function BattleScreen({ token, onUnauthorized }: Props) {
   );
 
   useEffect(() => {
-    void reload();
-  }, [reload]);
+    void reload(requestedDay);
+  }, [reload, requestedDay]);
 
   function setTurnSkill(characterId: string, turnIndex: number, skillId: string | null): void {
     setPlan((prev) => ({
@@ -81,6 +85,7 @@ export function BattleScreen({ token, onUnauthorized }: Props) {
     try {
       const result = await submitBattle(token, plan as BattlePlan, dayNo);
       setSubmitState({ kind: 'result', result });
+      onResolved?.();
       // 送信の応答が最新の勝敗・討伐状況そのものなので、読み直さずここで反映する。
       // 読み直すと一瞬「読み込み中」に戻ってプランの表示が消え、負けても
       // すぐ組み替えられるという設計書 §4.5 の体験を損なう。
@@ -105,24 +110,27 @@ export function BattleScreen({ token, onUnauthorized }: Props) {
     }
   }
 
+  const Container = embedded ? 'section' : 'main';
+  const Heading = embedded ? 'h2' : 'h1';
+
   if (load.kind === 'loading') {
     return (
-      <main>
-        <h1>戦闘</h1>
+      <Container>
+        <Heading>{embedded ? '戦闘結果' : '戦闘'}</Heading>
         <p>読み込み中…</p>
-      </main>
+      </Container>
     );
   }
 
   if (load.kind === 'error') {
     return (
-      <main>
-        <h1>戦闘</h1>
+      <Container>
+        <Heading>{embedded ? '戦闘結果' : '戦闘'}</Heading>
         <p role="alert">{load.message}</p>
-        <button type="button" onClick={() => void reload()}>
+        <button type="button" onClick={() => void reload(requestedDay)}>
           再試行
         </button>
-      </main>
+      </Container>
     );
   }
 
@@ -130,9 +138,9 @@ export function BattleScreen({ token, onUnauthorized }: Props) {
   const days = battleDayNumbers(world);
 
   return (
-    <main>
-      <h1>戦闘</h1>
-      <DaySelector currentDayNo={battle.dayNo} days={days} onSelect={(dayNo) => void reload(dayNo)} />
+    <Container>
+      <Heading>{embedded ? '戦闘結果' : '戦闘'}</Heading>
+      {!embedded && <DaySelector currentDayNo={battle.dayNo} days={days} onSelect={(dayNo) => void reload(dayNo)} />}
 
       {!battle.hasBattle && (
         <p>{battle.dayNo}日目は戦闘はありません。上の一覧から過去の戦闘を選べます。</p>
@@ -140,6 +148,7 @@ export function BattleScreen({ token, onUnauthorized }: Props) {
 
       {battle.hasBattle && (
         <BattleBody
+          embedded={embedded}
           battle={battle}
           plan={plan}
           onChangeTurn={setTurnSkill}
@@ -147,7 +156,7 @@ export function BattleScreen({ token, onUnauthorized }: Props) {
           submitState={submitState}
         />
       )}
-    </main>
+    </Container>
   );
 }
 
@@ -186,18 +195,22 @@ function DaySelector({
 }
 
 function BattleBody({
+  embedded,
   battle,
   plan,
   onChangeTurn,
   onSubmit,
   submitState,
 }: {
+  embedded: boolean;
   battle: Extract<BattleInfo, { hasBattle: true }>;
   plan: PlanState;
   onChangeTurn: (characterId: string, turnIndex: number, skillId: string | null) => void;
   onSubmit: () => void;
   submitState: SubmitState;
 }) {
+  const [retry, setRetry] = useState(false);
+  const saved = battle.report;
   const submitting = submitState.kind === 'submitting';
 
   return (
@@ -220,6 +233,7 @@ function BattleBody({
 
       <h2>{battle.enemy.name} との戦い</h2>
       <EnemyPortrait enemyId={battle.enemy.id} name={battle.enemy.name} />
+      {(!embedded || !saved || retry) && <>
       <TurnGrid
         enemy={battle.enemy}
         party={battle.party}
@@ -237,7 +251,11 @@ function BattleBody({
         {submitting ? '送信中…' : 'このプランで挑む'}
       </button>
 
+      </>}
+      {embedded && saved && !retry && <button type="button" onClick={() => setRetry(true)}>行動を組み直して再挑戦する</button>}
       {submitState.kind === 'error' && <p role="alert">{submitState.message}</p>}
+      {submitState.kind !== 'result' && saved && <BattleResultView party={saved.party} enemy={saved.enemy} log={saved.log} rewarded={saved.rewarded} rewardedMessage="この戦闘の報酬は受け取り済みです。" notRewardedMessage="この戦闘では報酬はありません。" />}
+      {!saved && battle.won && submitState.kind !== 'result' && <p>勝利済みです。以前の戦闘の詳細ログは保存されていません。</p>}
       {submitState.kind === 'result' && (
         <BattleResultView
           party={battle.party}

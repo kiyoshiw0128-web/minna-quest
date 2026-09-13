@@ -285,3 +285,26 @@ describe('敵の絵', () => {
     expect(document.querySelector('.portrait')).toBeNull();
   });
 });
+
+describe('冒険の結果に埋め込む戦闘', () => {
+  it('保存ログを読み込み、行動表を出さずに勝利を読み返せる', async () => {
+    const report = { party: [{ ...HERO, name: '当時の勇者' }], enemy: ENEMY, rewarded: true,
+      log: { result: 'win', turns: 2, events: [{ t: 'end', result: 'win', turns: 2 }] } };
+    installFetchMock({
+      'GET /api/world': worldResponse(),
+      'GET /api/battle?dayNo=4': jsonResponse(200, { ok: true, data: {
+        dayNo: 4, hasBattle: true, enemy: ENEMY, party: [HERO], won: true, worldDefeated: true, report,
+      } }),
+    });
+    const { container, unmount } = render(<BattleScreen token="t" onUnauthorized={vi.fn()} dayNo={4} embedded />);
+    expect(await screen.findByText('結果: 2ターンで勝利')).toBeInTheDocument();
+    expect(screen.queryByText('プラン（8ターン）')).not.toBeInTheDocument();
+    expect(container.querySelector('main')).toBeNull();
+    await userEvent.setup().click(screen.getByRole('button', { name: '行動を組み直して再挑戦する' }));
+    expect(screen.getByText('プラン（8ターン）')).toBeInTheDocument();
+    unmount();
+    render(<BattleScreen token="t" onUnauthorized={vi.fn()} dayNo={4} embedded />);
+    expect(await screen.findByText('結果: 2ターンで勝利')).toBeInTheDocument();
+    expect(vi.mocked(fetch).mock.calls.some(([, init]) => init?.method === 'POST')).toBe(false);
+  });
+});

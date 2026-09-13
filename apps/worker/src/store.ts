@@ -1,3 +1,5 @@
+import { battleReportStatement } from './battleReports.js';
+import type { BattleReport } from './battleReports.js';
 import type { Character, JobId, JobProgress, Vote, WorldDay } from '@mq/core';
 
 export type WorldRow = {
@@ -833,6 +835,7 @@ export async function recordBattleWin(
     rewardedAt: string;
     goldAward: number;
     party: readonly BattleRewardCharacter[];
+    report?: BattleReport;
   },
 ): Promise<{ rewarded: boolean; defeated: boolean }> {
   const { worldId, dayNo, playerId, rewardedAt, goldAward, party } = params;
@@ -842,6 +845,7 @@ export async function recordBattleWin(
   const guardBind = (): [string, number, string] => [worldId, dayNo, playerId];
 
   const statements: D1PreparedStatement[] = [
+    ...(params.report ? [battleReportStatement(db, worldId, dayNo, playerId, params.report)] : []),
     db
       .prepare(`UPDATE players SET gold = gold + ? WHERE id = ? AND ${NOT_REWARDED_YET}`)
       .bind(goldAward, playerId, ...guardBind()),
