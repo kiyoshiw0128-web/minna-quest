@@ -7,6 +7,7 @@ import {
 } from '../store.js';
 import { fail, ok } from '../respond.js';
 import type { Env } from '../env.js';
+import { getSavedBattlePlan } from '../battlePlans.js';
 
 /**
  * currentJob に対応する Job を引く。battle.ts の jobOf と同じ理由・同じ挙動
@@ -44,6 +45,7 @@ export async function handleMe(request: Request, env: Env): Promise<Response> {
   ]);
   if (gold === null) return fail('player not found', 404);
 
+  const battlePlan = await getSavedBattlePlan(env.DB, player.id);
   const party = characters.map((character) => {
     const job = jobOf(character);
     // 装備前の実効ステータス。画面が「候補の装備を選ぶとどれだけ上がるか」を
@@ -66,6 +68,7 @@ export async function handleMe(request: Request, env: Env): Promise<Response> {
       baseStats,
       learnedSkillIds: character.learnedSkills,
       equippedSkillIds: character.equippedActive,
+      turnSkillIds: battlePlan[character.id],
       // パッシブも返す。返さないと画面が「いま何を装備しているか」を
       // 知らないまま装備の更新を送ることになり、触っていないパッシブが
       // 空で上書きされて消える。実際にそうなっていた。

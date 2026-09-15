@@ -2,7 +2,7 @@ import { useCallback, useEffect, useState } from 'react';
 import { fetchWorld, ApiError, UnauthorizedError } from '../api.js';
 import type { WorldResult } from '../api.js';
 import { isBossDay } from '@mq/core';
-import { BattleScreen } from './BattleScreen.js';
+import { StoryBattle } from './StoryBattle.js';
 import { resolveEvent } from '../events.js';
 
 type Props = {
@@ -96,7 +96,7 @@ export function HistoryScreen({ token, onUnauthorized }: Props) {
                   {chosen?.resultText != null && <p className="narrative">{chosen.resultText}</p>}
                   {(chosen?.kind === 'battle' || isBossDay(day.dayNo)) && (
                     openedBattles.includes(day.dayNo)
-                      ? <BattleScreen token={token} onUnauthorized={onUnauthorized} dayNo={day.dayNo} embedded />
+                      ? <StoryBattle token={token} onUnauthorized={onUnauthorized} dayNo={day.dayNo} />
                       : <button type="button" onClick={() => setOpenedBattles((days) => [...days, day.dayNo])}>戦闘結果を読む</button>
                   )}
                   <ul>

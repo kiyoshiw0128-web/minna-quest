@@ -2,6 +2,7 @@ import { describe, it, expect, beforeEach } from 'vitest';
 import { env, SELF, applyD1Migrations } from 'cloudflare:test';
 import type { BattleLog } from '@mq/core';
 import { sha256Hex } from '../src/auth.js';
+import type { BattleReport } from '../src/battleReports.js';
 
 const WORLD = 'w1';
 const TOKEN_A = 'battle-token-aaaaaaaaaaaaaaaaaaaa';
@@ -21,6 +22,77 @@ const HERO_B = 'heroB';
  */
 const WINNING_PLAN = ['earthRend', 'heavyBlow', 'shieldSmash', 'slash', 'heavyBlow', 'earthRend', 'shieldSmash', 'heavyBlow'];
 const NO_ACTION_PLAN = [null, null, null, null, null, null, null, null];
+
+function saveTurns(token: string, characterId: string, turns: unknown): Promise<Response> {
+  return SELF.fetch('https://example.com/api/battle-plan', { method: 'POST',
+    headers: { Authorization: `Bearer ${token}`, 'content-type': 'application/json' },
+    body: JSON.stringify({ characterId, turns }) });
+}
+function autoBattle(token: string, dayNo = 7): Promise<Response> {
+  return SELF.fetch('https://example.com/api/battle', { method: 'POST',
+    headers: { Authorization: `Bearer ${token}`, 'content-type': 'application/json' },
+    body: JSON.stringify({ dayNo, automatic: true }) });
+}
+
+describe('保存したターン順で物語の戦闘を処理する', () => {
+  beforeEach(async () => {
+    await seedWorld(7, 'banditAmbush');
+    await addPlayer(PLAYER_A, TOKEN_A);
+    await addPlayer(PLAYER_B, TOKEN_B);
+    await seedWinningHero(PLAYER_A, HERO_A);
+    await seedWinningHero(PLAYER_B, HERO_B);
+  });
+  it('自分の8ターンを保存し、meから復元できる。未設定は通常技になる', async () => {
+    const initial = await readOk<{ party: { turnSkillIds: string[] }[] }>(await SELF.fetch('https://example.com/api/me', { headers: { Authorization: `Bearer ${TOKEN_A}` } }));
+    expect(initial.party[0].turnSkillIds).toEqual(Array(8).fill('slash'));
+    expect((await saveTurns(TOKEN_A, HERO_A, WINNING_PLAN)).status).toBe(200);
+    const after = await readOk<{ party: { turnSkillIds: string[] }[] }>(await SELF.fetch('https://example.com/api/me', { headers: { Authorization: `Bearer ${TOKEN_A}` } }));
+    expect(after.party[0].turnSkillIds).toEqual(WINNING_PLAN);
+  });
+  it('他人のキャラ、不正な長さ、未装備の技、未認証を拒否する', async () => {
+    expect((await saveTurns(TOKEN_A, HERO_B, WINNING_PLAN)).status).toBe(404);
+    expect((await saveTurns(TOKEN_A, HERO_A, ['slash'])).status).toBe(400);
+    expect((await saveTurns(TOKEN_A, HERO_A, Array(8).fill('fireball'))).status).toBe(400);
+    expect((await saveTurns('invalid', HERO_A, WINNING_PLAN)).status).toBe(401);
+  });
+  it('保存した技の順で勝利し、並行した読み込みと再読込で報酬が増えない', async () => {
+    await saveTurns(TOKEN_A, HERO_A, WINNING_PLAN);
+    const responses = await Promise.all([autoBattle(TOKEN_A), autoBattle(TOKEN_A)]);
+    const first = await readOk<{ report: BattleReport; won: boolean }>(responses[0]);
+    const second = await readOk<{ report: BattleReport }>(responses[1]);
+    expect(first.won).toBe(true);
+    expect(first.report.log.events.find((event) => event.t === 'act' && event.actorId === HERO_A))
+      .toMatchObject({ skillId: WINNING_PLAN[0] });
+    expect(second.report).toEqual(first.report);
+    const gold = await env.DB.prepare('SELECT gold FROM players WHERE id = ?').bind(PLAYER_A).first();
+    await saveTurns(TOKEN_A, HERO_A, NO_ACTION_PLAN);
+    const readAgain = await readOk<{ report: BattleReport }>(await autoBattle(TOKEN_A));
+    expect(readAgain.report).toEqual(first.report);
+    expect(await env.DB.prepare('SELECT gold FROM players WHERE id = ?').bind(PLAYER_A).first()).toEqual(gold);
+  });
+  it('敗北を読み返しても再戦せず、別プレイヤーの勝利と混ざらない', async () => {
+    await saveTurns(TOKEN_A, HERO_A, NO_ACTION_PLAN);
+    const first = await readOk<{ report: BattleReport }>(await autoBattle(TOKEN_A));
+    expect(first.report.log.result).not.toBe('win');
+    await saveTurns(TOKEN_A, HERO_A, WINNING_PLAN);
+    expect((await readOk<{ report: BattleReport }>(await autoBattle(TOKEN_A))).report).toEqual(first.report);
+    await saveTurns(TOKEN_B, HERO_B, WINNING_PLAN);
+    expect((await readOk<{ won: boolean }>(await autoBattle(TOKEN_B))).won).toBe(true);
+    expect((await readOk<{ report: BattleReport }>(await autoBattle(TOKEN_A))).report).toEqual(first.report);
+  });
+  it('装備から外した技は通常技に置き換え、待機の指定は残す', async () => {
+    await saveTurns(TOKEN_A, HERO_A, [null, ...WINNING_PLAN.slice(1)]);
+    await env.DB.prepare("UPDATE characters SET equipped_active = '[\"slash\"]' WHERE id = ?").bind(HERO_A).run();
+    const data = await readOk<{ party: { turnSkillIds: (string | null)[] }[] }>(await SELF.fetch('https://example.com/api/me', { headers: { Authorization: `Bearer ${TOKEN_A}` } }));
+    expect(data.party[0].turnSkillIds).toEqual([null, ...Array(7).fill('slash')]);
+  });
+  it('戦闘でない日・未締めの日は自動処理できない', async () => {
+    expect((await autoBattle(TOKEN_A, 8)).status).toBe(400);
+    await seedWorld(1, 'crossroads');
+    await addPlayer(PLAYER_A, TOKEN_A);
+    expect((await autoBattle(TOKEN_A, 1)).status).toBe(400);
+  });
+});
 
 /**
  * 締まった日 `dayNo` と、その翌日（未締め）を作る。`current_day` は翌日を指す。

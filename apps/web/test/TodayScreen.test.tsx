@@ -230,7 +230,7 @@ describe('冒険の物語と戦闘結果', () => {
         myVote: null, chosenId: null, counts: null, tiebroken: null,
       } }),
       'GET /api/world': jsonResponse(200, { ok: true, data: { currentDay: 3, history: [] } }),
-      'GET /api/battle?dayNo=2': jsonResponse(200, { ok: true, data: {
+      'POST /api/battle': jsonResponse(200, { ok: true, data: {
         dayNo: 2, hasBattle: true, enemy, party: [], won: true, worldDefeated: true,
         report: { enemy, party: [], rewarded: true, log: { result: 'win', turns: 3, events: [{ t: 'end', result: 'win', turns: 3 }] } },
       } }),
@@ -241,10 +241,13 @@ describe('冒険の物語と戦闘結果', () => {
     const choices = screen.getByRole('heading', { name: '∞ 次回行動選択' });
     expect(narrative.compareDocumentPosition(result) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
     expect(result.compareDocumentPosition(choices) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    const call = vi.mocked(fetch).mock.calls.find(([url]) => url === '/api/battle');
+    expect(JSON.parse(String(call?.[1]?.body))).toEqual({ dayNo: 2, automatic: true });
+    expect(screen.queryByRole('button', { name: 'このプランで挑む' })).not.toBeInTheDocument();
   });
 });
 
-it('冒険内で再挑戦した敗北と行動表は、依頼の再取得後も消えない', async () => {
+it('自動戦闘の敗北は依頼の再取得後も残り、再処理されない', async () => {
   const skill = { id: 'slash', name: '斬る', mpCost: 0, cooldown: 0, element: 'none', target: 'enemy', damage: { kind: 'physical', power: 100 } };
   const stats = { maxHp: 100, maxMp: 10, atk: 15, def: 10, mat: 10, mdf: 10, spd: 10 };
   const hero = { id: 'hero', name: '旅人', stats, skills: [skill] };
@@ -253,18 +256,13 @@ it('冒険内で再挑戦した敗北と行動表は、依頼の再取得後も�
   installFetchMock({
     'GET /api/today': jsonResponse(200, { ok: true, data }),
     'GET /api/world': jsonResponse(200, { ok: true, data: { currentDay: 3, history: [] } }),
-    'GET /api/battle?dayNo=2': jsonResponse(200, { ok: true, data: { dayNo: 2, hasBattle: true, enemy, party: [hero], won: true, worldDefeated: true,
-      report: { enemy, party: [hero], rewarded: true, log: { result: 'win', turns: 3, events: [{ t: 'end', result: 'win', turns: 3 }] } },
+    'POST /api/battle': jsonResponse(200, { ok: true, data: { won: false, worldDefeated: false,
+      report: { enemy, party: [hero], rewarded: false, log: { result: 'lose', turns: 8, events: [{ t: 'end', result: 'lose', turns: 8 }] } },
     } }),
-    'POST /api/battle': jsonResponse(200, { ok: true, data: { log: { result: 'lose', turns: 8, events: [{ t: 'end', result: 'lose', turns: 8 }] }, rewarded: false, worldDefeated: true } }),
   });
-  const user = userEvent.setup();
   render(<TodayScreen token="t" onUnauthorized={vi.fn()} />);
-  await user.click(await screen.findByRole('button', { name: '行動を組み直して再挑戦する' }));
-  await user.selectOptions(screen.getByLabelText('旅人 のターン1'), 'slash');
-  await user.click(screen.getByRole('button', { name: 'このプランで挑む' }));
   await screen.findByText('結果: 8ターンで敗北');
   await waitFor(() => expect(vi.mocked(fetch).mock.calls.filter(([url]) => url === '/api/today')).toHaveLength(2));
-  expect(screen.getByLabelText('旅人 のターン1')).toHaveValue('slash');
+  expect(vi.mocked(fetch).mock.calls.filter(([url]) => url === '/api/battle')).toHaveLength(1);
   expect(screen.getByText('結果: 8ターンで敗北')).toBeInTheDocument();
 });

@@ -53,7 +53,7 @@ export function BattleScreen({ token, onUnauthorized, dayNo: requestedDay, embed
         setLoad({ kind: 'loaded', world, battle });
         if (battle.hasBattle && planDayRef.current !== battle.dayNo) {
           planDayRef.current = battle.dayNo;
-          setPlan(freshPlan(battle.party));
+          setPlan(battle.plan ?? freshPlan(battle.party));
         }
       } catch (error) {
         if (error instanceof UnauthorizedError) {

@@ -1,7 +1,7 @@
 import { AdventureMap } from '../AdventureMap.js';
 import { eventLocation, LOCATIONS, locationDescription, chapterStory, routeTo } from '../geography.js';
 import type { LocationId } from '../geography.js';
-import { BattleScreen } from './BattleScreen.js';
+import { StoryBattle } from './StoryBattle.js';
 import { questProgress, isBossDay } from '@mq/core';
 import { useCallback, useEffect, useState } from 'react';
 import { fetchToday, vote as voteApi, ApiError, UnauthorizedError, ALREADY_CLOSED_MESSAGE } from '../api.js';
@@ -128,7 +128,7 @@ export function TodayScreen({ token, onUnauthorized }: Props) {
         <p>{location !== null ? locationDescription(location, tags) : '街道の先には、まだ知らない土地が広がっている。'}</p>
       </div>
 
-      {hasResultBattle && <BattleScreen key={resultDay} token={token} onUnauthorized={onUnauthorized} dayNo={resultDay} embedded onResolved={() => void refreshAfterBattle()} />}
+      {hasResultBattle && <StoryBattle key={resultDay} token={token} onUnauthorized={onUnauthorized} dayNo={resultDay} onResolved={() => void refreshAfterBattle()} />}
       {battleRefreshError && <p role="alert">戦闘結果は保存されましたが、依頼の表示を更新できませんでした。画面を開き直してください。</p>}
 
       {quests.length > 0 && <section className="quest-journal" aria-label="依頼の手帳">

@@ -479,7 +479,7 @@ describe('ペットが要る技の表示', () => {
 
     render(<EquipmentScreen token="t" onUnauthorized={vi.fn()} />);
     await screen.findByRole('combobox', { name: '設定する仲間' });
-    expect(screen.getByText(/要ペット/)).toBeInTheDocument();
+    expect(screen.getByRole('cell', { name: /要ペット/ })).toBeInTheDocument();
   });
 });
 
@@ -599,6 +599,33 @@ describe('装備パネル（設計書 §7）', () => {
 });
 
 describe('仲間・装備・店の分離', () => {
+  it('仲間ごとの8ターンを保存し、画面を開き直しても順番を復元する', async () => {
+    const payload = await meResponseTwoMembers(500).json();
+    payload.data.party[1].learnedSkillIds = ['slash', 'provoke'];
+    payload.data.party[1].equippedSkillIds = ['slash', 'provoke'];
+    payload.data.party[1].turnSkillIds = Array(8).fill('slash');
+    const saved = structuredClone(payload);
+    saved.data.party[1].turnSkillIds[1] = 'provoke';
+    saved.data.party[1].turnSkillIds[2] = null;
+    installFetchMock({
+      'GET /api/me': [jsonResponse(200, payload), jsonResponse(200, saved)],
+      'POST /api/battle-plan': jsonResponse(200, { ok: true, data: {} }),
+    });
+    const user = userEvent.setup();
+    const view = render(<EquipmentScreen token="t" onUnauthorized={vi.fn()} />);
+    await user.selectOptions(await screen.findByRole('combobox', { name: '設定する仲間' }), 'hire1');
+    await user.selectOptions(screen.getByLabelText('たろう のターン2'), 'provoke');
+    await user.selectOptions(screen.getByLabelText('たろう のターン3'), '');
+    await user.click(screen.getByRole('button', { name: 'ターンごとの技を保存' }));
+    expect(await screen.findByRole('status')).toHaveTextContent('ターンごとの技を保存しました');
+    const call = vi.mocked(fetch).mock.calls.find(([url]) => url === '/api/battle-plan');
+    expect(JSON.parse(String(call?.[1]?.body))).toEqual({ characterId: 'hire1', turns: saved.data.party[1].turnSkillIds });
+    view.unmount();
+    render(<EquipmentScreen token="t" onUnauthorized={vi.fn()} />);
+    await user.selectOptions(await screen.findByRole('combobox', { name: '設定する仲間' }), 'hire1');
+    expect(screen.getByLabelText('たろう のターン2')).toHaveValue('provoke');
+    expect(screen.getByLabelText('たろう のターン3')).toHaveValue('');
+  });
   it('仲間画面は店の通信に依存せず、購入や装備フォームを表示しない', async () => {
     installFetchMock({
       'GET /api/me': meResponse(500),
@@ -623,16 +650,16 @@ describe('仲間・装備・店の分離', () => {
     });
     const user = userEvent.setup();
     render(<EquipmentScreen token="t" onUnauthorized={vi.fn()} />);
-    await user.selectOptions(await screen.findByRole('combobox'), 'hire1');
+    await user.selectOptions(await screen.findByRole('combobox', { name: '設定する仲間' }), 'hire1');
     await user.click(screen.getByLabelText('挑発をアクティブに装備'));
     await user.click(screen.getByLabelText(/錆びた剣/));
     await user.click(screen.getByRole('button', { name: '武器・防具を保存' }));
     expect(await screen.findByRole('status')).toHaveTextContent('武器・防具を保存しました');
-    expect(screen.getByRole('combobox')).toHaveValue('hire1');
+    expect(screen.getByRole('combobox', { name: '設定する仲間' })).toHaveValue('hire1');
     expect(screen.getByLabelText('挑発をアクティブに装備')).toBeChecked();
     const call = vi.mocked(fetch).mock.calls.find(([url, init]) => String(url).endsWith('/api/equip-item') && init?.method === 'POST');
     expect(JSON.parse(String(call?.[1]?.body))).toEqual({ characterId: 'hire1', weaponId: 'rustedSword', armorId: null });
-    await user.selectOptions(screen.getByRole('combobox'), 'hero1');
+    await user.selectOptions(screen.getByRole('combobox', { name: '設定する仲間' }), 'hero1');
     expect(screen.getByLabelText(/錆びた剣/)).toBeDisabled();
     expect(screen.getByLabelText(/錆びた剣/)).not.toBeChecked();
     expect(screen.queryByLabelText('挑発をアクティブに装備')).not.toBeInTheDocument();

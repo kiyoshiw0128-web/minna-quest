@@ -11,6 +11,7 @@ import {
 import { activePetEffects } from '../petEffects.js';
 import { fail, ok } from '../respond.js';
 import type { Env } from '../env.js';
+import { getSavedBattlePlan } from '../battlePlans.js';
 
 const POOL: readonly DailyEvent[] = Object.values(EVENTS);
 const ENEMY_TABLE: Readonly<Record<string, Enemy>> = ENEMIES;
@@ -129,13 +130,14 @@ export async function handleGetBattle(request: Request, env: Env): Promise<Respo
     // 各人の実効ステータスと装備中の技。育成側の生データではなく、
     // 戦闘に持ち込む形（toPartyMember）そのままを返す。
     party,
+    plan: await getSavedBattlePlan(env.DB, player.id),
     report,
     won: battleResult?.result === 'win',
     worldDefeated: defeatedBy !== null,
   });
 }
 
-type BattleBody = { plan?: unknown; dayNo?: unknown };
+type BattleBody = { plan?: unknown; dayNo?: unknown; automatic?: unknown };
 
 /**
  * リクエストの plan を BattlePlan の形（characterId -> (技ID|null)[]）に整える。
@@ -165,7 +167,9 @@ export async function handlePostBattle(request: Request, env: Env): Promise<Resp
     return fail('invalid JSON body');
   }
 
-  const plan = sanitizePlan(body.plan);
+  if (!body || typeof body !== 'object') return fail('invalid JSON body');
+  const automatic = body.automatic === true;
+  const plan = automatic ? await getSavedBattlePlan(env.DB, player.id) : sanitizePlan(body.plan);
   if (plan === null) return fail('plan must map characterId to a list of skillId|null');
 
   const world = await getWorld(env.DB, player.worldId);
@@ -179,6 +183,12 @@ export async function handlePostBattle(request: Request, env: Env): Promise<Resp
 
   const enemy = resolveBattleEnemy(day.chosenId, day.dayNo);
   if (enemy === null) return fail('no battle today');
+
+  if (automatic) {
+    const report = await getBattleReport(env.DB, world.id, day.dayNo, player.id);
+    const won = (await getBattleResult(env.DB, world.id, day.dayNo, player.id))?.result === 'win';
+    if (report || won) return ok({ report, won, worldDefeated: (await getDefeatedBy(env.DB, world.id, day.dayNo)) !== null });
+  }
 
   const characters = await getPartyCharacters(env.DB, player.id);
   const partyMembers = characters.map((character) => toPartyMember(character, jobOf(character), SKILLS, PASSIVES));
@@ -201,7 +211,10 @@ export async function handlePostBattle(request: Request, env: Env): Promise<Resp
   if (log.result !== 'win') {
     // 敗北も読み返せるよう最新ログを残す。報酬や討伐の記録には触れない。
     await battleReportStatement(env.DB, world.id, day.dayNo, player.id, { log, enemy, party: partyMembers, rewarded: false }).run();
-    return ok({ log, rewarded: false, worldDefeated: (await getDefeatedBy(env.DB, world.id, day.dayNo)) !== null });
+    const worldDefeated = (await getDefeatedBy(env.DB, world.id, day.dayNo)) !== null;
+    return automatic
+      ? ok({ report: await getBattleReport(env.DB, world.id, day.dayNo, player.id), won: false, worldDefeated })
+      : ok({ log, rewarded: false, worldDefeated });
   }
 
   const reward = BATTLE_REWARDS[enemy.id];
@@ -247,5 +260,7 @@ export async function handlePostBattle(request: Request, env: Env): Promise<Resp
   // defeated は「このリクエストで討伐フラグを立てたか」であり、世界がすでに
   // 討伐済みかどうか（誰かが先に倒していた）とは別物。応答には後者を出す。
   const worldDefeated = defeated || (await getDefeatedBy(env.DB, world.id, day.dayNo)) !== null;
-  return ok({ log, rewarded, worldDefeated });
+  return automatic
+    ? ok({ report: await getBattleReport(env.DB, world.id, day.dayNo, player.id), won: true, worldDefeated })
+    : ok({ log, rewarded, worldDefeated });
 }

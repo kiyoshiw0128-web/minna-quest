@@ -121,6 +121,7 @@ export type MePartyMember = {
   baseStats?: StatBlock;
   learnedSkillIds: string[];
   equippedSkillIds: string[];
+  turnSkillIds?: (string | null)[];
   learnedPassiveIds: string[];
   equippedPassiveIds: string[];
   isHero: boolean;
@@ -312,6 +313,7 @@ export type BattleInfo =
       enemy: Enemy;
       party: PartyMember[];
       report?: BattleReport | null;
+      plan?: BattlePlan;
       won: boolean;
       worldDefeated: boolean;
     };
@@ -330,6 +332,15 @@ export function submitBattle(token: string, plan: BattlePlan, dayNo: number): Pr
     body: JSON.stringify({ plan, dayNo }),
     ...withAuth(token),
   });
+}
+
+export function saveBattleTurns(token: string, characterId: string, turns: (string | null)[]): Promise<{ characterId: string; turns: (string | null)[] }> {
+  return request('/api/battle-plan', { method: 'POST', body: JSON.stringify({ characterId, turns }), ...withAuth(token) });
+}
+
+export type StoryBattleResult = { report: BattleReport | null; won: boolean; worldDefeated: boolean };
+export function resolveStoryBattle(token: string, dayNo: number): Promise<StoryBattleResult> {
+  return request('/api/battle', { method: 'POST', body: JSON.stringify({ dayNo, automatic: true }), ...withAuth(token) });
 }
 
 export type TavernResult = { dayNo: number; recruits: Recruit[] };

@@ -1,8 +1,9 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { ARMORS, WEAPONS } from '@mq/core';
-import { ApiError, UnauthorizedError, fetchMe, updateCharacterEquipmentItems, updateEquipment } from '../api.js';
+import { ApiError, UnauthorizedError, fetchMe, saveBattleTurns, updateCharacterEquipmentItems, updateEquipment } from '../api.js';
 import type { MeResult } from '../api.js';
 import { EquipPanel, EquipmentItemPanel } from './equipmentPanels.js';
+import { TurnOrderPanel } from './TurnOrderPanel.js';
 
 type Props = { token: string; onUnauthorized: () => void; onOpenShop?: () => void };
 
@@ -70,6 +71,8 @@ export function EquipmentScreen({ token, onUnauthorized, onOpenShop }: Props) {
         <EquipPanel key={`skills:${member.id}:${JSON.stringify([member.equippedSkillIds, member.equippedPassiveIds])}`} member={member} busy={busy} error={null}
           onSave={(activeIds, passiveIds) => void save(
             () => updateEquipment(token, member.id, activeIds, passiveIds), 'スキル')} />
+        <TurnOrderPanel key={`turns:${member.id}:${JSON.stringify([member.turnSkillIds, member.equippedSkillIds])}`}
+          member={member} busy={busy} onSave={(turns) => void save(() => saveBattleTurns(token, member.id, turns), 'ターンごとの技')} />
       </>}
     </main>
   );

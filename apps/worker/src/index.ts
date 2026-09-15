@@ -1,6 +1,7 @@
 import { catchUp } from './close.js';
 import { handleArenaRanking, handleGetArena, handlePostArena } from './routes/arena.js';
 import { handleGetBattle, handlePostBattle } from './routes/battle.js';
+import { handleBattlePlan } from './routes/battlePlan.js';
 import { handleBuy } from './routes/buy.js';
 import { handleDismiss } from './routes/dismiss.js';
 import { handleEmail } from './routes/email.js';
@@ -61,6 +62,9 @@ export default {
 
     if (url.pathname === '/api/battle' && request.method === 'POST') {
       return handlePostBattle(request, env);
+    }
+    if (url.pathname === '/api/battle-plan' && request.method === 'POST') {
+      return handleBattlePlan(request, env);
     }
 
     if (url.pathname === '/api/job' && request.method === 'POST') {

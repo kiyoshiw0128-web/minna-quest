@@ -192,3 +192,6 @@ div:has(> table), details:has(> table) { overflow-x: auto; }
 
 .equipment-character { display: block; margin: 16px 0 8px; }
 .equipment-character select { display: block; width: 100%; margin-top: 6px; }
+.turn-order-list { display: grid; gap: 8px; margin: 12px 0; }
+.turn-order-list label { display: grid; grid-template-columns: 5em minmax(0, 1fr); align-items: center; gap: 8px; }
+.turn-order-list select { width: 100%; }
