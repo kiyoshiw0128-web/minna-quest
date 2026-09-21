@@ -90,6 +90,28 @@ describe('プランを組む（設計書 §4.3）', () => {
   });
 });
 
+describe('Jev 作戦参謀', () => {
+  it('AIの8ターン提案を表へ入れ、送信前に編集できる', async () => {
+    installFetchMock({
+      'GET /api/world': worldResponse(),
+      'GET /api/battle': battleResponse(),
+      'POST /api/ai/battle-plan': jsonResponse(200, { ok: true, data: {
+        plan: { hero1: Array(8).fill('slash') }, source: 'jev', confidence: 0.78, cached: false,
+      } }),
+    });
+    const user = userEvent.setup();
+    render(<BattleScreen token="t" onUnauthorized={vi.fn()} />);
+
+    await user.click(await screen.findByRole('button', { name: 'Jevに作戦を考えてもらう' }));
+    expect(await screen.findByText(/Jevの提案をセットしました/)).toBeInTheDocument();
+    expect(screen.getByLabelText('ゆうしゃ のターン1')).toHaveValue('slash');
+    expect(screen.getByLabelText('ゆうしゃ のターン1')).not.toBeDisabled();
+
+    const call = vi.mocked(fetch).mock.calls.find(([url]) => url === '/api/ai/battle-plan');
+    expect(JSON.parse(call?.[1]?.body as string)).toEqual({ dayNo: 4 });
+  });
+});
+
 describe('送信（設計書 §4.4）', () => {
   it('プランを組んで送ると、その内容が本文に入る', async () => {
     installFetchMock({

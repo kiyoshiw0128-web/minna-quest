@@ -334,6 +334,21 @@ export function submitBattle(token: string, plan: BattlePlan, dayNo: number): Pr
   });
 }
 
+export type AiBattlePlanResult = {
+  plan: BattlePlan;
+  source: 'jev' | 'fallback';
+  confidence: number | null;
+  cached: boolean;
+};
+
+export function suggestBattlePlan(token: string, dayNo: number): Promise<AiBattlePlanResult> {
+  return request('/api/ai/battle-plan', {
+    method: 'POST',
+    body: JSON.stringify({ dayNo }),
+    ...withAuth(token),
+  });
+}
+
 export function saveBattleTurns(token: string, characterId: string, turns: (string | null)[]): Promise<{ characterId: string; turns: (string | null)[] }> {
   return request('/api/battle-plan', { method: 'POST', body: JSON.stringify({ characterId, turns }), ...withAuth(token) });
 }

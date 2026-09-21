@@ -2,7 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { isBossDay } from '@mq/core';
 import type { BattlePlan, PartyMember } from '@mq/core';
 import {
-  ApiError, UnauthorizedError, fetchBattle, fetchWorld, submitBattle,
+  ApiError, UnauthorizedError, fetchBattle, fetchWorld, submitBattle, suggestBattlePlan,
 } from '../api.js';
 import type { BattleInfo, BattleSubmitResult, WorldResult } from '../api.js';
 import { resolveEvent } from '../events.js';
@@ -28,6 +28,12 @@ type SubmitState =
   | { kind: 'error'; message: string }
   | { kind: 'result'; result: BattleSubmitResult };
 
+type AiState =
+  | { kind: 'idle' }
+  | { kind: 'loading' }
+  | { kind: 'done'; source: 'jev' | 'fallback'; confidence: number | null; cached: boolean }
+  | { kind: 'error'; message: string };
+
 /** 世界の履歴のうち、戦闘だった日（締まっている）だけを日付の昇順で返す（設計書 §4.2）。 */
 function battleDayNumbers(world: WorldResult): number[] {
   return world.history
@@ -39,6 +45,7 @@ export function BattleScreen({ token, onUnauthorized, dayNo: requestedDay, embed
   const [load, setLoad] = useState<LoadState>({ kind: 'loading' });
   const [plan, setPlan] = useState<PlanState>({});
   const [submitState, setSubmitState] = useState<SubmitState>({ kind: 'idle' });
+  const [aiState, setAiState] = useState<AiState>({ kind: 'idle' });
   // プランを作り直すのは「見ている日が変わったとき」だけにする。
   // 送信結果を反映するための再読み込み（無し・実際にはこの画面は再読み込みしないが
   // 将来の変更に備える）でも同じ日である限りプランを消さない（設計書 §4.5）。
@@ -48,6 +55,7 @@ export function BattleScreen({ token, onUnauthorized, dayNo: requestedDay, embed
     async (dayNo?: number) => {
       setLoad({ kind: 'loading' });
       setSubmitState({ kind: 'idle' });
+      setAiState({ kind: 'idle' });
       try {
         const [world, battle] = await Promise.all([fetchWorld(token), fetchBattle(token, dayNo)]);
         setLoad({ kind: 'loaded', world, battle });
@@ -110,6 +118,22 @@ export function BattleScreen({ token, onUnauthorized, dayNo: requestedDay, embed
     }
   }
 
+  async function handleAiSuggestion(): Promise<void> {
+    if (load.kind !== 'loaded' || !load.battle.hasBattle) return;
+    setAiState({ kind: 'loading' });
+    try {
+      const result = await suggestBattlePlan(token, load.battle.dayNo);
+      setPlan(result.plan);
+      setAiState({ kind: 'done', source: result.source, confidence: result.confidence, cached: result.cached });
+    } catch (error) {
+      if (error instanceof UnauthorizedError) {
+        onUnauthorized();
+        return;
+      }
+      setAiState({ kind: 'error', message: error instanceof ApiError ? error.message : '通信に失敗しました' });
+    }
+  }
+
   const Container = embedded ? 'section' : 'main';
   const Heading = embedded ? 'h2' : 'h1';
 
@@ -153,7 +177,9 @@ export function BattleScreen({ token, onUnauthorized, dayNo: requestedDay, embed
           plan={plan}
           onChangeTurn={setTurnSkill}
           onSubmit={() => void handleSubmit()}
+          onAiSuggestion={() => void handleAiSuggestion()}
           submitState={submitState}
+          aiState={aiState}
         />
       )}
     </Container>
@@ -200,18 +226,23 @@ function BattleBody({
   plan,
   onChangeTurn,
   onSubmit,
+  onAiSuggestion,
   submitState,
+  aiState,
 }: {
   embedded: boolean;
   battle: Extract<BattleInfo, { hasBattle: true }>;
   plan: PlanState;
   onChangeTurn: (characterId: string, turnIndex: number, skillId: string | null) => void;
   onSubmit: () => void;
+  onAiSuggestion: () => void;
   submitState: SubmitState;
+  aiState: AiState;
 }) {
   const [retry, setRetry] = useState(false);
   const saved = battle.report;
   const submitting = submitState.kind === 'submitting';
+  const aiLoading = aiState.kind === 'loading';
 
   return (
     <section>
@@ -234,12 +265,27 @@ function BattleBody({
       <h2>{battle.enemy.name} との戦い</h2>
       <EnemyPortrait enemyId={battle.enemy.id} name={battle.enemy.name} />
       {(!embedded || !saved || retry) && <>
+      <section aria-label="Jev AI作戦提案">
+        <h3>Jev 作戦参謀</h3>
+        <p>敵の行動、仲間の能力、装備中の技から8ターンの作戦を提案します。提案後も自由に直せます。</p>
+        <button type="button" onClick={onAiSuggestion} disabled={submitting || aiLoading}>
+          {aiLoading ? 'Jevが考え中…' : 'Jevに作戦を考えてもらう'}
+        </button>
+        {aiState.kind === 'done' && (
+          <p role="status">
+            {aiState.source === 'jev'
+              ? `Jevの提案をセットしました${aiState.cached ? '（前回の提案）' : ''}。確認してから挑んでください。`
+              : 'Jevに接続できなかったため、基本作戦をセットしました。確認してから挑んでください。'}
+          </p>
+        )}
+        {aiState.kind === 'error' && <p role="alert">{aiState.message}</p>}
+      </section>
       <TurnGrid
         enemy={battle.enemy}
         party={battle.party}
         plan={plan}
         onChangeTurn={onChangeTurn}
-        disabled={submitting}
+        disabled={submitting || aiLoading}
       />
 
       <h2>パーティ</h2>
