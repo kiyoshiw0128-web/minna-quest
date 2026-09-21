@@ -3,6 +3,7 @@ import { handleArenaRanking, handleGetArena, handlePostArena } from './routes/ar
 import { handleGetBattle, handlePostBattle } from './routes/battle.js';
 import { handleBattlePlan } from './routes/battlePlan.js';
 import { handleAiBattlePlan } from './routes/aiBattlePlan.js';
+import { handleAiAdvice } from './routes/aiAdvice.js';
 import { handleBuy } from './routes/buy.js';
 import { handleDismiss } from './routes/dismiss.js';
 import { handleEmail } from './routes/email.js';
@@ -69,6 +70,9 @@ export default {
     }
     if (url.pathname === '/api/ai/battle-plan' && request.method === 'POST') {
       return handleAiBattlePlan(request, env);
+    }
+    if (url.pathname === '/api/ai/advice' && request.method === 'POST') {
+      return handleAiAdvice(request, env);
     }
 
     if (url.pathname === '/api/job' && request.method === 'POST') {

@@ -189,6 +189,9 @@ div:has(> table), details:has(> table) { overflow-x: auto; }
 .scenario-focus h2 { color: #eff6ff; font-size: 1rem; margin: 0 0 8px; }
 .scenario-focus strong { color: var(--accent); }
 .scenario-focus p { margin-bottom: 0; }
+.ai-advisor, .ai-recommendation { border: 1px solid var(--line); background: rgba(11, 43, 91, .55); padding: 10px 12px; }
+.ai-advice-result { margin-top: 10px; padding-top: 8px; border-top: 1px solid var(--line); }
+.ai-advice-result button + button { margin-left: 8px; }
 .journey-route { display: block; margin-top: 4px; font-size: .75rem; color: var(--muted); }
 .previous-story h3 { font-size: .85rem; color: var(--accent); margin-bottom: 4px; }
 .quest-journal { border-top: 4px ridge #aed1ef; margin-top: 20px; padding-top: 8px; }

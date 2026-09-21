@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { ARMORS, WEAPONS } from '@mq/core';
-import { ApiError, UnauthorizedError, fetchMe, saveBattleTurns, updateCharacterEquipmentItems, updateEquipment } from '../api.js';
-import type { MeResult } from '../api.js';
+import { ARMORS, PASSIVES, SKILLS, WEAPONS } from '@mq/core';
+import { ApiError, UnauthorizedError, fetchMe, saveBattleTurns, suggestLoadout, updateCharacterEquipmentItems, updateEquipment } from '../api.js';
+import type { LoadoutAdviceResult, MeResult } from '../api.js';
 import { EquipPanel, EquipmentItemPanel } from './equipmentPanels.js';
 import { TurnOrderPanel } from './TurnOrderPanel.js';
 
@@ -13,6 +13,8 @@ export function EquipmentScreen({ token, onUnauthorized, onOpenShop }: Props) {
   const [error, setError] = useState<string | null>(null);
   const [message, setMessage] = useState('');
   const [busy, setBusy] = useState(false);
+  const [advice, setAdvice] = useState<LoadoutAdviceResult | null>(null);
+  const [adviceLoading, setAdviceLoading] = useState(false);
   const saving = useRef(false);
 
   const reload = useCallback(async () => {
@@ -45,6 +47,20 @@ export function EquipmentScreen({ token, onUnauthorized, onOpenShop }: Props) {
     }
   }
 
+  async function askJev(characterId: string): Promise<void> {
+    setAdviceLoading(true);
+    setAdvice(null);
+    setError(null);
+    try {
+      setAdvice(await suggestLoadout(token, characterId));
+    } catch (cause) {
+      if (cause instanceof UnauthorizedError) onUnauthorized();
+      else setError(cause instanceof ApiError ? cause.message : 'Jevへの相談に失敗しました');
+    } finally {
+      setAdviceLoading(false);
+    }
+  }
+
   const member = me?.party.find((item) => item.id === selectedId) ?? me?.party[0];
   const weapon = member?.equippedWeaponId ? WEAPONS[member.equippedWeaponId as keyof typeof WEAPONS]?.name : null;
   const armor = member?.equippedArmorId ? ARMORS[member.equippedArmorId as keyof typeof ARMORS]?.name : null;
@@ -59,12 +75,34 @@ export function EquipmentScreen({ token, onUnauthorized, onOpenShop }: Props) {
       {me && !member && <p>装備を設定する仲間がいません。</p>}
       {me && member && <>
         <label className="equipment-character">設定する仲間
-          <select value={member.id} disabled={busy} onChange={(event) => { setSelectedId(event.target.value); setMessage(''); setError(null); }}>
+          <select value={member.id} disabled={busy} onChange={(event) => { setSelectedId(event.target.value); setAdvice(null); setMessage(''); setError(null); }}>
             {me.party.map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}
           </select>
         </label>
         <h2>{member.name}</h2>
         <p>装備中：武器「{weapon ?? 'なし'}」／防具「{armor ?? 'なし'}」</p>
+        <section className="ai-advisor" aria-label="Jev装備相談">
+          <h3>Jev 装備参謀</h3>
+          <p>所持品、職業、素質、習得した技を比較して構成を提案します。確認するまで装備は変わりません。</p>
+          <button type="button" disabled={busy || adviceLoading} onClick={() => void askJev(member.id)}>
+            {adviceLoading ? 'Jevが構成中…' : 'Jevに装備を相談する'}
+          </button>
+          {advice && <div className="ai-advice-result" role="status">
+            <p><strong>{advice.source === 'jev' ? 'Jevの提案' : '現在の安全な構成'}</strong></p>
+            <p>武器：{advice.weaponId ? WEAPONS[advice.weaponId as keyof typeof WEAPONS]?.name ?? advice.weaponId : 'なし'}<br />
+              防具：{advice.armorId ? ARMORS[advice.armorId as keyof typeof ARMORS]?.name ?? advice.armorId : 'なし'}</p>
+            <p>技：{advice.activeIds.map((id) => SKILLS[id as keyof typeof SKILLS]?.name ?? id).join('・') || 'なし'}</p>
+            <p>パッシブ：{advice.passiveIds.map((id) => PASSIVES[id as keyof typeof PASSIVES]?.name ?? id).join('・') || 'なし'}</p>
+            <button type="button" disabled={busy} onClick={() => void save(
+              () => updateCharacterEquipmentItems(token, member.id, advice.weaponId, advice.armorId), 'Jev提案の武器・防具')}>
+              提案の武器・防具を装備
+            </button>
+            <button type="button" disabled={busy} onClick={() => void save(
+              () => updateEquipment(token, member.id, advice.activeIds, advice.passiveIds), 'Jev提案のスキル')}>
+              提案のスキルを装備
+            </button>
+          </div>}
+        </section>
         <EquipmentItemPanel key={`items:${member.id}:${member.equippedWeaponId}:${member.equippedArmorId}`} member={member} party={me.party} items={me.items ?? []}
           busy={busy} error={null} onSave={(weaponId, armorId) => void save(
             () => updateCharacterEquipmentItems(token, member.id, weaponId, armorId), '武器・防具')} />

@@ -124,6 +124,20 @@ function shopResponse() {
 }
 
 describe('仲間画面（設計書 §5）', () => {
+  it('Jevの酒場推薦を候補者カードへ表示する', async () => {
+    installFetchMock({
+      'GET /api/me': meResponse(500), 'GET /api/tavern': tavernResponse(),
+      'POST /api/ai/advice': jsonResponse(200, { ok: true, data: {
+        recruitId: 'r1', source: 'jev', confidence: 0.8, cached: false,
+      } }),
+    });
+    render(<PartyScreen token="t" onUnauthorized={vi.fn()} />);
+    await userEvent.click(await screen.findByRole('button', { name: 'Jevに仲間を選んでもらう' }));
+    expect(await screen.findByText('◆ Jevの推薦')).toBeInTheDocument();
+    const call = vi.mocked(fetch).mock.calls.find(([url]) => url === '/api/ai/advice');
+    expect(JSON.parse(String(call?.[1]?.body))).toEqual({ kind: 'recruit' });
+  });
+
   it('所持金・パーティ・酒場の3人が出る', async () => {
     installFetchMock({
       'GET /api/me': meResponse(500),
@@ -599,6 +613,21 @@ describe('装備パネル（設計書 §7）', () => {
 });
 
 describe('仲間・装備・店の分離', () => {
+  it('Jevの装備提案を確認してから適用できる', async () => {
+    installFetchMock({
+      'GET /api/me': meResponseWithProvoke(500),
+      'POST /api/ai/advice': jsonResponse(200, { ok: true, data: {
+        weaponId: null, armorId: null, activeIds: ['slash', 'provoke'], passiveIds: [],
+        source: 'jev', confidence: 0.76, cached: false,
+      } }),
+    });
+    render(<EquipmentScreen token="t" onUnauthorized={vi.fn()} />);
+    await userEvent.click(await screen.findByRole('button', { name: 'Jevに装備を相談する' }));
+    expect(await screen.findByText('Jevの提案')).toBeInTheDocument();
+    expect(screen.getByText('技：斬りつける・挑発')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: '提案のスキルを装備' })).toBeInTheDocument();
+  });
+
   it('仲間ごとの8ターンを保存し、画面を開き直しても順番を復元する', async () => {
     const payload = await meResponseTwoMembers(500).json();
     payload.data.party[1].learnedSkillIds = ['slash', 'provoke'];

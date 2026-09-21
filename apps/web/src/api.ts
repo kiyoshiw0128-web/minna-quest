@@ -369,6 +369,23 @@ export function fetchTavern(token: string): Promise<TavernResult> {
   return request('/api/tavern', withAuth(token));
 }
 
+export type RecruitAdviceResult = {
+  recruitId: string | null; source: 'jev' | 'fallback'; confidence: number | null; cached: boolean;
+};
+export function suggestRecruit(token: string): Promise<RecruitAdviceResult> {
+  return request('/api/ai/advice', { method: 'POST', body: JSON.stringify({ kind: 'recruit' }), ...withAuth(token) });
+}
+
+export type LoadoutAdviceResult = {
+  weaponId: string | null; armorId: string | null; activeIds: string[]; passiveIds: string[];
+  source: 'jev' | 'fallback'; confidence: number | null; cached: boolean;
+};
+export function suggestLoadout(token: string, characterId: string): Promise<LoadoutAdviceResult> {
+  return request('/api/ai/advice', {
+    method: 'POST', body: JSON.stringify({ kind: 'loadout', characterId }), ...withAuth(token),
+  });
+}
+
 export type HireResult = { characterId: string; name: string; jobId: string; cost: number };
 
 export function hireRecruit(token: string, recruitId: string): Promise<HireResult> {

@@ -6,7 +6,7 @@ import type {
 } from '@mq/core';
 import {
   ApiError, UnauthorizedError, changeCharacterJob, dismissCharacter, fetchMe, fetchTavern,
-  hireRecruit, registerEmail, reorderParty, setActivePet,
+  hireRecruit, registerEmail, reorderParty, setActivePet, suggestRecruit,
 } from '../api.js';
 import type { MeResult, MePartyMember, TavernResult } from '../api.js';
 
@@ -24,6 +24,9 @@ type LoadState =
 
 /** 雇用は同時に1件まで。複数のボタンを連打されても二重に送らせない。 */
 type HireState = { kind: 'idle' } | { kind: 'hiring'; recruitId: string } | { kind: 'error'; message: string };
+type RecruitAdviceState = { kind: 'idle' } | { kind: 'loading' }
+  | { kind: 'done'; recruitId: string | null; source: 'jev' | 'fallback' }
+  | { kind: 'error'; message: string };
 
 /**
  * 転職・装備・並べ替え・解雇に共通の実行状態。key で「今どの操作が動いているか
@@ -70,6 +73,7 @@ export function PartyScreen({ token, onUnauthorized }: Props) {
   const [load, setLoad] = useState<LoadState>({ kind: 'loading' });
   const [hireState, setHireState] = useState<HireState>({ kind: 'idle' });
   const [actionState, setActionState] = useState<ActionState>({ kind: 'idle' });
+  const [recruitAdvice, setRecruitAdvice] = useState<RecruitAdviceState>({ kind: 'idle' });
 
   const reload = useCallback(async () => {
     setLoad({ kind: 'loading' });
@@ -121,6 +125,17 @@ export function PartyScreen({ token, onUnauthorized }: Props) {
       // 金貨不足・パーティ満杯はサーバの文言をそのまま出す（設計書 §5）。
       const message = error instanceof ApiError ? error.message : '通信に失敗しました';
       setHireState({ kind: 'error', message });
+    }
+  }
+
+  async function handleRecruitAdvice(): Promise<void> {
+    setRecruitAdvice({ kind: 'loading' });
+    try {
+      const result = await suggestRecruit(token);
+      setRecruitAdvice({ kind: 'done', recruitId: result.recruitId, source: result.source });
+    } catch (error) {
+      if (error instanceof UnauthorizedError) return onUnauthorized();
+      setRecruitAdvice({ kind: 'error', message: error instanceof ApiError ? error.message : '通信に失敗しました' });
     }
   }
 
@@ -205,6 +220,15 @@ export function PartyScreen({ token, onUnauthorized }: Props) {
 
       <section>
         <h2>今日の酒場</h2>
+        <p>Jevは現在のパーティと候補者の職業・素質・費用を比べて、足りない役割を補う仲間を選びます。</p>
+        <button type="button" disabled={recruitAdvice.kind === 'loading' || tavern.recruits.length === 0}
+          onClick={() => void handleRecruitAdvice()}>
+          {recruitAdvice.kind === 'loading' ? 'Jevが選考中…' : 'Jevに仲間を選んでもらう'}
+        </button>
+        {recruitAdvice.kind === 'done' && <p role="status">{recruitAdvice.source === 'jev'
+          ? 'Jevの推薦に印を付けました。能力を確認してから雇ってください。'
+          : 'Jevに接続できなかったため、素質の総合値が高い候補に印を付けました。'}</p>}
+        {recruitAdvice.kind === 'error' && <p role="alert">{recruitAdvice.message}</p>}
         {partyFull && <p>パーティが満員です。仲間を雇うには枠を空ける必要があります。</p>}
         <ul>
           {tavern.recruits.map((recruit) => (
@@ -213,6 +237,7 @@ export function PartyScreen({ token, onUnauthorized }: Props) {
                 recruit={recruit}
                 onHire={() => void handleHire(recruit)}
                 busy={hireState.kind === 'hiring'}
+                recommended={recruitAdvice.kind === 'done' && recruitAdvice.recruitId === recruit.id}
               />
             </li>
           ))}
@@ -454,13 +479,16 @@ function RecruitCard({
   recruit,
   onHire,
   busy,
+  recommended,
 }: {
   recruit: Recruit;
   onHire: () => void;
   busy: boolean;
+  recommended: boolean;
 }) {
   return (
     <div>
+      {recommended && <p className="ai-recommendation"><strong>◆ Jevの推薦</strong></p>}
       <p>
         {recruit.name}（{jobName(recruit.jobId)} / 冒険Lv{recruit.adventureLevel} / {recruit.cost}ゴールド）
       </p>
