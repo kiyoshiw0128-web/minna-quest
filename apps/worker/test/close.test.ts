@@ -47,6 +47,8 @@ describe('catchUp', () => {
     const next = await getDay(env.DB, WORLD, 2);
     expect(next?.optionIds).toHaveLength(3);
     expect(next?.chosenId).toBeNull();
+    const { getDayStoryGuide } = await import('../src/store.js');
+    expect(await getDayStoryGuide(env.DB, WORLD, 2)).toEqual({ focusId: next?.optionIds[0], guided: false });
   });
 
   it('世界の進行度が進む', async () => {

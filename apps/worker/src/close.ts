@@ -2,7 +2,7 @@ import {
   EVENTS, applyOutcome, chapterOf, closeDay, daySeed, jstDayNumber, pickAdventureEvents, eventLocation, voteSeed,
 } from '@mq/core';
 import type { DailyEvent, WorldFlags } from '@mq/core';
-import { advanceDay, getWorld, listOpenDaysBefore, listVotes } from './store.js';
+import { advanceDay, getWorld, listClosedDays, listOpenDaysBefore, listVotes } from './store.js';
 import { questVictoryTags } from './questProgress.js';
 import { guideStoryOptions } from './storyGuide.js';
 
@@ -47,8 +47,12 @@ export async function catchUp(
 
     const current = eventLocation(resolved.chosenId) ?? 'leaf';
     const selectedOptions = pickAdventureEvents(POOL, advancedFlags, daySeed(worldId, nextDayNo), current, nextDayNo);
-    const { events: options } = await guideStoryOptions(
-      selectedOptions, { previous: chosen, current, flags: advancedFlags }, typeSafeApiKey,
+    const history = await listClosedDays(db, worldId);
+    const recent = [...history.map((entry) => POOL.find((event) => event.id === entry.chosenId)), chosen]
+      .filter((event): event is DailyEvent => event !== undefined)
+      .slice(-4);
+    const { events: options, guided } = await guideStoryOptions(
+      selectedOptions, { previous: chosen, recent, current, flags: advancedFlags }, typeSafeApiKey,
     );
 
     // 選んだ選択肢に金貨があれば世界の全員に配る（設計書 §4）。ルートが共有なので
@@ -68,6 +72,7 @@ export async function catchUp(
       { fromDay: day.dayNo, currentDay: nextDayNo, chapter: advancedFlags.chapter, tags: advancedFlags.tags },
       goldAward,
       petAward,
+      { focusId: options[0]?.id ?? null, guided },
     );
     // すでに他が締めていた。正常な結果。ローカルの flags はもう古いので、
     // ここで止めて次回の起動に読み直しから任せる。

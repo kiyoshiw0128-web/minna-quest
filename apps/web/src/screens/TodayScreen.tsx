@@ -2,7 +2,7 @@ import { AdventureMap } from '../AdventureMap.js';
 import { eventLocation, LOCATIONS, locationDescription, chapterStory, routeTo } from '../geography.js';
 import type { LocationId } from '../geography.js';
 import { StoryBattle } from './StoryBattle.js';
-import { questProgress, isBossDay } from '@mq/core';
+import { QUESTS, questProgress, isBossDay } from '@mq/core';
 import { useCallback, useEffect, useState } from 'react';
 import { fetchToday, vote as voteApi, ApiError, UnauthorizedError, ALREADY_CLOSED_MESSAGE } from '../api.js';
 import type { TodayResult } from '../api.js';
@@ -112,7 +112,6 @@ export function TodayScreen({ token, onUnauthorized }: Props) {
   const quests = questProgress(tags);
   const resultDay = closed ? data.dayNo : data.dayNo - 1;
   const hasResultBattle = resultDay > 0 && (isBossDay(resultDay) || (lastEventId !== null && resolveEvent(lastEventId).kind === 'battle'));
-  const previousStory = data.previousChosenId ? resolveEvent(data.previousChosenId).resultText : null;
 
   return (
     <main className="today-screen">
@@ -122,9 +121,9 @@ export function TodayScreen({ token, onUnauthorized }: Props) {
       </header>
       <AdventureMap current={location} />
       <p className="chapter-story">{chapterStory(data.chapter, tags)}</p>
+      <ScenarioPanel data={data} closed={closed} />
       <div className="location-story">
         <h2>{location !== null ? `${LOCATIONS[location].symbol} ${LOCATIONS[location].name}` : '◆ 旅の途中'}</h2>
-        {!closed && previousStory && <div className="previous-story"><h3>前回の出来事</h3><p>{previousStory}</p></div>}
         <p>{location !== null ? locationDescription(location, tags) : '街道の先には、まだ知らない土地が広がっている。'}</p>
       </div>
 
@@ -145,6 +144,42 @@ export function TodayScreen({ token, onUnauthorized }: Props) {
       {!closed && <p className="journey-prompt">さて、どこへ向かおうか。</p>}
       {closed ? <ClosedDay data={data} /> : <OpenDay key={data.dayNo} current={location} data={data} onVote={handleVote} voteState={voteState} />}
     </main>
+  );
+}
+
+function ScenarioPanel({ data, closed }: { data: TodayResult; closed: boolean }) {
+  const recentIds = data.recentChosenIds ?? (data.previousChosenId ? [data.previousChosenId] : []);
+  const recapIds = closed && recentIds.at(-1) === data.chosenId ? recentIds.slice(0, -1) : recentIds;
+  const recent = recapIds
+    .map(resolveEvent)
+    .filter((event) => event.resultText !== null)
+    .slice(-3);
+  const focusId = closed ? data.chosenId : (data.storyFocusId ?? data.optionIds[0] ?? null);
+  const focus = focusId === null ? null : resolveEvent(focusId);
+  const quest = focusId === null ? undefined : QUESTS.find((candidate) =>
+    candidate.steps.some((step) => step.eventId === focusId));
+  const episode = quest?.steps.findIndex((step) => step.eventId === focusId) ?? -1;
+  const objective = episode < 0 ? null : quest?.steps[episode]?.objective ?? null;
+
+  if (recent.length === 0 && focus === null) return null;
+  return (
+    <section className="scenario-panel" aria-label="現在のシナリオ">
+      <p className="screen-caption">◆ これまでの物語 ◆</p>
+      {recent.length === 0
+        ? <p>一行の冒険は、ここから始まる。</p>
+        : <div className="previous-story">
+            {recent.map((event) => <p key={event.id} className="scenario-recap">{event.resultText}</p>)}
+          </div>}
+      {focus !== null && <div className="scenario-focus">
+        <h2>{data.storyGuided && !closed ? 'Jevが選んだ今回の本筋' : '今回の本筋'}</h2>
+        {quest !== undefined && episode >= 0
+          ? <>
+              <strong>「{quest.name}」第{episode + 1}話 / 全{quest.steps.length}話</strong>
+              <p>{objective}。物語は「{focus.label}」へ続こうとしている。</p>
+            </>
+          : <p>これまでの出来事を受け、次は「{focus.label}」が物語の焦点になる。</p>}
+      </div>}
+    </section>
   );
 }
 

@@ -1,4 +1,4 @@
-import { eventLocation, LOCATIONS } from '@mq/core';
+import { eventLocation, LOCATIONS, QUESTS } from '@mq/core';
 import type { DailyEvent, LocationId, WorldFlags } from '@mq/core';
 
 type ChoiceAnswer = {
@@ -25,7 +25,7 @@ const TIMEOUT_MS = 2_500;
  */
 export async function guideStoryOptions(
   events: readonly DailyEvent[],
-  context: { previous: DailyEvent | undefined; current: LocationId; flags: WorldFlags },
+  context: { previous: DailyEvent | undefined; recent?: readonly DailyEvent[]; current: LocationId; flags: WorldFlags },
   apiKey: string | undefined,
   fetcher: typeof fetch = fetch,
 ): Promise<StoryGuideResult> {
@@ -36,11 +36,20 @@ export async function guideStoryOptions(
   try {
     const describe = (event: DailyEvent) => {
       const place = eventLocation(event.id);
+      const quest = QUESTS.find((candidate) => candidate.steps.some((step) => step.eventId === event.id));
+      const stepIndex = quest?.steps.findIndex((step) => step.eventId === event.id) ?? -1;
       return {
         id: event.id,
         name: event.name,
         kind: event.kind,
         location: place === null ? 'unknown' : LOCATIONS[place].name,
+        quest: quest === undefined ? null : {
+          name: quest.name,
+          episode: stepIndex + 1,
+          total_episodes: quest.steps.length,
+          objective: quest.steps[stepIndex]?.objective ?? '',
+          is_continuation: stepIndex > 0,
+        },
       };
     };
     const response = await fetcher(ENDPOINT, {
@@ -58,6 +67,11 @@ export async function guideStoryOptions(
             name: context.previous.name,
             result: context.previous.resultText ?? '',
           } : null,
+          recent_story: (context.recent ?? []).slice(-4).map((event) => ({
+            id: event.id,
+            name: event.name,
+            result: event.resultText ?? '',
+          })),
           established_story_tags: context.flags.tags,
           candidates: events.map((event) => ({
             ...describe(event),
@@ -71,7 +85,8 @@ export async function guideStoryOptions(
               question: 'Which candidate is the most coherent and interesting immediate continuation of the established adventure?',
               rules: [
                 'Choose only from `state.candidates`.',
-                'Prefer an unresolved quest continuation or consequence of the previous event.',
+                'Prefer the next episode of an unresolved quest over an unrelated standalone incident.',
+                'Keep continuity with `state.recent_story`, especially named people, places, and unresolved consequences.',
                 'Respect current location and established story tags.',
                 'If several fit, prefer variety over repeating the previous kind of scene.',
               ],

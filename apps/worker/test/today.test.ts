@@ -138,8 +138,14 @@ describe('冒険の現在地に使う前日の結果', () => {
     await env.DB.prepare('INSERT INTO world_days (world_id, day_no, option_ids, chosen_id) VALUES (?, 1, ?, ?)')
       .bind(WORLD, JSON.stringify(['forestSpiritPray']), 'forestSpiritPray').run();
     await authed('/api/vote', { method: 'POST', body: JSON.stringify({ optionId: 'town' }) });
-    const payload = await (await authed('/api/today')).json<{ data: { previousChosenId: string; myVote: string; chosenId: null; counts: null } }>();
+    const payload = await (await authed('/api/today')).json<{ data: {
+      previousChosenId: string; recentChosenIds: string[]; storyFocusId: string;
+      storyGuided: boolean; myVote: string; chosenId: null; counts: null;
+    } }>();
     expect(payload.data.previousChosenId).toBe('forestSpiritPray');
+    expect(payload.data.recentChosenIds).toEqual(['forestSpiritPray']);
+    expect(payload.data.storyFocusId).toBe('forest');
+    expect(payload.data.storyGuided).toBe(false);
     expect(payload.data.myVote).toBe('town');
     expect(payload.data.chosenId).toBeNull();
     expect(payload.data.counts).toBeNull();

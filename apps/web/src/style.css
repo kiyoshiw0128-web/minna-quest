@@ -182,6 +182,13 @@ div:has(> table), details:has(> table) { overflow-x: auto; }
 }
 .tower-floor[aria-pressed='true'], .tower-floor[aria-pressed='true']:hover { background: #173f91; color: #fff19a; }
 .chapter-story { font-size: .85rem; color: var(--muted); line-height: 1.8; }
+.scenario-panel { border-block: 4px ridge #aed1ef; margin: 14px 0; padding: 12px 0; }
+.scenario-panel .screen-caption { color: var(--accent); margin-top: 0; }
+.scenario-recap { line-height: 1.8; margin: 8px 0; }
+.scenario-focus { margin-top: 12px; padding: 10px 12px; border: 1px solid var(--line); background: rgba(11, 43, 91, .55); }
+.scenario-focus h2 { color: #eff6ff; font-size: 1rem; margin: 0 0 8px; }
+.scenario-focus strong { color: var(--accent); }
+.scenario-focus p { margin-bottom: 0; }
 .journey-route { display: block; margin-top: 4px; font-size: .75rem; color: var(--muted); }
 .previous-story h3 { font-size: .85rem; color: var(--accent); margin-bottom: 4px; }
 .quest-journal { border-top: 4px ridge #aed1ef; margin-top: 20px; padding-top: 8px; }

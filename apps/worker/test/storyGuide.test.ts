@@ -21,6 +21,20 @@ describe('TypeSafeによる物語候補の整列', () => {
     expect(request.model).toBe('jev-latest');
     expect(Object.keys(request.questions.next_event.criteria)).toEqual(candidates.map((event) => event.id));
   });
+  it('直近の物語と連続依頼の話数をJevへ渡す', async () => {
+    const questCandidates = [EVENTS.millTracks, EVENTS.crossroads];
+    const fetcher = response({ answers: { next_event: { type: 'choice', choice: 'millTracks', confidence: 0.9,
+      probabilities: { millTracks: 0.9, crossroads: 0.1 } } } });
+    await guideStoryOptions(questCandidates, {
+      previous: EVENTS.millRequest, recent: [EVENTS.meetElder, EVENTS.millRequest],
+      current: 'leaf', flags: { chapter: 1, tags: ['q-mill-1'] },
+    }, 'secret', fetcher);
+    const request = JSON.parse((fetcher as ReturnType<typeof vi.fn>).mock.calls[0]![1]!.body as string);
+    expect(request.state.recent_story.map((event: { id: string }) => event.id)).toEqual(['meetElder', 'millRequest']);
+    expect(request.questions.next_event.criteria.millTracks.quest).toMatchObject({
+      name: '止まった水車', episode: 2, total_episodes: 4, is_continuation: true,
+    });
+  });
   it.each([
     ['キー未設定', undefined, response({})],
     ['低確信', 'secret', response({ answers: { next_event: { type: 'choice', choice: 'banditAmbush', confidence: 0.2, probabilities: {} } } })],

@@ -1,5 +1,5 @@
 import { requirePlayer } from '../auth.js';
-import { getDay, getWorld, listVotes } from '../store.js';
+import { getDay, getDayStoryGuide, getWorld, listClosedDays, listVotes } from '../store.js';
 import { fail, ok } from '../respond.js';
 import type { Env } from '../env.js';
 import { questVictoryTags } from '../questProgress.js';
@@ -21,10 +21,15 @@ export async function handleToday(request: Request, env: Env): Promise<Response>
   const closed = day.chosenId !== null;
 
   const previous = day.dayNo > 1 ? await getDay(env.DB, world.id, day.dayNo - 1) : null;
+  const recent = (await listClosedDays(env.DB, world.id)).slice(-4);
+  const storyGuide = await getDayStoryGuide(env.DB, world.id, day.dayNo);
 
   return ok({
     dayNo: day.dayNo,
     previousChosenId: previous?.chosenId ?? null,
+    recentChosenIds: recent.flatMap((entry) => entry.chosenId === null ? [] : [entry.chosenId]),
+    storyFocusId: storyGuide.focusId ?? day.optionIds[0] ?? null,
+    storyGuided: storyGuide.guided,
     chapter: world.chapter,
     tags: [...new Set([...world.tags, ...await questVictoryTags(env.DB, world.id)])],
     optionIds: day.optionIds,

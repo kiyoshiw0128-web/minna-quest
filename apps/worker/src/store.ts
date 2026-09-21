@@ -137,6 +137,7 @@ export async function advanceDay(
   progress: { fromDay: number; currentDay: number; chapter: number; tags: readonly string[] },
   goldAward = 0,
   petAward: string | null = null,
+  storyGuide: { focusId: string | null; guided: boolean } = { focusId: null, guided: false },
 ): Promise<boolean> {
   // 締める前の状態（未締め）を表す条件。gold・pet の配布文が締めの文より前に
   // 読む前提を1箇所にまとめておく（bind の値を毎回並べ直すと個数を数え間違える）。
@@ -192,11 +193,15 @@ export async function advanceDay(
       ),
     db
       .prepare(
-        `INSERT INTO world_days (world_id, day_no, option_ids, chosen_id, counts, tiebroken)
-         VALUES (?, ?, ?, NULL, NULL, NULL)
+        `INSERT INTO world_days
+           (world_id, day_no, option_ids, chosen_id, counts, tiebroken, story_focus_id, story_guided)
+         VALUES (?, ?, ?, NULL, NULL, NULL, ?, ?)
          ON CONFLICT (world_id, day_no) DO NOTHING`,
       )
-      .bind(worldId, nextDay.dayNo, JSON.stringify(nextDay.optionIds)),
+      .bind(
+        worldId, nextDay.dayNo, JSON.stringify(nextDay.optionIds), storyGuide.focusId,
+        storyGuide.guided ? 1 : 0,
+      ),
     db
       .prepare(
         `UPDATE worlds SET current_day = ?, chapter = ?, tags = ?
@@ -208,6 +213,15 @@ export async function advanceDay(
   const results = await db.batch(statements);
   const closeResult = results[closeIndex];
   return (closeResult.meta.changes ?? 0) === 1;
+}
+
+export async function getDayStoryGuide(
+  db: D1Database, worldId: string, dayNo: number,
+): Promise<{ focusId: string | null; guided: boolean }> {
+  const row = await db.prepare(
+    'SELECT story_focus_id, story_guided FROM world_days WHERE world_id = ? AND day_no = ?',
+  ).bind(worldId, dayNo).first<{ story_focus_id: string | null; story_guided: number }>();
+  return { focusId: row?.story_focus_id ?? null, guided: row?.story_guided === 1 };
 }
 
 export async function listVotes(

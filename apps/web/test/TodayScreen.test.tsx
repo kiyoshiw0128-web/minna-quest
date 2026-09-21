@@ -9,6 +9,22 @@ afterEach(() => {
 });
 
 describe('未締めの日', () => {
+  it('直近のあらすじとJevが選んだ連続依頼の本筋をまとめて表示する', async () => {
+    installFetchMock({
+      'GET /api/today': jsonResponse(200, { ok: true, data: {
+        dayNo: 3, chapter: 1, previousChosenId: 'millRequest',
+        recentChosenIds: ['meetElder', 'millRequest'], storyFocusId: 'millTracks', storyGuided: true,
+        tags: ['met-elder', 'q-mill-1'], optionIds: ['millTracks', 'forestWolfAttack', 'crossroads'],
+        myVote: null, chosenId: null, counts: null, tiebroken: null,
+      } }),
+    });
+    render(<TodayScreen token="t" onUnauthorized={vi.fn()} />);
+    expect(await screen.findByRole('heading', { name: 'Jevが選んだ今回の本筋' })).toBeInTheDocument();
+    expect(screen.getByText(/「止まった水車」第2話/)).toBeInTheDocument();
+    expect(screen.getAllByText(/森で水路の詰まりを調べる/)).not.toHaveLength(0);
+    expect(screen.getByText(/水車が止まり/)).toBeInTheDocument();
+  });
+
   it('counts: null の応答では票数を出さず、「まだ分からない」と明示する', async () => {
     installFetchMock({
       'GET /api/today': jsonResponse(200, {
