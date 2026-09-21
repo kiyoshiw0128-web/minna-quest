@@ -146,7 +146,7 @@ export default {
     // 他の世界の進行を止めてはいけない（複数世界を運用する段階で顕在化する穴）。
     for (const world of worlds.results) {
       try {
-        const closed = await catchUp(env.DB, world.id, now);
+        const closed = await catchUp(env.DB, world.id, now, env.TYPESAFE_API_KEY);
         totalClosed += closed;
         console.log(`world ${world.id}: closed ${closed} day(s)`);
       } catch (error) {

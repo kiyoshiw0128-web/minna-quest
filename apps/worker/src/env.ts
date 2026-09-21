@@ -7,4 +7,6 @@ export type Env = {
   // 未設定でも他の機能が壊れないよう、mail.ts側でoptionalとして扱う
   // （設計書 §5 — キーを入れる前でもデプロイできる必要がある）。
   RESEND_API_KEY?: string;
+  // TypeSafeは毎日の候補順を整える補助。未設定・障害時も従来抽選で進行する。
+  TYPESAFE_API_KEY?: string;
 };

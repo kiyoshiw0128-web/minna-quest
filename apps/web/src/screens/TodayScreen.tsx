@@ -164,6 +164,7 @@ function OpenDay({
   return (
     <section className="daily-choices">
       <h2>∞ 次回行動選択</h2>
+      <p className="section-description">物語の流れ、現在地、進行中の依頼を見て、自然につながる候補を優先して並べています。</p>
       <form onSubmit={(event) => {
         event.preventDefault();
         if (selected !== null && !submitting && selected !== data.myVote) onVote(selected);

@@ -4,6 +4,7 @@ import {
 import type { DailyEvent, WorldFlags } from '@mq/core';
 import { advanceDay, getWorld, listOpenDaysBefore, listVotes } from './store.js';
 import { questVictoryTags } from './questProgress.js';
+import { guideStoryOptions } from './storyGuide.js';
 
 const POOL: readonly DailyEvent[] = Object.values(EVENTS);
 
@@ -16,7 +17,9 @@ const POOL: readonly DailyEvent[] = Object.values(EVENTS);
  * 1日ずつ処理するのは、途中で失敗したときにどこまで進んだかがDBに残るようにするため。
  * 次の起動が続きから再開する。
  */
-export async function catchUp(db: D1Database, worldId: string, now: Date): Promise<number> {
+export async function catchUp(
+  db: D1Database, worldId: string, now: Date, typeSafeApiKey?: string,
+): Promise<number> {
   const world = await getWorld(db, worldId);
   if (world === null) return 0;
 
@@ -42,7 +45,11 @@ export async function catchUp(db: D1Database, worldId: string, now: Date): Promi
     const nextDayNo = day.dayNo + 1;
     const advancedFlags: WorldFlags = { ...nextFlags, chapter: chapterOf(nextDayNo) };
 
-    const options = pickAdventureEvents(POOL, advancedFlags, daySeed(worldId, nextDayNo), eventLocation(resolved.chosenId) ?? 'leaf', nextDayNo);
+    const current = eventLocation(resolved.chosenId) ?? 'leaf';
+    const selectedOptions = pickAdventureEvents(POOL, advancedFlags, daySeed(worldId, nextDayNo), current, nextDayNo);
+    const { events: options } = await guideStoryOptions(
+      selectedOptions, { previous: chosen, current, flags: advancedFlags }, typeSafeApiKey,
+    );
 
     // 選んだ選択肢に金貨があれば世界の全員に配る（設計書 §4）。ルートが共有なので
     // 得られるものも共有でよく、誰が投票したかで差をつけない。締めと同じバッチに
