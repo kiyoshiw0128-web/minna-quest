@@ -11,6 +11,7 @@ import {
 import type { MeResult, MePartyMember, TavernResult } from '../api.js';
 
 import { effectLabel, StatGrid, STAT_ORDER, STAT_SHORT } from './partyDisplay.js';
+import { JobArt } from '../JobArt.js';
 
 type Props = {
   token: string;
@@ -268,9 +269,12 @@ function PartyMemberCard({
   const dismissError = errorFor(`dismiss:${member.id}`);
 
   return (
-    <details>
-      <summary>
-        {member.name}（{jobName(member.jobId)} / 冒険Lv{member.adventureLevel} / ジョブLv{member.jobLevel}）
+    <details className="party-member-card">
+      <summary className="character-summary">
+        <JobArt jobId={member.jobId} decorative />
+        <span className="character-summary-copy">
+          {member.name}（{jobName(member.jobId)} / 冒険Lv{member.adventureLevel} / ジョブLv{member.jobLevel}）
+        </span>
       </summary>
       <StatGrid stats={member.stats} />
 
@@ -378,6 +382,7 @@ function JobOption({
   if (!unlocked) {
     return (
       <>
+        <JobArt jobId={job.id} decorative />
         <span className="job-name">{job.name}</span>
         <span className="job-note">{requirementText(job)}が必要</span>
       </>
@@ -386,6 +391,7 @@ function JobOption({
 
   return (
     <>
+      <JobArt jobId={job.id} decorative />
       <span className="job-name">{job.name}</span>
       <span className="job-note">
         {visitedLevel !== undefined ? `ジョブLv${visitedLevel}` : '未経験'}
@@ -485,11 +491,14 @@ function RecruitCard({
   recommended: boolean;
 }) {
   return (
-    <div>
+    <div className="recruit-card">
+      <JobArt jobId={recruit.jobId} decorative />
+      <div className="recruit-copy">
       {recommended && <p className="ai-recommendation"><strong>◆ Jevの推薦</strong></p>}
       <p>
-        {recruit.name}（{jobName(recruit.jobId)} / 冒険Lv{recruit.adventureLevel} / {recruit.cost}ゴールド）
+        <strong>{recruit.name}</strong><br />{jobName(recruit.jobId)} · 冒険Lv{recruit.adventureLevel} · {recruit.cost}G
       </p>
+      </div>
       <AptitudeGrid aptitude={recruit.aptitude} />
       <button type="button" onClick={onHire} disabled={busy}>
         雇う

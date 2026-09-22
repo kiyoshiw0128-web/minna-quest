@@ -1,10 +1,11 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { ARMORS, PASSIVES, SKILLS, WEAPONS } from '@mq/core';
+import { ARMORS, JOBS, PASSIVES, SKILLS, WEAPONS } from '@mq/core';
 import { ApiError, UnauthorizedError, fetchMe, saveBattleTurns, suggestLoadout, updateCharacterEquipmentItems, updateEquipment } from '../api.js';
 import type { LoadoutAdviceResult, MeResult } from '../api.js';
 import { EquipPanel, EquipmentItemPanel } from './equipmentPanels.js';
 import { TurnOrderPanel } from './TurnOrderPanel.js';
 import { EquipmentArt } from '../EquipmentArt.js';
+import { JobArt } from '../JobArt.js';
 
 type Props = { token: string; onUnauthorized: () => void; onOpenShop?: () => void };
 
@@ -80,7 +81,7 @@ export function EquipmentScreen({ token, onUnauthorized, onOpenShop }: Props) {
           </select>
         </label>
         <div className="loadout-summary">
-          <div><span className="eyebrow">CURRENT LOADOUT</span><h2>{member.name}</h2><p>{weapon ?? '武器なし'} · {armor ?? '防具なし'}</p></div>
+          <div className="loadout-identity"><JobArt jobId={member.jobId} decorative /><div><span className="eyebrow">CURRENT LOADOUT</span><h2>{member.name}</h2><p>{JOBS[member.jobId as keyof typeof JOBS]?.name ?? member.jobId} · {weapon ?? '武器なし'} · {armor ?? '防具なし'}</p></div></div>
           <div className="loadout-art" aria-hidden="true"><EquipmentArt itemId={member.equippedWeaponId ?? null} slot="weapon" /><EquipmentArt itemId={member.equippedArmorId ?? null} slot="armor" /></div>
         </div>
         <section className="ai-advisor" aria-label="Jev装備相談">
