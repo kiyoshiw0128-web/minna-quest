@@ -12,6 +12,7 @@ import { activePetEffects } from '../petEffects.js';
 import { fail, ok } from '../respond.js';
 import type { Env } from '../env.js';
 import { getSavedBattlePlan } from '../battlePlans.js';
+import { immediateQuestCompletion } from '../questProgress.js';
 
 const POOL: readonly DailyEvent[] = Object.values(EVENTS);
 const ENEMY_TABLE: Readonly<Record<string, Enemy>> = ENEMIES;
@@ -247,7 +248,8 @@ export async function handlePostBattle(request: Request, env: Env): Promise<Resp
     };
   });
 
-  const { rewarded, defeated } = await recordBattleWin(env.DB, {
+  const questCompletion = isBossDay(day.dayNo) ? null : immediateQuestCompletion(day.chosenId);
+  const { rewarded, defeated, questCompleted } = await recordBattleWin(env.DB, {
     worldId: world.id,
     dayNo: day.dayNo,
     playerId: player.id,
@@ -255,12 +257,14 @@ export async function handlePostBattle(request: Request, env: Env): Promise<Resp
     goldAward: reward.gold,
     party: partyRewards,
     report: { log, enemy, party: partyMembers, rewarded: true },
+    questCompletion,
   });
 
   // defeated は「このリクエストで討伐フラグを立てたか」であり、世界がすでに
   // 討伐済みかどうか（誰かが先に倒していた）とは別物。応答には後者を出す。
   const worldDefeated = defeated || (await getDefeatedBy(env.DB, world.id, day.dayNo)) !== null;
   return automatic
-    ? ok({ report: await getBattleReport(env.DB, world.id, day.dayNo, player.id), won: true, worldDefeated })
-    : ok({ log, rewarded, worldDefeated });
+    ? ok({ report: await getBattleReport(env.DB, world.id, day.dayNo, player.id), won: true, worldDefeated,
+      questCompleted: questCompleted ? questCompletion : null })
+    : ok({ log, rewarded, worldDefeated, questCompleted: questCompleted ? questCompletion : null });
 }

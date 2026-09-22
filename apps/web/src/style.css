@@ -80,16 +80,19 @@ section > h2:first-child { margin-top: 0; }
 .journey-heading h1 { font-size: .9rem; margin: 4px 0; font-weight: 400; }
 .screen-caption { font-size: 1rem; margin: 4px 0; color: var(--accent); }
 .adventure-map { margin: 8px auto 12px; max-width: 480px; }
-.map-surface { position: relative; aspect-ratio: 3 / 2; background: #176dbb; border: 3px ridge #cfbb7d; overflow: hidden; }
-.map-surface > img { display: block; width: 100%; height: 100%; object-fit: cover; image-rendering: pixelated; }
+.map-surface { position: relative; isolation: isolate; aspect-ratio: 3 / 2; overflow: hidden; background: #173b40; border: 1px solid #78958b; }
+.map-surface::after { position: absolute; z-index: 1; inset: 0; content: ''; pointer-events: none; box-shadow: inset 0 0 45px #071f25a6; background: linear-gradient(180deg, transparent 68%, #09252a38); }
+.map-surface > img { display: block; width: 100%; height: 100%; object-fit: cover; }
 .map-labels { list-style: none; margin: 0; padding: 0; }
-.map-labels li { position: absolute; margin: 0; transform: translate(-50%, -25%); text-align: center; white-space: nowrap; font-size: clamp(10px, 2.7vw, 12px); line-height: 1.3; }
-.map-pin { display: block; color: #fff; font-size: 13px; line-height: 1; text-shadow: 1px 1px #04152e, -1px -1px #04152e; }
-.map-place { display: block; padding: 1px 3px; border: 1px solid #d9e9ff; background: #0e275ee8; color: #fff9da; text-shadow: 1px 1px #071932; }
-.map-labels li[aria-current='location'] { z-index: 1; }
-.map-labels li[aria-current='location'] .map-pin { color: #fff16b; font-size: 19px; }
-.map-labels li[aria-current='location'] .map-place { background: #fff09b; color: #332209; border-color: #714c17; font-weight: 700; text-shadow: none; }
-.adventure-map figcaption { font-size: .78rem; text-align: center; color: #fff3a6; margin-top: 6px; }
+.map-labels li { position: absolute; z-index: 2; margin: 0; transform: translate(-50%, -25%); text-align: center; white-space: nowrap; font-size: clamp(9px, 2.5vw, 12px); line-height: 1.3; }
+.map-pin { display: block; color: #efe0af; font-size: 15px; line-height: 1; text-shadow: 0 2px 4px #071a1f; }
+.map-place { display: block; padding: 3px 7px; border: 1px solid #e8dec8b8; border-radius: 5px; background: #f8f3e8e8; color: #18393b; box-shadow: 0 3px 10px #071a1f59; font-weight: 700; text-shadow: none; backdrop-filter: blur(4px); }
+.map-labels li[aria-current='location'] { z-index: 3; }
+.map-labels li[aria-current='location'] .map-pin { color: #f3ca63; font-size: 20px; animation: map-pulse 1.8s ease-in-out infinite; }
+.map-labels li[aria-current='location'] .map-place { background: #173b40ed; color: #fff; border-color: #d8b866; }
+.adventure-map figcaption { margin-top: 8px; color: #52696b; font-size: .76rem; font-weight: 700; text-align: center; letter-spacing: .06em; }
+@keyframes map-pulse { 50% { transform: translateY(-2px); filter: drop-shadow(0 0 5px #f3ca63); } }
+@media (prefers-reduced-motion: reduce) { .map-labels li[aria-current='location'] .map-pin { animation: none; } }
 .location-story { border-block: 4px ridge #aed1ef; padding: 8px 0; margin: 14px 0; }
 .location-story h2 { margin: 0 0 8px; color: #eff6ff; }
 .location-story p { line-height: 1.8; }
@@ -277,10 +280,7 @@ input[type='checkbox'], input[type='radio'] { width: 19px; height: 19px; min-hei
 .journey-heading { align-items: end; margin-bottom: 14px; }
 .journey-heading h1 { margin: 0; color: var(--muted); font-size: .8rem; font-weight: 600; letter-spacing: .04em; }
 .adventure-map { max-width: none; margin: 0 0 20px; }
-.map-surface { border: 0; border-radius: 18px; box-shadow: 0 10px 25px #173b4018; }
-.map-place { padding: 3px 7px; color: var(--fg); background: #fffffff0; border: 1px solid #fff; border-radius: 5px; text-shadow: none; }
-.map-labels li[aria-current='location'] .map-place { color: #fff; background: var(--accent); border-color: var(--accent); }
-.adventure-map figcaption { color: var(--muted); }
+.map-surface { border-radius: 18px; box-shadow: 0 12px 28px #173b4026; }
 .chapter-story { max-width: 720px; margin: 18px 0 24px; color: var(--fg); font-size: 1.03rem; line-height: 1.9; }
 .scenario-panel { border: 1px solid #cfe2da; background: linear-gradient(135deg, #edf7f2, #fdfcf4); }
 .scenario-focus { padding: 12px 0 0; border: 0; border-top: 1px solid #cfe2da; background: transparent; }
@@ -291,6 +291,10 @@ input[type='checkbox'], input[type='radio'] { width: 19px; height: 19px; min-hei
 .quest-journal { border: 1px solid var(--line); }
 .quest-journal li { padding: 12px 0; border-bottom: 1px solid var(--line); }
 .quest-journal strong { color: var(--fg); }
+.quest-completed { margin: 14px 0; padding: 16px 18px; border: 1px solid #d8b866; border-radius: 12px; background: linear-gradient(135deg, #fffaf0, #edf7f2); color: var(--fg); }
+.quest-completed strong { color: var(--good); font-size: 1.05rem; }
+.quest-completed p { margin: 7px 0; color: var(--fg); }
+.quest-completed small { color: var(--muted); font-weight: 700; }
 .daily-choices { padding: 22px; border: 1px solid var(--line); }
 .journey-options legend { color: var(--muted); }
 .journey-options .journey-option { min-height: 58px; margin: 7px 0; padding: 10px 13px; border: 1px solid var(--line); border-radius: 10px; background: #fbfcfa; }

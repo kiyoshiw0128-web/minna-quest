@@ -37,6 +37,11 @@ export function StoryBattle({ token, dayNo, onUnauthorized, onResolved }: {
       <EnemyPortrait enemyId={report.enemy.id} name={report.enemy.name} />
       <BattleResultView party={report.party} enemy={report.enemy} log={report.log} rewarded={report.rewarded}
         rewardedMessage="この戦闘の報酬を受け取りました。" notRewardedMessage="この戦闘では報酬はありません。" />
+      {result.questCompleted && <aside className="quest-completed" role="status">
+        <strong>✓ 「{result.questCompleted.name}」完了</strong>
+        <p>{result.questCompleted.resultText}</p>
+        <small>完了報酬 {result.questCompleted.gold}Gを全員が受け取りました。</small>
+      </aside>}
       {report.log.result !== 'win' && <p>「装備・スキル」で技の順番や装備を見直して、「戦闘」から再挑戦できます。</p>}
     </>}
     {result && !report && <p>{result.won ? '以前に勝利した戦闘です。詳細ログは保存されていません。' : '戦闘結果がありません。'}</p>}

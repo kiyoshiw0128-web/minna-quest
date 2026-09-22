@@ -302,6 +302,7 @@ function BattleBody({
       {submitState.kind !== 'result' && saved && <BattleResultView party={saved.party} enemy={saved.enemy} log={saved.log} rewarded={saved.rewarded} rewardedMessage="この戦闘の報酬は受け取り済みです。" notRewardedMessage="この戦闘では報酬はありません。" />}
       {!saved && battle.won && submitState.kind !== 'result' && <p>勝利済みです。以前の戦闘の詳細ログは保存されていません。</p>}
       {submitState.kind === 'result' && (
+        <>
         <BattleResultView
           party={battle.party}
           enemy={battle.enemy}
@@ -310,6 +311,12 @@ function BattleBody({
           rewardedMessage="報酬が入りました。"
           notRewardedMessage="報酬は入りませんでした。"
         />
+        {submitState.result.questCompleted && <aside className="quest-completed" role="status">
+          <strong>✓ 「{submitState.result.questCompleted.name}」完了</strong>
+          <p>{submitState.result.questCompleted.resultText}</p>
+          <small>完了報酬 {submitState.result.questCompleted.gold}Gを全員が受け取りました。</small>
+        </aside>}
+        </>
       )}
     </section>
   );

@@ -165,6 +165,18 @@ describe('金貨の配布（設計書 §4）', () => {
     expect(await goldOf('p1')).toBe(0);
   });
 
+  it('即時完了済みの依頼の帰還候補が古い投票日に残っていても完了報酬を重ねない', async () => {
+    await insertPlayer('p1');
+    await env.DB.prepare('UPDATE worlds SET tags = ? WHERE id = ?')
+      .bind(JSON.stringify(['q-mill-4']), WORLD).run();
+    await forceEventOnDay(1, 'millRepair');
+
+    await catchUp(env.DB, WORLD, atDay(2));
+
+    expect((await getDay(env.DB, WORLD, 1))?.chosenId).toBe('millRepair');
+    expect(await goldOf('p1')).toBe(0);
+  });
+
   it(
     '二重に締めても金貨は二重に配られない（並行実行でガードを競わせる）',
     async () => {

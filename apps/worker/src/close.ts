@@ -40,6 +40,11 @@ export async function catchUp(
     const resolved = closeDay(day, votes, voteSeed(worldId, day.dayNo));
 
     const chosen = POOL.find((event) => event.id === resolved.chosenId);
+    // 即時完了導入前に作られた日の候補には、すでに完了タグを持つ帰還イベントが
+    // 残っていることがある。その候補が後から選ばれても、完了報酬を二重に配らない。
+    const outcomeAlreadyApplied = chosen?.outcome?.addTags !== undefined
+      && chosen.outcome.addTags.length > 0
+      && chosen.outcome.addTags.every((tag) => flags.tags.includes(tag));
     const nextFlags: WorldFlags = chosen === undefined ? flags : applyOutcome(flags, chosen);
 
     const nextDayNo = day.dayNo + 1;
@@ -58,10 +63,10 @@ export async function catchUp(
     // 選んだ選択肢に金貨があれば世界の全員に配る（設計書 §4）。ルートが共有なので
     // 得られるものも共有でよく、誰が投票したかで差をつけない。締めと同じバッチに
     // 入れることで、締めの冪等性がそのままこの配布の冪等性になる。
-    const goldAward = chosen?.outcome?.gold ?? 0;
+    const goldAward = outcomeAlreadyApplied ? 0 : chosen?.outcome?.gold ?? 0;
     // ペットも金貨と同じ扱い（段階6・設計書 §4・§5）。同じバッチに入れないと
     // 「金貨だけ入ってペットが入らない日」が起こりうる。
-    const petAward = chosen?.outcome?.petId ?? null;
+    const petAward = outcomeAlreadyApplied ? null : chosen?.outcome?.petId ?? null;
 
     const didAdvance = await advanceDay(
       db,

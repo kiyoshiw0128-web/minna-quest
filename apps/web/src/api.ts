@@ -323,7 +323,8 @@ export type BattleInfo =
       worldDefeated: boolean;
     };
 
-export type BattleSubmitResult = { log: BattleLog; rewarded: boolean; worldDefeated: boolean };
+export type QuestCompletedResult = { name: string; tag: string; gold: number; resultText: string };
+export type BattleSubmitResult = { log: BattleLog; rewarded: boolean; worldDefeated: boolean; questCompleted?: QuestCompletedResult | null };
 
 /** dayNo を省くと、サーバは直近の締まった日を返す（設計書 §4.2）。 */
 export function fetchBattle(token: string, dayNo?: number): Promise<BattleInfo> {
@@ -358,7 +359,7 @@ export function saveBattleTurns(token: string, characterId: string, turns: (stri
   return request('/api/battle-plan', { method: 'POST', body: JSON.stringify({ characterId, turns }), ...withAuth(token) });
 }
 
-export type StoryBattleResult = { report: BattleReport | null; won: boolean; worldDefeated: boolean };
+export type StoryBattleResult = { report: BattleReport | null; won: boolean; worldDefeated: boolean; questCompleted?: QuestCompletedResult | null };
 export function resolveStoryBattle(token: string, dayNo: number): Promise<StoryBattleResult> {
   return request('/api/battle', { method: 'POST', body: JSON.stringify({ dayNo, automatic: true }), ...withAuth(token) });
 }

@@ -850,8 +850,9 @@ export async function recordBattleWin(
     goldAward: number;
     party: readonly BattleRewardCharacter[];
     report?: BattleReport;
+    questCompletion?: { tag: string; gold: number } | null;
   },
-): Promise<{ rewarded: boolean; defeated: boolean }> {
+): Promise<{ rewarded: boolean; defeated: boolean; questCompleted: boolean }> {
   const { worldId, dayNo, playerId, rewardedAt, goldAward, party } = params;
 
   const NOT_REWARDED_YET =
@@ -895,26 +896,47 @@ export async function recordBattleWin(
           .bind(member.characterId, passiveId, ...guardBind()),
       ),
     ]),
-    db
-      .prepare(
-        `INSERT INTO battle_results (world_id, day_no, player_id, result, rewarded_at)
-         SELECT ?, ?, ?, 'win', ? WHERE ${NOT_REWARDED_YET}`,
-      )
-      .bind(worldId, dayNo, playerId, rewardedAt, ...guardBind()),
-    db
-      .prepare(
-        `UPDATE world_days SET defeated_by = ?
-          WHERE world_id = ? AND day_no = ? AND defeated_by IS NULL`,
-      )
-      .bind(playerId, worldId, dayNo),
   ];
 
+  const rewardIndex = statements.length;
+  statements.push(db
+    .prepare(
+      `INSERT INTO battle_results (world_id, day_no, player_id, result, rewarded_at)
+       SELECT ?, ?, ?, 'win', ? WHERE ${NOT_REWARDED_YET}`,
+    )
+    .bind(worldId, dayNo, playerId, rewardedAt, ...guardBind()));
+
+  let completionIndex: number | null = null;
+  if (params.questCompletion) {
+    const { tag, gold } = params.questCompletion;
+    const NOT_COMPLETED_YET =
+      `EXISTS (SELECT 1 FROM worlds WHERE id = ?
+        AND NOT EXISTS (SELECT 1 FROM json_each(worlds.tags) WHERE value = ?))`;
+    statements.push(db
+      .prepare(`UPDATE players SET gold = gold + ? WHERE world_id = ? AND ${NOT_COMPLETED_YET}`)
+      .bind(gold, worldId, worldId, tag));
+    completionIndex = statements.length;
+    statements.push(db
+      .prepare(
+        `UPDATE worlds SET tags = json_insert(tags, '$[#]', ?)
+          WHERE id = ? AND NOT EXISTS (SELECT 1 FROM json_each(tags) WHERE value = ?)`,
+      )
+      .bind(tag, worldId, tag));
+  }
+
+  const defeatedIndex = statements.length;
+  statements.push(db
+    .prepare(
+      `UPDATE world_days SET defeated_by = ?
+        WHERE world_id = ? AND day_no = ? AND defeated_by IS NULL`,
+    )
+    .bind(playerId, worldId, dayNo));
+
   const results = await db.batch(statements);
-  const rewardResult = results[results.length - 2];
-  const defeatedResult = results[results.length - 1];
   return {
-    rewarded: (rewardResult.meta.changes ?? 0) === 1,
-    defeated: (defeatedResult.meta.changes ?? 0) === 1,
+    rewarded: (results[rewardIndex].meta.changes ?? 0) === 1,
+    defeated: (results[defeatedIndex].meta.changes ?? 0) === 1,
+    questCompleted: completionIndex !== null && (results[completionIndex].meta.changes ?? 0) === 1,
   };
 }
 

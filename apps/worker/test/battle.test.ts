@@ -297,6 +297,32 @@ describe('POST /api/battle（設計書 §6.2〜§6.4）', () => {
     expect(world?.defeated_by).toBe(PLAYER_A);
   });
 
+  it('依頼戦に勝つと帰還日を待たず、その場で依頼を完了して全員へ報酬を配る', async () => {
+    await seedWorld(1, 'millBoar');
+    await env.DB.prepare('UPDATE worlds SET tags = ? WHERE id = ?')
+      .bind(JSON.stringify(['q-mill-1', 'q-mill-2', 'q-mill-3']), WORLD).run();
+    await addPlayer(PLAYER_A, TOKEN_A, 0);
+    await addPlayer(PLAYER_B, TOKEN_B, 0);
+    await seedWinningHero(PLAYER_A, HERO_A);
+
+    const first = await readOk<{ questCompleted: { name: string; gold: number } | null }>(
+      await battleRequest(TOKEN_A, 'POST', { [HERO_A]: WINNING_PLAN }),
+    );
+    expect(first.questCompleted).toMatchObject({ name: '止まった水車', gold: 70 });
+
+    const world = await env.DB.prepare('SELECT tags FROM worlds WHERE id = ?').bind(WORLD).first<{ tags: string }>();
+    expect(JSON.parse(world?.tags ?? '[]')).toContain('q-mill-4');
+    const otherPlayer = await env.DB.prepare('SELECT gold FROM players WHERE id = ?').bind(PLAYER_B).first<{ gold: number }>();
+    expect(otherPlayer?.gold).toBe(70);
+
+    const second = await readOk<{ questCompleted: unknown }>(
+      await battleRequest(TOKEN_A, 'POST', { [HERO_A]: WINNING_PLAN }),
+    );
+    expect(second.questCompleted).toBeNull();
+    const goldAfterRetry = await env.DB.prepare('SELECT gold FROM players WHERE id = ?').bind(PLAYER_B).first<{ gold: number }>();
+    expect(goldAfterRetry?.gold).toBe(70);
+  });
+
   it('勝っても2回目の報酬は入らない（8・冪等性）', async () => {
     await seedWorld(1, 'banditAmbush');
     await addPlayer(PLAYER_A, TOKEN_A, 0);
