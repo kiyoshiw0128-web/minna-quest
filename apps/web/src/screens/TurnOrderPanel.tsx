@@ -10,9 +10,7 @@ export function TurnOrderPanel({ member, busy, onSave }: {
     ?? Array.from({ length: DEFAULT_MAX_TURNS }, () => member.equippedSkillIds[0] ?? null));
   return <section>
     <h3>戦闘で使う順番（{DEFAULT_MAX_TURNS}ターン）</h3>
-    <p>冒険中の戦闘は、この順番で自動的に進みます。使いたい技を上で装備して保存してから、順番を決めてください。</p>
-    <p>MP不足や再使用までの待ち時間がある技は、そのターンは使えません。「待機」は何もしません。</p>
-    <p>装備から外した技は、使える基本の技に置き換わります。</p>
+    <p className="section-description">戦闘で使う技を8ターン分セットします。</p>
     <div className="turn-order-list">
       {turns.map((id, index) => <label key={index}>
         ターン{index + 1}

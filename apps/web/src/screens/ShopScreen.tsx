@@ -43,14 +43,13 @@ export function ShopScreen({ token, onUnauthorized, onOpenEquipment }: Props) {
     }
   }
   return <main>
-    <h1>店</h1>
-    <p>武器・防具を購入できます。買った装備は「装備・スキル」で付け替えます。</p>
-    {onOpenEquipment && <button type="button" disabled={busy} onClick={onOpenEquipment}>装備・スキルを設定する</button>}
+    <header className="screen-heading"><span className="eyebrow">ARMORY</span><h1>旅支度の店</h1></header>
+    {onOpenEquipment && <button className="button-secondary" type="button" disabled={busy} onClick={onOpenEquipment}>装備へ戻る</button>}
     {error && <p role="alert">{error} <button type="button" disabled={busy} onClick={() => void reload()}>再読込</button></p>}
     {message && <p role="status">{message}</p>}
     {!data && !error && <p>読み込み中…</p>}
     {data && <>
-      <p>所持金: {data.me.gold} ゴールド</p>
+      <p className="gold-balance"><span>所持金</span><strong>{data.me.gold.toLocaleString()} G</strong></p>
       <ShopSection shopItems={data.shop.items} gold={data.me.gold} busy={busy} error={null} onBuy={(id) => void buy(id)} />
     </>}
   </main>;

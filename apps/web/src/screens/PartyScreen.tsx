@@ -180,8 +180,7 @@ export function PartyScreen({ token, onUnauthorized }: Props) {
   return (
     <main>
       <h1>仲間</h1>
-      <p>編成・転職・育成はここで。武器や技の付け替えは「装備・スキル」、購入は「店」へ。</p>
-      <p>所持金: {me.gold} ゴールド</p>
+      <p className="gold-balance"><span>所持金</span><strong>{me.gold.toLocaleString()} G</strong><span className="sr-only">所持金: {me.gold} ゴールド</span></p>
 
       <RestoreKey token={token} />
       <EmailRecoverySetting
@@ -220,7 +219,6 @@ export function PartyScreen({ token, onUnauthorized }: Props) {
 
       <section>
         <h2>今日の酒場</h2>
-        <p>Jevは現在のパーティと候補者の職業・素質・費用を比べて、足りない役割を補う仲間を選びます。</p>
         <button type="button" disabled={recruitAdvice.kind === 'loading' || tavern.recruits.length === 0}
           onClick={() => void handleRecruitAdvice()}>
           {recruitAdvice.kind === 'loading' ? 'Jevが選考中…' : 'Jevに仲間を選んでもらう'}

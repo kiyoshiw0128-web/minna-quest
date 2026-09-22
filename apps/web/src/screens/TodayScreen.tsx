@@ -116,7 +116,7 @@ export function TodayScreen({ token, onUnauthorized }: Props) {
   return (
     <main className="today-screen">
       <header className="journey-heading">
-        <p className="screen-caption">◆ 冒険 ◆</p>
+        <p className="screen-caption">JOURNEY</p>
         <h1>{data.chapter}章 {data.dayNo}日目</h1>
       </header>
       <AdventureMap current={location} />
@@ -131,17 +131,15 @@ export function TodayScreen({ token, onUnauthorized }: Props) {
       {battleRefreshError && <p role="alert">戦闘結果は保存されましたが、依頼の表示を更新できませんでした。画面を開き直してください。</p>}
 
       {quests.length > 0 && <section className="quest-journal" aria-label="依頼の手帳">
-        <h2>◆ 依頼の手帳</h2>
-        <p className="section-description">勝利した依頼の続きは、次の日の行動候補に反映されます。</p>
+        <span className="eyebrow">QUESTS</span><h2>依頼</h2>
         <ul>{quests.map((quest) => <li key={quest.id}>
           <strong>{quest.completed ? '✓' : '◇'} {quest.name}</strong>
-          <p>{quest.completed ? '依頼完了' : quest.awaitingBattle
-            ? `${quest.step.objective}。「戦闘」でこの依頼の日を選んで挑もう。誰かが勝つと、次の締切で続きが候補になる。`
-            : `次の目的：${quest.step.objective}（${LOCATIONS[quest.step.location].name}）`}</p>
+          <p>{quest.completed ? '完了' : quest.awaitingBattle
+            ? `${quest.step.objective}。「戦闘」から挑戦できます。`
+            : `${quest.step.objective} · ${LOCATIONS[quest.step.location].name}`}</p>
         </li>)}</ul>
       </section>}
 
-      {!closed && <p className="journey-prompt">さて、どこへ向かおうか。</p>}
       {closed ? <ClosedDay data={data} /> : <OpenDay key={data.dayNo} current={location} data={data} onVote={handleVote} voteState={voteState} />}
     </main>
   );
@@ -164,11 +162,11 @@ function ScenarioPanel({ data, closed }: { data: TodayResult; closed: boolean })
   if (recent.length === 0 && focus === null) return null;
   return (
     <section className="scenario-panel" aria-label="現在のシナリオ">
-      <p className="screen-caption">◆ これまでの物語 ◆</p>
+      <p className="screen-caption">STORY SO FAR</p>
       {recent.length === 0
         ? <p>一行の冒険は、ここから始まる。</p>
         : <div className="previous-story">
-            {recent.map((event) => <p key={event.id} className="scenario-recap">{event.resultText}</p>)}
+            {recent.slice(-1).map((event) => <p key={event.id} className="scenario-recap">{event.resultText}</p>)}
           </div>}
       {focus !== null && <div className="scenario-focus">
         <h2>{data.storyGuided && !closed ? 'Jevが選んだ今回の本筋' : '今回の本筋'}</h2>
@@ -198,8 +196,7 @@ function OpenDay({
   const submitting = voteState.kind === 'voting';
   return (
     <section className="daily-choices">
-      <h2>∞ 次回行動選択</h2>
-      <p className="section-description">物語の流れ、現在地、進行中の依頼を見て、自然につながる候補を優先して並べています。</p>
+      <span className="eyebrow">NEXT MOVE</span><h2 aria-label="∞ 次回行動選択">次の行動</h2>
       <form onSubmit={(event) => {
         event.preventDefault();
         if (selected !== null && !submitting && selected !== data.myVote) onVote(selected);
@@ -221,9 +218,8 @@ function OpenDay({
         </fieldset>
         <button className="journey-confirm" type="submit" disabled={selected === null || submitting || selected === data.myVote}>{submitting ? '送信中…' : '決定'}</button>
       </form>
-      <p className="journey-vote-status" role="status">{data.myVote === null ? 'まだ投票していません。' : `投票済み：${resolveEvent(data.myVote).label}`}</p>
-      <p className="section-description">毎朝5時（JST）に締まります。締切までは選び直せます。</p>
-      <p className="vote-note">票数: まだ分かりません（締まるまで公開されません）</p>
+      <p className="journey-vote-status" role="status">{data.myVote === null ? '毎朝5時に決定' : `投票済み：${resolveEvent(data.myVote).label}`}</p>
+      <span className="sr-only">票数: まだ分かりません（締まるまで公開されません）</span>
       {voteState.kind === 'error' && <p role="alert">{voteState.message}</p>}
     </section>
   );

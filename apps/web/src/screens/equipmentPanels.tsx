@@ -3,6 +3,7 @@ import { ARMORS, PASSIVES, SKILLS, WEAPONS, applyEquipment } from '@mq/core';
 import type { DamageSpec, Element, Equipment, StatBlock, Skill } from '@mq/core';
 import type { MePartyMember } from '../api.js';
 import { effectLabel, StatGrid } from './partyDisplay.js';
+import { EquipmentArt } from '../EquipmentArt.js';
 
 const ELEMENT_LABEL: Record<Element, string> = {
   none: 'なし', fire: '火', ice: '氷', thunder: '雷', holy: '光', dark: '闇',
@@ -238,7 +239,7 @@ export function EquipmentItemPanel({
     const isCurrent = id !== null && current === id;
     const canSelect = id === null || isCurrent || availableCount(id) > 0;
     return (
-      <li key={id ?? 'none'}>
+      <li key={id ?? 'none'} className="equipment-option">
         <label>
           <input
             type="radio"
@@ -247,9 +248,9 @@ export function EquipmentItemPanel({
             disabled={busy || !canSelect}
             onChange={() => onSelect(id)}
           />
-          {name}
-          {modsLabel !== '' && `（${modsLabel}）`}
-          {id !== null && !canSelect && '　他のキャラが装備中で所持数が足りません'}
+          {id !== null && <EquipmentArt itemId={id} slot={groupName.startsWith('weapon-') ? 'weapon' : 'armor'} />}
+          <span><strong>{name}</strong>{modsLabel !== '' && <small>{modsLabel}</small>}
+          {id !== null && !canSelect && <small>ほかの仲間が装備中</small>}</span>
         </label>
       </li>
     );
@@ -334,7 +335,8 @@ export function ShopSection({
               const affordable = gold >= item.cost;
               return (
                 <li key={item.id} className="shelf-item" data-affordable={affordable}>
-                  <span className="shelf-name">{item.name}</span>
+                  <EquipmentArt itemId={item.id} slot={item.slot} />
+                  <span className="shelf-name"><strong>{item.name}</strong></span>
                   <span className="shelf-mods">{equipmentModsLabel(item)}</span>
                   <span className="shelf-cost">
                     {item.cost}G
@@ -352,4 +354,3 @@ export function ShopSection({
     </section>
   );
 }
-

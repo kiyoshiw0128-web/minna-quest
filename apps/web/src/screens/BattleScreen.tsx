@@ -267,7 +267,6 @@ function BattleBody({
       {(!embedded || !saved || retry) && <>
       <section aria-label="Jev AI作戦提案">
         <h3>Jev 作戦参謀</h3>
-        <p>敵の行動、仲間の能力、装備中の技から8ターンの作戦を提案します。提案後も自由に直せます。</p>
         <button type="button" onClick={onAiSuggestion} disabled={submitting || aiLoading}>
           {aiLoading ? 'Jevが考え中…' : 'Jevに作戦を考えてもらう'}
         </button>

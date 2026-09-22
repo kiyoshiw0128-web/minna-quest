@@ -124,13 +124,15 @@ export function JoinScreen({ onJoined }: Props) {
   return (
     <main className="join-layout">
       <header className="title-banner">
-        <p>仲間とつむぐ、毎日の冒険</p>
+        <span className="eyebrow">MINNA QUEST</span>
         <h1>日々譚</h1>
-        <p className="title-sub">― エルムの道と星の記憶 ―</p>
+        <p className="title-sub">仲間とつむぐ、毎日の冒険</p>
       </header>
+      <div className="join-showcase">
       <AdventureMap />
       <div className="join-panel">
-      <h2 className="join-title">◆ 冒険をはじめる ◆</h2>
+      <span className="eyebrow">START YOUR JOURNEY</span>
+      <h2 className="join-title">冒険をはじめる</h2>
       <p className="join-intro">{mode === 'join' ? '招待コードを受け取ったら、あなたの名前を登録しよう。' : '合言葉を入力して、冒険の続きへ。'}</p>
 
       <nav aria-label="参加方法">
@@ -237,6 +239,7 @@ export function JoinScreen({ onJoined }: Props) {
 
       {status.kind === 'error' && <p role="alert">{status.message}</p>}
       <p className="join-note">毎朝5時、新しい一日がはじまります。</p>
+      </div>
       </div>
     </main>
   );

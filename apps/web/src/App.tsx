@@ -86,28 +86,27 @@ export function App() {
       */}
       <header className="app-header">
       <div className="brand">
-        <span className="brand-sigil" aria-hidden="true">✦</span>
-        <span>日々譚<small>エルムの道と星の記憶</small></span>
+        <span className="brand-sigil" aria-hidden="true">MQ</span>
+        <span>MINNA QUEST<small>みんなで紡ぐ冒険</small></span>
       </div>
-      <p className="header-note">みんなで進む冒険の世界</p>
       </header>
       <nav className="main-nav" aria-label="冒険のメニュー">
         <button type="button" onClick={() => setTab('today')} aria-current={tab === 'today'}>
-          今日
+          <span aria-hidden="true">⌂</span> 冒険
         </button>
         <button type="button" onClick={() => setTab('battle')} aria-current={tab === 'battle'}>
-          戦闘
+          <span aria-hidden="true">⚔</span> 戦闘
         </button>
         <button type="button" onClick={() => setTab('party')} aria-current={tab === 'party'}>
-          仲間
+          <span aria-hidden="true">♟</span> 仲間
         </button>
-        <button type="button" onClick={() => setTab('equipment')} aria-current={tab === 'equipment'}>装備・スキル</button>
-        <button type="button" onClick={() => setTab('shop')} aria-current={tab === 'shop'}>店</button>
+        <button type="button" onClick={() => setTab('equipment')} aria-current={tab === 'equipment'}><span aria-hidden="true">◇</span> 装備</button>
+        <button type="button" onClick={() => setTab('shop')} aria-current={tab === 'shop'}><span aria-hidden="true">◈</span> 店</button>
         <button type="button" onClick={() => setTab('history')} aria-current={tab === 'history'}>
-          履歴
+          <span aria-hidden="true">☷</span> 記録
         </button>
         <button type="button" onClick={() => setTab('arena')} aria-current={tab === 'arena'}>
-          闘技場
+          <span aria-hidden="true">♜</span> 塔
         </button>
       </nav>
       {tab === 'today' && <TodayScreen token={token} onUnauthorized={handleUnauthorized} />}
@@ -117,7 +116,7 @@ export function App() {
       {tab === 'shop' && <ShopScreen token={token} onUnauthorized={handleUnauthorized} onOpenEquipment={() => setTab('equipment')} />}
       {tab === 'history' && <HistoryScreen token={token} onUnauthorized={handleUnauthorized} />}
       {tab === 'arena' && <ArenaScreen token={token} onUnauthorized={handleUnauthorized} />}
-      <footer className="app-footer">日々譚 <span>物語はみんなで。冒険はあなたらしく。</span></footer>
+      <footer className="app-footer">MINNA QUEST</footer>
     </div>
   );
 }

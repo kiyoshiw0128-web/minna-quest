@@ -4,6 +4,7 @@ import { ApiError, UnauthorizedError, fetchMe, saveBattleTurns, suggestLoadout, 
 import type { LoadoutAdviceResult, MeResult } from '../api.js';
 import { EquipPanel, EquipmentItemPanel } from './equipmentPanels.js';
 import { TurnOrderPanel } from './TurnOrderPanel.js';
+import { EquipmentArt } from '../EquipmentArt.js';
 
 type Props = { token: string; onUnauthorized: () => void; onOpenShop?: () => void };
 
@@ -66,9 +67,8 @@ export function EquipmentScreen({ token, onUnauthorized, onOpenShop }: Props) {
   const armor = member?.equippedArmorId ? ARMORS[member.equippedArmorId as keyof typeof ARMORS]?.name : null;
   return (
     <main>
-      <h1>装備・スキル</h1>
-      <p>仲間を選び、持っている武器・防具と習得した技をセットします。選んだら、それぞれの保存ボタンを押してください。</p>
-      {onOpenShop && <button type="button" disabled={busy} onClick={onOpenShop}>武器・防具を買いに行く</button>}
+      <header className="screen-heading"><span className="eyebrow">EQUIPMENT</span><h1>装備とスキル</h1></header>
+      {onOpenShop && <button className="button-secondary" type="button" disabled={busy} onClick={onOpenShop}>店を見る</button>}
       {error && <p role="alert">{error} <button type="button" disabled={busy} onClick={() => void reload()}>再読込</button></p>}
       {message && <p role="status">{message}</p>}
       {!me && !error && <p>読み込み中…</p>}
@@ -79,11 +79,12 @@ export function EquipmentScreen({ token, onUnauthorized, onOpenShop }: Props) {
             {me.party.map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}
           </select>
         </label>
-        <h2>{member.name}</h2>
-        <p>装備中：武器「{weapon ?? 'なし'}」／防具「{armor ?? 'なし'}」</p>
+        <div className="loadout-summary">
+          <div><span className="eyebrow">CURRENT LOADOUT</span><h2>{member.name}</h2><p>{weapon ?? '武器なし'} · {armor ?? '防具なし'}</p></div>
+          <div className="loadout-art" aria-hidden="true"><EquipmentArt itemId={member.equippedWeaponId ?? null} slot="weapon" /><EquipmentArt itemId={member.equippedArmorId ?? null} slot="armor" /></div>
+        </div>
         <section className="ai-advisor" aria-label="Jev装備相談">
-          <h3>Jev 装備参謀</h3>
-          <p>所持品、職業、素質、習得した技を比較して構成を提案します。確認するまで装備は変わりません。</p>
+          <span className="eyebrow">JEV ADVISOR</span><h3>装備をおまかせ</h3>
           <button type="button" disabled={busy || adviceLoading} onClick={() => void askJev(member.id)}>
             {adviceLoading ? 'Jevが構成中…' : 'Jevに装備を相談する'}
           </button>
